@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.nextgen.botrunner</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/local/share/dotnet/dotnet</string>
+      <string>/usr/local/share/bot-runner/BotRunner.dll</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>ORCHESTRATOR_URL</key>
+      <string>http://localhost:4000</string>
+      <key>BOT_RUNNER_TENANT_ID</key>
+      <string>SET-ME-TENANT-ID</string>
+      <key>BOT_RUNNER_ACTIVATION_TOKEN</key>
+      <string></string>
+      <key>RUNNER_MODE</key>
+      <string>VM</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+  </dict>
+</plist>

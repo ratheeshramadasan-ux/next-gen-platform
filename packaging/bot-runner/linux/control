@@ -1,0 +1,8 @@
+Package: bot-runner
+Version: __VERSION__
+Section: admin
+Priority: optional
+Architecture: amd64
+Maintainer: NextGen Platform
+Description: Universal Bot Runner worker service
+

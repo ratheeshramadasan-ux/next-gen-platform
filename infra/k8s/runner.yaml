@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-runner
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bot-runner
+  template:
+    metadata:
+      labels:
+        app: bot-runner
+    spec:
+      containers:
+        - name: runner
+          image: rpa/bot-runner:latest
+          env:
+            - name: ORCHESTRATOR_URL
+              value: "http://orchestrator-api:3001"
+            - name: RUNNER_MODE
+              value: "K8S"
+

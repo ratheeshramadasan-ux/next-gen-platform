@@ -1,0 +1,19 @@
+[PRISMA_INIT] Establishing Connection: postgresql://ra...
+/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/utils/validatePrismaClientOptions.ts:229
+    throw new PrismaClientConstructorValidationError(
+          ^
+
+PrismaClientConstructorValidationError: Using engine type "client" requires either "adapter" or "accelerateUrl" to be provided to PrismaClient constructor.
+Read more at https://pris.ly/d/client-constructor
+    at validateDependentOptions (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/utils/validatePrismaClientOptions.ts:229:11)
+    at validatePrismaClientOptions (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/utils/validatePrismaClientOptions.ts:246:3)
+    at new t (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:342:7)
+    at prismaClientSingleton (/Users/ratheesh/next-gen-platform/web/src/lib/prisma.ts:13:10)
+    at <anonymous> (/Users/ratheesh/next-gen-platform/web/src/lib/prisma.ts:22:37)
+    at Object.<anonymous> (/Users/ratheesh/next-gen-platform/web/src/lib/prisma.ts:30:16)
+    at Module._compile (node:internal/modules/cjs/loader:1829:14)
+    at Object.transformer (/Users/ratheesh/.npm/_npx/fd45a72a545557e9/node_modules/tsx/dist/register-D46fvsV_.cjs:3:1104)
+    at Module.load (node:internal/modules/cjs/loader:1552:32)
+    at Module._load (node:internal/modules/cjs/loader:1354:12)
+
+Node.js v25.8.1

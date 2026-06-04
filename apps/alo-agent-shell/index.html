@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Alo Agent – NextGen Platform</title>
+  <style>
+    /* ── Google Fonts ─────────────────────────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+    /* ── Theme Tokens (default: Deep Space) ──────── */
+    :root {
+      --bg:      #020204;
+      --card:    #09090e;
+      --border:  rgba(255,255,255,0.06);
+      --primary: #6366F1;
+      --primary-hover: #4f46e5;
+      --primary-fg: #ffffff;
+      --text:    #F2F2F2;
+      --muted:   #9494B8;
+      --success: #10b981;
+      --error:   #ef4444;
+      --radius:  0.625rem;
+    }
+
+    /* ── Per-theme variable overrides ────────────── */
+    .t-sand-serenity     { --bg:#E5D8C9; --card:#F2E9E1; --border:#C8B4A1; --primary:#714329; --primary-hover:#5c3622; --primary-fg:#FDFBF7; --text:#433422; --muted:#6b4e3d; --radius:0.75rem; }
+    .t-ink-wash          { --bg:#F8F9FA; --card:#FFFFFF; --border:#CFCFCF; --primary:#252525; --primary-hover:#111; --primary-fg:#F8F9FA; --text:#252525; --muted:#666; --radius:0.5rem; }
+    .t-jade-pebble       { --bg:#E6E6E6; --card:#F2F2F2; --border:#BAC8B1; --primary:#7B9669; --primary-hover:#62795a; --primary-fg:#fff; --text:#404E3B; --muted:#5c7055; --radius:0.625rem; }
+    .t-opaline           { --bg:#F4F4F6; --card:#FFFFFF; --border:#D2D2D4; --primary:#FF634A; --primary-hover:#e04e37; --primary-fg:#fff; --text:#1A1A1A; --muted:#6a6a6e; --radius:0.5rem; }
+    .t-arctic-reflection { --bg:#F4FCFB; --card:#FFFFFF; --border:#ACBCBF; --primary:#5289AD; --primary-hover:#40708f; --primary-fg:#fff; --text:#243C4C; --muted:#5a7a8a; --radius:0.625rem; }
+    .t-woodland          { --bg:#525034; --card:#42402A; --border:#9F7560; --primary:#AAD31E; --primary-hover:#8db218; --primary-fg:#2A2A2A; --text:#F8FAF1; --muted:#d4c9a8; --radius:0.375rem; }
+    .t-midnight-aurora   { --bg:#020617; --card:#0F172A; --border:#1E293B; --primary:#14B8A6; --primary-hover:#0d9488; --primary-fg:#020617; --text:#F8FAFC; --muted:#94A3B8; --radius:0.5rem; }
+    .t-wraith            { --bg:#1E1702; --card:#342005; --border:#342005; --primary:#047C58; --primary-hover:#036649; --primary-fg:#fff; --text:#E5E3E4; --muted:#b0a888; --radius:0.625rem; }
+    .t-next-gen-ultra    { --bg:#050505; --card:#0D0D0F; --border:#1F1F23; --primary:#00D1FF; --primary-hover:#00b3d9; --primary-fg:#000; --text:#F1F1F1; --muted:#8F8F9B; --radius:0.75rem; }
+    .t-deep-space        { --bg:#020204; --card:#09090e; --border:rgba(255,255,255,0.06); --primary:#6366F1; --primary-hover:#4f46e5; --primary-fg:#fff; --text:#F2F2F2; --muted:#9494B8; --radius:0.625rem; }
+    .t-aurora-glass      { --bg:#120A05; --card:rgba(34,21,13,0.85); --border:rgba(255,180,100,0.2); --primary:#FBBF24; --primary-hover:#d99b1a; --primary-fg:#1A0F05; --text:#F5E6D3; --muted:#C4A882; --radius:0.75rem; }
+    .t-frosted-glass     { --bg:#E8E0F0; --card:rgba(255,255,255,0.7); --border:rgba(255,255,255,0.6); --primary:#6366F1; --primary-hover:#4f46e5; --primary-fg:#fff; --text:#1A1A2E; --muted:#5B5B80; --radius:0.75rem; }
+    .t-obsidian-glass    { --bg:#05050A; --card:rgba(18,18,26,0.85); --border:rgba(255,255,255,0.12); --primary:#1DB954; --primary-hover:#18a347; --primary-fg:#05050A; --text:#E8E8F0; --muted:#8888AA; --radius:0.75rem; }
+    .t-silk-glass        { --bg:#FAF9F6; --card:rgba(252,251,249,0.85); --border:rgba(0,0,0,0.06); --primary:#E2725B; --primary-hover:#c55e49; --primary-fg:#fff; --text:#332D2D; --muted:#8C8C8C; --radius:0.625rem; }
+    .t-horizon-glass     { --bg:#F8FAFF; --card:rgba(255,255,255,0.75); --border:rgba(255,255,255,0.25); --primary:#3B82F6; --primary-hover:#2563eb; --primary-fg:#fff; --text:#0F172A; --muted:#64748B; --radius:0.625rem; }
+
+    /* ── Base Styles ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      user-select: none;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    /* ── Top bar ─────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      -webkit-app-region: drag;
+    }
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .topbar-brand .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 8px var(--primary);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Theme Picker ────────────────────────────── */
+    .theme-picker {
+      -webkit-app-region: no-drag;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .theme-picker label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+    .theme-picker select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) * 0.6);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .theme-picker select:focus { border-color: var(--primary); }
+
+    /* ── Main Content ────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .header-icon {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--primary) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px;
+    }
+    .header-icon svg { width: 20px; height: 20px; stroke: var(--primary); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .header h2 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      color: var(--text);
+    }
+    .header p {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Form ────────────────────────────────────── */
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: calc(var(--radius) * 0.7);
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-group input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+    }
+    .form-group input::placeholder { color: var(--muted); opacity: 0.6; }
+
+    /* ── Button ──────────────────────────────────── */
+    .btn {
+      width: 100%;
+      background: var(--primary);
+      color: var(--primary-fg);
+      border: none;
+      padding: 11px;
+      border-radius: calc(var(--radius) * 0.7);
+      font-size: 13px;
+      font-weight: 700;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      letter-spacing: 0.02em;
+      box-shadow: 0 2px 12px color-mix(in srgb, var(--primary) 30%, transparent);
+    }
+    .btn:hover:not(:disabled) {
+      background: var(--primary-hover);
+      box-shadow: 0 4px 20px color-mix(in srgb, var(--primary) 40%, transparent);
+    }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* ── Status ──────────────────────────────────── */
+    #statusMessage {
+      margin-top: 14px;
+      font-size: 12px;
+      text-align: center;
+      min-height: 18px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .success { color: var(--success); }
+    .error   { color: var(--error); }
+
+    /* ── Divider ─────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+    }
+
+    /* ── Status strip ────────────────────────────── */
+    .status-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: color-mix(in srgb, var(--primary) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+      border-radius: calc(var(--radius) * 0.6);
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .status-strip .label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .status-strip .value { color: var(--primary); font-weight: 700; }
+
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="dot"></div>
+      Alo Agent
+    </div>
+    <div class="theme-picker">
+      <label>Theme</label>
+      <select id="themePicker">
+        <optgroup label="Light">
+          <option value="sand-serenity">Sand Serenity</option>
+          <option value="ink-wash">Ink Wash</option>
+          <option value="jade-pebble">Jade Pebble</option>
+          <option value="opaline">Opaline</option>
+          <option value="arctic-reflection">Arctic Reflection</option>
+        </optgroup>
+        <optgroup label="Dark">
+          <option value="woodland">Woodland</option>
+          <option value="midnight-aurora">Midnight Aurora</option>
+          <option value="wraith">Wraith</option>
+          <option value="next-gen-ultra">Next Gen Ultra</option>
+          <option value="deep-space" selected>Deep Space</option>
+        </optgroup>
+        <optgroup label="Glass">
+          <option value="aurora-glass">Aurora Glass</option>
+          <option value="frosted-glass">Frosted Glass</option>
+          <option value="obsidian-glass">Obsidian Glass</option>
+          <option value="silk-glass">Silk Glass</option>
+          <option value="horizon-glass">Horizon Glass</option>
+        </optgroup>
+      </select>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="card">
+      <div class="header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h2>Connect Agent</h2>
+        <p>Pair this machine with your Orchestrator portal to begin receiving automation jobs.</p>
+      </div>
+
+      <!-- Config from portal if already activated -->
+      <div id="existingConfig" class="status-strip" style="display:none; margin-bottom:16px;">
+        <span class="label">Current Portal</span>
+        <span class="value" id="existingUrl">—</span>
+      </div>
+
+      <div class="form-group">
+        <label for="orchestratorUrl">Orchestrator URL</label>
+        <input type="text" id="orchestratorUrl" placeholder="http://localhost:4000" value="http://localhost:4000" />
+      </div>
+      <div class="form-group">
+        <label for="activationToken">Activation Token</label>
+        <input type="text" id="activationToken" placeholder="ACT-XXXXXXXXX" />
+      </div>
+
+      <button class="btn" id="activateBtn">Complete Setup</button>
+      <div id="statusMessage"></div>
+
+      <div class="divider"></div>
+
+      <div class="status-strip">
+        <span class="label">Agent Version</span>
+        <span class="value">v0.2.0</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    // ── Theme System ─────────────────────────────────────────────
+    const THEME_MAP = {
+      'Sand Serenity':     'sand-serenity',
+      'Ink Wash':          'ink-wash',
+      'Jade Pebble':       'jade-pebble',
+      'Opaline':           'opaline',
+      'Arctic Reflection': 'arctic-reflection',
+      'Woodland':          'woodland',
+      'Midnight Aurora':   'midnight-aurora',
+      'Wraith':            'wraith',
+      'Next Gen Ultra':    'next-gen-ultra',
+      'Deep Space':        'deep-space',
+      'Aurora Glass':      'aurora-glass',
+      'Frosted Glass':     'frosted-glass',
+      'Obsidian Glass':    'obsidian-glass',
+      'Silk Glass':        'silk-glass',
+      'Horizon Glass':     'horizon-glass',
+    };
+
+    function applyTheme(slug) {
+      // Remove all theme classes
+      document.body.className = document.body.className
+        .split(' ')
+        .filter(c => !c.startsWith('t-'))
+        .join(' ');
+      document.body.classList.add('t-' + slug);
+
+      // Sync picker
+      const picker = document.getElementById('themePicker');
+      if (picker.value !== slug) picker.value = slug;
+    }
+
+    // Load saved theme: first check portal localStorage, then agent prefs
+    async function loadTheme() {
+      try {
+        // Ask main process to read localStorage from the portal webContents
+        const saved = await ipcRenderer.invoke('get-portal-theme');
+        if (saved) {
+          // saved is the portal ThemeName string e.g. "Midnight Aurora"
+          const slug = THEME_MAP[saved];
+          if (slug) { applyTheme(slug); return; }
+        }
+      } catch (e) { /* portal might not be open */ }
+
+      // Fallback: check agent's own saved preference
+      const agentTheme = localStorage.getItem('agent_theme') || 'deep-space';
+      applyTheme(agentTheme);
+    }
+
+    // Theme picker change
+    document.getElementById('themePicker').addEventListener('change', (e) => {
+      const slug = e.target.value;
+      applyTheme(slug);
+      localStorage.setItem('agent_theme', slug);
+
+      // Tell main process to persist the theme name back to portal localStorage
+      const reversedMap = Object.fromEntries(
+        Object.entries(THEME_MAP).map(([k, v]) => [v, k])
+      );
+      const themeName = reversedMap[slug];
+      if (themeName) {
+        ipcRenderer.invoke('set-portal-theme', themeName).catch(() => {});
+      }
+    });
+
+    // ── Existing Config ─────────────────────────────────────────
+    async function loadExistingConfig() {
+      try {
+        const config = await ipcRenderer.invoke('get-agent-config');
+        if (config && config.orchestratorUrl) {
+          document.getElementById('existingConfig').style.display = 'flex';
+          document.getElementById('existingUrl').textContent = config.orchestratorUrl.replace(/\/api\/.*$/, '');
+          document.getElementById('orchestratorUrl').value = config.orchestratorUrl.replace(/\/api\/.*$/, '');
+          if (config.activationToken) {
+            document.getElementById('activationToken').value = config.activationToken;
+          }
+        }
+      } catch (e) { /* first run */ }
+    }
+
+    // ── Activation ───────────────────────────────────────────────
+    const activateBtn  = document.getElementById('activateBtn');
+    const urlInput     = document.getElementById('orchestratorUrl');
+    const tokenInput   = document.getElementById('activationToken');
+    const statusMsg    = document.getElementById('statusMessage');
+
+    activateBtn.addEventListener('click', () => {
+      const url   = urlInput.value.trim().replace(/\/$/, '');
+      const token = tokenInput.value.trim();
+
+      if (!url || !token) {
+        statusMsg.textContent = 'Please provide both the Orchestrator URL and Activation Token.';
+        statusMsg.className = 'error';
+        return;
+      }
+
+      activateBtn.disabled = true;
+      activateBtn.textContent = 'Pairing…';
+      statusMsg.textContent = '';
+
+      ipcRenderer.invoke('save-activation-config', { url, token }).then((response) => {
+        if (response.success) {
+          statusMsg.textContent = '✓ Agent successfully paired and restarted!';
+          statusMsg.className = 'success';
+          activateBtn.textContent = 'Setup Complete';
+          document.getElementById('existingConfig').style.display = 'flex';
+          document.getElementById('existingUrl').textContent = url;
+          setTimeout(() => {
+            ipcRenderer.send('close-activation-window');
+          }, 3000);
+        } else {
+          statusMsg.textContent = 'Failed: ' + (response.error || 'Unknown error');
+          statusMsg.className = 'error';
+          activateBtn.disabled = false;
+          activateBtn.textContent = 'Complete Setup';
+        }
+      });
+    });
+
+    // ── Init ─────────────────────────────────────────────────────
+    loadTheme();
+    loadExistingConfig();
+  </script>
+</body>
+</html>

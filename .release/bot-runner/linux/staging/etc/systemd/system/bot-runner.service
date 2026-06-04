@@ -1,0 +1,15 @@
+[Unit]
+Description=Bot Runner Agent
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/bot-runner
+ExecStart=/usr/bin/dotnet /opt/bot-runner/BotRunner.dll
+Environment=ORCHESTRATOR_URL=http://localhost:3001
+Environment=RUNNER_MODE=VM
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

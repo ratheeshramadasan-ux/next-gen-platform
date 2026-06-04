@@ -1,0 +1,1028 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lexend:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600;700;800&family=Syne:wght@400;500;600;700;800&family=Roboto:wght@300;400;500;700;900&family=Open+Sans:wght@300;400;500;600;700;800&family=Lato:wght@300;400;700;900&display=swap');
+@import "tailwindcss";
+
+/* --- Google Fonts (Moved to top) --- */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-main);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-main);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-delete-base: var(--delete-base);
+  --color-delete-hover: var(--delete-hover);
+  --color-delete-active: var(--delete-active);
+  --color-delete-light: var(--delete-light);
+  --color-disable-bg: var(--disable-bg);
+  --color-disable-text: var(--disable-text);
+
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --font-main: var(--font-geist-sans), 'Inter', sans-serif;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.08 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.08 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.08 0 0);
+  --primary: oklch(0.18 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.18 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.25 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.125rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Login Component Tokens - Mapped to Theme Variables */
+  --color-bg: var(--background);
+  --color-surface: var(--card);
+  --color-muted-surface: var(--muted);
+  --color-border: var(--border);
+  --color-text-secondary: var(--muted-foreground);
+  --color-text-primary: var(--foreground);
+  --color-heading: var(--foreground);
+  --spacing-6: 1.5rem;
+  --rounded-lg: var(--radius);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+  --color-text-primary-rgb: 255, 255, 255;
+  --color-bg-2: var(--primary);
+
+  /* Standardized Action Tokens (Industrial Guidelines) */
+  --delete-base: #D92D20;
+  --delete-hover: #B42318;
+  --delete-active: #912018;
+  --delete-light: #FEE4E2;
+  --disable-bg: #E4E7EC;
+  --disable-text: #98A2B3;
+
+  /* Derived Anti-gravity & Hologram Variables */
+  --theme-bg-base: var(--background);
+  --theme-primary: var(--primary);
+  --theme-secondary: var(--accent);
+  --theme-text: var(--foreground);
+  --glass-bg: color-mix(in srgb, var(--theme-bg-base) 40%, transparent);
+  --glass-border: color-mix(in srgb, var(--theme-primary) 30%, transparent);
+  --hologram-glow: drop-shadow(0 0 12px color-mix(in srgb, var(--theme-primary) 60%, transparent));
+}
+
+
+/* --- 1. Sand Serenity (Warm Premium) --- */
+.theme-sand-serenity {
+  --background: #E5D8C9;
+  --foreground: #2A1F12;
+  --primary: #5A3521;
+  --primary-foreground: #FDFBF7;
+  --card: #F2E9E1;
+  --card-foreground: #2A1F12;
+  --muted: #D0B9A7;
+  --muted-foreground: #3D2315;
+  --accent: #B08463;
+  --accent-foreground: #FFFFFF;
+  --border: #C8B4A1;
+  --sidebar: #F2E9E1;
+  --radius: 0.75rem;
+}
+
+/* --- 2. Ink Wash (Minimal Grayscale) --- */
+.theme-ink-wash {
+  --background: #F8F9FA;
+  --foreground: #111111;
+  --primary: #111111;
+  --primary-foreground: #F8F9FA;
+  --card: #FFFFFF;
+  --card-foreground: #111111;
+  --muted: #CFCFCF;
+  --muted-foreground: #222222;
+  --accent: #7D7D7D;
+  --accent-foreground: #FFFFFF;
+  --border: #CFCFCF;
+  --sidebar: #FFFFFF;
+  --radius: 0.5rem;
+}
+
+/* --- 3. Jade Pebble (Earthy Calm) --- */
+.theme-jade-pebble {
+  --background: #E6E6E6;
+  --foreground: #404E3B;
+  --primary: #7B9669;
+  --primary-foreground: #FFFFFF;
+  --card: #F2F2F2;
+  --card-foreground: #404E3B;
+  --muted: #BAC8B1;
+  --muted-foreground: #404E3B;
+  --accent: #6C8480;
+  --accent-foreground: #FFFFFF;
+  --border: #BAC8B1;
+  --sidebar: #F2F2F2;
+  --radius: 0.625rem;
+}
+
+/* --- 4. Woodland (Deep Organic) --- */
+.theme-woodland {
+  --background: #525034;
+  --foreground: #F8FAF1;
+  --primary: #AAD31E;
+  --primary-foreground: #2A2A2A;
+  --card: #42402A;
+  --card-foreground: #F8FAF1;
+  --muted: #9F7560;
+  --muted-foreground: #F8FAF1;
+  --accent: #D4AF9F;
+  --accent-foreground: #42402A;
+  --border: #9F7560;
+  --sidebar: #42402A;
+  --radius: 0.375rem;
+}
+
+/* --- 5. Midnight Aurora (Cosmic Premium) --- */
+.theme-midnight-aurora {
+  --background: #020617;
+  --foreground: #F8FAFC;
+  --primary: #14B8A6;
+  --primary-foreground: #020617;
+  --card: #0F172A;
+  --card-foreground: #F8FAFC;
+  --muted: #1E293B;
+  --muted-foreground: #94A3B8;
+  --accent: #F43F5E;
+  --accent-foreground: #FFFFFF;
+  --border: #1E293B;
+  --sidebar: #0F172A;
+  --radius: 0.5rem;
+  /* --- Studio Pro Theme Extension --- */
+  --studio-bg: #0d0d0e;
+  --studio-panel: #111112;
+  --studio-accent-blue: #3b82f6;
+  --studio-accent-emerald: #10b981;
+  --studio-accent-amber: #f59e0b;
+  --studio-accent-purple: #8b5cf6;
+  --studio-border: rgba(255, 255, 255, 0.05);
+  /* --- Studio Legibility Scale --- */
+  --studio-font-size-base: 13.5px;
+  --studio-font-size-heading: 15px;
+  --studio-font-size-label: 12px;
+}
+
+/* Studio Glossy Card */
+.studio-card {
+  @apply bg-card/80 backdrop-blur-3xl border border-border/50 rounded-sm text-foreground shadow-2xl transition-all;
+}
+
+.studio-grid-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.studio-glow-blue {
+  box-shadow: 0 0 40px -10px rgba(59, 130, 246, 0.2);
+}
+
+.studio-glow-emerald {
+  box-shadow: 0 0 40px -10px rgba(16, 185, 129, 0.2);
+}
+
+.studio-text-pro {
+  font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+  letter-spacing: -0.01em;
+  font-size: var(--studio-font-size-base);
+}
+
+.studio-label-caps {
+  font-size: var(--studio-font-size-label);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.9;
+}
+
+/* --- Custom Scrollbar Utility --- */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 10px;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 25%, transparent);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* --- High-Fidelity Designer Utilities --- */
+.diamond-shape {
+  transform: rotate(45deg);
+}
+
+.diamond-content {
+  transform: rotate(-45deg);
+}
+
+.glass-depth {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+.node-accent-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+/* --- 6. Opaline (Vibrant Coral) --- */
+.theme-opaline {
+  --background: #F4F4F6;
+  --foreground: #000000;
+  --primary: #FF634A;
+  --primary-foreground: #FFFFFF;
+  --card: #FFFFFF;
+  --card-foreground: #000000;
+  --muted: #E7E7E7;
+  --muted-foreground: #222225;
+  --accent: #D2D2D4;
+  --accent-foreground: #1A1A1A;
+  --border: #D2D2D4;
+  --sidebar: #FFFFFF;
+  --radius: 0.5rem;
+}
+
+/* --- Mocha Espresso --- */
+.theme-mocha-espresso {
+  --background: #FDFBF7;
+  --foreground: #2C1810;
+  --primary: #4E342E;
+  --primary-foreground: #FFFFFF;
+  --accent: #D7CCC8;
+  --accent-foreground: #3E2723;
+  --card: #FFFFFF;
+  --card-foreground: #2C1810;
+  --border: #EFEBE9;
+  --muted: #F5F1EE;
+  --muted-foreground: #6D4C41;
+}
+
+/* --- Minimalist Slate --- */
+.theme-minimalist-slate {
+  --background: #F8FAFC;
+  --foreground: #0F172A;
+  --primary: #334155;
+  --primary-foreground: #FFFFFF;
+  --accent: #94A3B8;
+  --accent-foreground: #0F172A;
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --border: #E2E8F0;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+}
+
+/* --- Cyberpunk Neon --- */
+.theme-cyberpunk-neon {
+  --background: #050505;
+  --foreground: #E0E0E0;
+  --primary: #FF00FF;
+  --primary-foreground: #FFFFFF;
+  --accent: #00FFFF;
+  --accent-foreground: #050505;
+  --card: #0A0A0A;
+  --card-foreground: #E0E0E0;
+  --border: #1A1A1A;
+  --muted: #111111;
+  --muted-foreground: #888888;
+}
+
+/* --- Emerald Empire --- */
+.theme-emerald-empire {
+  --background: #020C0A;
+  --foreground: #D1D5DB;
+  --primary: #10B981;
+  --primary-foreground: #FFFFFF;
+  --accent: #FBBF24;
+  --accent-foreground: #020C0A;
+  --card: #041410;
+  --card-foreground: #D1D5DB;
+  --border: #064E3B;
+  --muted: #064E3B33;
+  --muted-foreground: #10B98188;
+}
+
+/* --- Crimson Velvet --- */
+.theme-crimson-velvet {
+  --background: #0A0202;
+  --foreground: #FEE2E2;
+  --primary: #DC2626;
+  --primary-foreground: #FFFFFF;
+  --accent: #FCD34D;
+  --accent-foreground: #0A0202;
+  --card: #150505;
+  --card-foreground: #FEE2E2;
+  --border: #450A0A;
+  --muted: #450A0A44;
+  --muted-foreground: #DC262688;
+}
+
+/* --- Oceanic Depth --- */
+.theme-oceanic-depth {
+  --background: #010409;
+  --foreground: #C9D1D9;
+  --primary: #1F6FEB;
+  --primary-foreground: #FFFFFF;
+  --accent: #238636;
+  --accent-foreground: #FFFFFF;
+  --card: #0D1117;
+  --card-foreground: #C9D1D9;
+  --border: #30363D;
+  --muted: #161B22;
+  --muted-foreground: #8B949E;
+}
+
+/* --- Lavender Mist --- */
+.theme-lavender-mist {
+  --background: #F5F3FF;
+  --foreground: #4C1D95;
+  --primary: #8B5CF6;
+  --primary-foreground: #FFFFFF;
+  --accent: #DDD6FE;
+  --accent-foreground: #4C1D95;
+  --card: #FFFFFF;
+  --card-foreground: #4C1D95;
+  --border: #EDE9FE;
+  --muted: #F3F0FF;
+  --muted-foreground: #7C3AED;
+}
+
+/* --- Jet Black (Extreme Dark) --- */
+.theme-jet-black {
+  --background: #000000;
+  --foreground: #FFFFFF;
+  --primary: #FFFFFF;
+  --primary-foreground: #000000;
+  --accent: #1A1A1A;
+  --accent-foreground: #FFFFFF;
+  --card: #080808;
+  --card-foreground: #E0E0E0;
+  --border: #111111;
+  --muted: #111111;
+  --muted-foreground: #666666;
+}
+
+/* --- Pure Alabaster (Extreme Light) --- */
+.theme-pure-alabaster {
+  --background: #FFFFFF;
+  --foreground: #000000;
+  --primary: #000000;
+  --primary-foreground: #FFFFFF;
+  --accent: #F0F0F0;
+  --accent-foreground: #000000;
+  --card: #FFFFFF;
+  --card-foreground: #000000;
+  --border: #E5E5E5;
+  --muted: #F9F9F9;
+  --muted-foreground: #737373;
+}
+
+/* --- 7. Arctic Reflection (Glacial Blue) --- */
+.theme-arctic-reflection {
+  --background: #F4FCFB;
+  --foreground: #243C4C;
+  --primary: #5289AD;
+  --primary-foreground: #FFFFFF;
+  --card: #FFFFFF;
+  --card-foreground: #243C4C;
+  --muted: #ACBCBF;
+  --muted-foreground: #243C4C;
+  --accent: #243C4C;
+  --accent-foreground: #FFFFFF;
+  --border: #ACBCBF;
+  --sidebar: #FFFFFF;
+  --radius: 0.625rem;
+}
+
+/* --- 8. Wraith (Spectral Dark) --- */
+.theme-wraith {
+  --background: #1E1702;
+  --foreground: #E5E3E4;
+  --primary: #047C58;
+  --primary-foreground: #FFFFFF;
+  --card: #342005;
+  --card-foreground: #E5E3E4;
+  --muted: #8C886B;
+  --muted-foreground: #E5E3E4;
+  --accent: #8C886B;
+  --accent-foreground: #FFFFFF;
+  --border: #342005;
+  --sidebar: #342005;
+  --radius: 0.625rem;
+}
+
+/* --- 9. Next Gen Ultra (Flagship) --- */
+.theme-next-gen-ultra {
+  --background: #050505;
+  --foreground: #F1F1F1;
+  --primary: #00D1FF;
+  --primary-foreground: #000000;
+  --card: #0D0D0F;
+  --card-foreground: #F1F1F1;
+  --muted: #1A1A1E;
+  --muted-foreground: #8F8F9B;
+  --accent: #A855F7;
+  --accent-foreground: #FFFFFF;
+  --border: #1F1F23;
+  --sidebar: #0D0D0F;
+  --radius: 0.75rem;
+}
+
+/* --- 9b. Deep Space (Extreme Dark) --- */
+.theme-deep-space {
+  --background: #020204;
+  --foreground: #F2F2F2;
+  --primary: #6366F1;
+  --primary-foreground: #FFFFFF;
+  --card: rgba(9, 9, 14, 0.45);
+  --card-foreground: #F2F2F2;
+  --muted: rgba(26, 26, 46, 0.5);
+  --muted-foreground: #9494B8;
+  --accent: #F43F5E;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.05);
+  --sidebar: rgba(5, 5, 8, 0.6);
+  --radius: 0.625rem;
+}
+
+/* --- 10. Aurora Glass (Warm Amber - Image 1) --- */
+.theme-aurora-glass {
+  --background: #120A05;
+  --foreground: #F5E6D3;
+  --primary: #FBBF24;
+  --primary-foreground: #1A0F05;
+  --card: hsl(from #22150D h s l / var(--panel-opacity, 0.45));
+  --card-foreground: #F5E6D3;
+  --muted: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #C4A882;
+  --accent: #F97316;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(255, 180, 100, 0.2);
+  --sidebar: rgba(30, 20, 10, 0.3);
+  --radius: 0.75rem;
+}
+
+/* --- 11. Frosted Glass (Soft Pastel - Image 2) --- */
+.theme-frosted-glass {
+  --background: #E8E0F0;
+  --foreground: #1A1A2E;
+  --primary: #6366F1;
+  --primary-foreground: #FFFFFF;
+  --card: hsl(from white h s l / var(--panel-opacity, 0.4));
+  --card-foreground: #1A1A2E;
+  --muted: rgba(255, 255, 255, 0.25);
+  --muted-foreground: #5B5B80;
+  --accent: #EC4899;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.6);
+  --sidebar: rgba(255, 255, 255, 0.2);
+  --radius: 0.75rem;
+}
+
+/* --- 12. Obsidian Glass (Deep Dark - Image 3) --- */
+.theme-obsidian-glass {
+  --background: #05050A;
+  --foreground: #E8E8F0;
+  --primary: #1DB954;
+  --primary-foreground: #05050A;
+  --card: hsl(from #12121A h s l / var(--panel-opacity, 0.45));
+  --card-foreground: #E8E8F0;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #8888AA;
+  --accent: #38BDF8;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.12);
+  --sidebar: rgba(10, 10, 20, 0.3);
+  --radius: 0.75rem;
+}
+
+/* --- 13. Silk Glass (Minimalist Light - Image 4) --- */
+.theme-silk-glass {
+  --background: #FAF9F6;
+  --foreground: #1F1B1B;
+  --primary: #E2725B;
+  --primary-foreground: #FFFFFF;
+  --card: hsl(from #FCFBF9 h s l / var(--panel-opacity, 0.6));
+  --card-foreground: #1F1B1B;
+  --muted: rgba(0, 0, 0, 0.03);
+  --muted-foreground: #4A4A4A;
+  --accent: #A8816B;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(0, 0, 0, 0.05);
+  --sidebar: rgba(255, 255, 255, 0.4);
+  --radius: 0.625rem;
+}
+
+/* --- 14. Horizon Glass (Clean Dashboard - Image 5) --- */
+.theme-horizon-glass {
+  --background: #F8FAFF;
+  --foreground: #0F172A;
+  --primary: #3B82F6;
+  --primary-foreground: #FFFFFF;
+  --card: hsl(from white h s l / var(--panel-opacity, 0.5));
+  --card-foreground: #0F172A;
+  --muted: rgba(226, 232, 240, 0.9);
+  --muted-foreground: #64748B;
+  --accent: #8B5CF6;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.15);
+  --sidebar: rgba(255, 255, 255, 0.15);
+  --radius: 0.625rem;
+}
+
+/* ─── Glass Mode: Advanced Rendering ─── */
+
+/* Grain Texture Overlay */
+.glass-mode::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.02;
+  pointer-events: none;
+  z-index: 100;
+  mix-blend-mode: overlay;
+}
+
+/* Lush Glass Backgrounds (Image Based) */
+html.glass-mode.theme-aurora-glass,
+html.glass-mode.theme-aurora-glass body {
+  background: 
+    linear-gradient(135deg, #FAD961 0%, #F76B1C 100%) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+html.glass-mode.theme-frosted-glass,
+html.glass-mode.theme-frosted-glass body {
+  background: 
+    linear-gradient(135deg, #FFDEE9 0%, #B5FFFC 100%) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+html.glass-mode.theme-obsidian-glass,
+html.glass-mode.theme-obsidian-glass body {
+  background: 
+    linear-gradient(135deg, #090979 0%, #00d4ff 100%) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+html.glass-mode.theme-silk-glass,
+html.glass-mode.theme-silk-glass body {
+  background: 
+    linear-gradient(135deg, #FAF9F6 0%, #DED9D5 100%) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+html.glass-mode.theme-horizon-glass,
+html.glass-mode.theme-horizon-glass body {
+  background: 
+    linear-gradient(135deg, #8BC6EC 0%, #9599E2 100%) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+
+/* Floating Blobs (Refined) */
+.glass-mode .blob-container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none;
+}
+.glass-mode .blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.3;
+  animation: blob-float 20s infinite alternate ease-in-out;
+}
+@keyframes blob-float {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(5vw, 5vh) scale(1.1); }
+}
+
+/* Glass Card - Rim Light & Soft Depth */
+.glass-mode [class*="bg-card"],
+.glass-mode .glass-card {
+  backdrop-filter: blur(24px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.8) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 
+    0 4px 24px 0 rgba(0, 0, 0, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  background: var(--card) !important;
+}
+
+/* Sidebar Glass (Deep Blur) */
+.glass-mode aside,
+.glass-mode [class*="sidebar"] {
+  backdrop-filter: blur(40px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.6) !important;
+  border-right: 1px solid var(--border) !important;
+  background: var(--sidebar) !important;
+}
+
+
+/* Icon Set Styles */
+.icon-set-glow-aura svg {
+  filter: drop-shadow(0 0 4px var(--primary));
+  opacity: 0.9;
+}
+
+.icon-set-minimal-thin svg {
+  stroke-width: 1px !important;
+}
+
+.icon-set-sharp-tech svg {
+  stroke-width: 2.5px !important;
+  stroke-linecap: square !important;
+  stroke-linejoin: miter !important;
+}
+
+.icon-set-vibrant-duotone svg {
+  fill: var(--primary);
+  fill-opacity: 0.15;
+}
+
+.icon-set-futuristic-cyber svg {
+  filter: drop-shadow(-1px -1px 3px #00ffff) drop-shadow(1px 1px 3px #ff00ff) !important;
+  transform: skewX(-3deg);
+}
+
+.icon-set-glassmorphic-hologram svg {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 3px;
+  border-radius: 6px;
+  box-shadow: inset 0 1px 4px rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+.icon-set-retro-8-bit svg {
+  stroke-width: 2.5px !important;
+  stroke-linecap: square !important;
+  stroke-linejoin: miter !important;
+  filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.85)) !important;
+}
+
+.icon-set-neomorphic-tactile svg {
+  background: var(--theme-neomorphic-bg, #f3f3f5);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  padding: 6px;
+  border-radius: 50% !important;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.07), 
+              -3px -3px 8px rgba(255, 255, 255, 0.9),
+              inset 1px 1px 2px rgba(255, 255, 255, 0.5) !important;
+  color: var(--theme-neomorphic-icon, #2d3748) !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.icon-set-neomorphic-tactile:hover svg,
+.icon-set-neomorphic-tactile:active svg {
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.08), 
+              inset -2px -2px 5px rgba(255, 255, 255, 0.9) !important;
+  transform: scale(0.96);
+}
+
+/* --- Menu Typography Synchronization --- */
+.menu-item-label, .submenu-item-label {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Glow Aura: Unified Luminescence */
+.icon-set-glow-aura .menu-item-label,
+.icon-set-glow-aura .submenu-item-label {
+  text-shadow: 0 0 8px hsl(from var(--primary) h s l / 0.3);
+}
+.icon-set-glow-aura [class*="bg-primary/10"] .menu-item-label {
+  text-shadow: 0 0 10px var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Minimal Thin: Architectural Spacing */
+.icon-set-minimal-thin .menu-item-label,
+.icon-set-minimal-thin .submenu-item-label {
+  font-weight: 200 !important;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+.icon-set-minimal-thin [class*="bg-primary/10"] .menu-item-label {
+  font-weight: 400 !important;
+  opacity: 1;
+}
+
+/* Sharp Tech: Industrial Precision */
+.icon-set-sharp-tech .menu-item-label,
+.icon-set-sharp-tech .submenu-item-label {
+  font-weight: 900 !important;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  font-size: 0.75rem; /* Slightly smaller for density */
+}
+.icon-set-sharp-tech [class*="bg-primary/10"] .menu-item-label {
+  background: var(--primary);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent !important;
+  filter: drop-shadow(0 0 1px var(--primary));
+}
+
+/* Vibrant Duotone: Saturated Focus */
+.icon-set-vibrant-duotone [class*="bg-primary/10"] .menu-item-label {
+  filter: contrast(1.2) brightness(1.1);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* Futuristic Cyber: Neon Scan lines */
+.icon-set-futuristic-cyber .menu-item-label,
+.icon-set-futuristic-cyber .submenu-item-label {
+  font-weight: 800 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 4px rgba(0, 209, 255, 0.3);
+}
+
+.icon-set-futuristic-cyber [class*="bg-primary/10"] .menu-item-label {
+  text-shadow: 0 0 10px #00ffff, 0 0 20px #ff00ff;
+  color: var(--primary);
+}
+
+/* Glassmorphic Hologram: Ambient Translucent */
+.icon-set-glassmorphic-hologram .menu-item-label,
+.icon-set-glassmorphic-hologram .submenu-item-label {
+  font-weight: 300 !important;
+  opacity: 0.95;
+  letter-spacing: 0.02em;
+}
+
+/* Retro 8-Bit: Pixel Blocky */
+.icon-set-retro-8-bit .menu-item-label,
+.icon-set-retro-8-bit .submenu-item-label {
+  font-family: 'Courier New', Courier, monospace !important;
+  font-weight: bold !important;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+
+/* Neomorphic Tactile: Soft Rounded Legibility */
+.icon-set-neomorphic-tactile .menu-item-label,
+.icon-set-neomorphic-tactile .submenu-item-label {
+  font-weight: 600;
+  color: var(--theme-neomorphic-icon, #2d3748);
+  letter-spacing: 0.02em;
+}
+
+/* Font Family Overrides */
+.font-family-inter { font-family: 'Inter', sans-serif !important; --font-main: 'Inter', sans-serif; }
+.font-family-outfit { font-family: 'Outfit', sans-serif !important; --font-main: 'Outfit', sans-serif; }
+.font-family-plus-jakarta-sans { font-family: 'Plus Jakarta Sans', sans-serif !important; --font-main: 'Plus Jakarta Sans', sans-serif; }
+.font-family-playfair-display { font-family: 'Playfair Display', serif !important; --font-main: 'Playfair Display', serif; }
+.font-family-jetbrains-mono { font-family: 'JetBrains Mono', monospace !important; --font-main: 'JetBrains Mono', monospace; }
+.font-family-manrope { font-family: 'Manrope', sans-serif !important; --font-main: 'Manrope', sans-serif; }
+.font-family-cormorant-garamond { font-family: 'Cormorant Garamond', serif !important; --font-main: 'Cormorant Garamond', serif; }
+.font-family-lexend { font-family: 'Lexend', sans-serif !important; --font-main: 'Lexend', sans-serif; }
+.font-family-space-grotesk { font-family: 'Space Grotesk', sans-serif !important; --font-main: 'Space Grotesk', sans-serif; }
+.font-family-montserrat { font-family: 'Montserrat', sans-serif !important; --font-main: 'Montserrat', sans-serif; }
+.font-family-syne { font-family: 'Syne', sans-serif !important; --font-main: 'Syne', sans-serif; }
+.font-family-roboto { font-family: 'Roboto', sans-serif !important; --font-main: 'Roboto', sans-serif; }
+.font-family-open-sans { font-family: 'Open Sans', sans-serif !important; --font-main: 'Open Sans', sans-serif; }
+.font-family-lato { font-family: 'Lato', sans-serif !important; --font-main: 'Lato', sans-serif; }
+.font-family-helvetica { font-family: 'Helvetica', 'Arial', sans-serif !important; --font-main: 'Helvetica', 'Arial', sans-serif; }
+.font-family-avenir { font-family: 'Avenir Next', 'Avenir', 'Segoe UI', sans-serif !important; --font-main: 'Avenir Next', 'Avenir', 'Segoe UI', sans-serif; }
+.font-family-cambria { font-family: 'Cambria', 'Georgia', serif !important; --font-main: 'Cambria', 'Georgia', serif; }
+
+/* Text Size Scales - Proportional System Scaling */
+.text-size-tiny { font-size: 12px; } 
+.text-size-small { font-size: 13.5px; } 
+.text-size-regular { font-size: 14.5px; } 
+.text-size-large { font-size: 16.5px; } 
+.text-size-extra-large { font-size: 18.5px; } 
+.text-size-gigantic { font-size: 22.5px; } 
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  :root {
+    --font-main: 'Inter', sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground transition-all duration-300;
+  }
+  html {
+    @apply font-sans;
+    transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* Shared dashboard viewport-fit behavior */
+.dashboard-page-shell {
+  min-height: 0;
+}
+
+.dashboard-page-shell > * {
+  height: 100%;
+  min-height: 0;
+}
+
+/* --- React Flow Overrides --- */
+.react-flow__pane { background: transparent !important; }
+.react-flow__background { background: transparent !important; }
+.react-flow__minimap { background: transparent !important; }
+.react-flow__minimap-svg { background: transparent !important; }
+
+/* Font: Force theme font on ALL ReactFlow elements */
+.react-flow,
+.react-flow__renderer,
+.react-flow__node,
+.react-flow__edge-textwrapper,
+.react-flow__panel,
+.react-flow *:not(svg):not(path):not(circle):not(rect):not(line) {
+  font-family: var(--font-main, 'Inter', sans-serif) !important;
+}
+
+/* Handles: Always visible, interactive, high z-index */
+.react-flow__handle {
+  z-index: 10 !important;
+  pointer-events: all !important;
+  opacity: 1 !important;
+  cursor: crosshair !important;
+}
+.react-flow__handle:hover {
+  transform: scale(1.4);
+}
+
+/* Connections: Theme-aware styling */
+.react-flow__connection-path {
+  stroke: var(--primary) !important;
+  stroke-width: 2.5 !important;
+  stroke-dasharray: 5 5;
+}
+.react-flow__edge-path {
+  cursor: pointer;
+  stroke: var(--foreground) !important;
+  stroke-width: 2 !important;
+  opacity: 0.6;
+  transition: opacity 0.15s, stroke-width 0.15s;
+}
+.react-flow__edge:hover .react-flow__edge-path {
+  opacity: 1;
+  stroke-width: 2.5 !important;
+  stroke: var(--primary) !important;
+}
+.react-flow__edge .react-flow__edge-text {
+  fill: var(--foreground) !important;
+}
+/* Arrow markers inherit foreground color */
+.react-flow__arrowhead polyline,
+.react-flow__arrowhead polygon {
+  stroke: var(--foreground) !important;
+  fill: var(--foreground) !important;
+}
+.react-flow__node.selected .react-flow__handle { opacity: 1 !important; }
+
+/* Selected edge — highlighted in primary */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary) !important;
+  stroke-width: 3 !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 4px var(--primary));
+}
+.react-flow__edge {
+  cursor: pointer !important;
+}
+
+/* Ensure nodes don't block handle interaction */
+.react-flow__node {
+  pointer-events: all !important;
+}
+
+/* Selection box (lasso/rubber band) */
+.react-flow__selection {
+  background: hsl(var(--primary) / 0.06) !important;
+  border: 1.5px dashed hsl(var(--primary) / 0.5) !important;
+  border-radius: 2px !important;
+}
+
+/* Selected nodes get a visible border */
+.react-flow__node.selected {
+  outline: 2px solid hsl(var(--primary) / 0.6) !important;
+  outline-offset: 2px;
+  border-radius: 4px;
+  filter: drop-shadow(0 0 6px hsl(var(--primary) / 0.15));
+}
+
+/* Multi-selection toolbar */
+.react-flow__nodesselection-rect {
+  background: hsl(var(--primary) / 0.04) !important;
+  border: 1.5px solid hsl(var(--primary) / 0.3) !important;
+  border-radius: 4px !important;
+}
+
+.mask-text-security {
+  -webkit-text-security: disc;
+}
+@keyframes flow {
+  from { stroke-dashoffset: 60; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-flow {
+  animation: flow 1s linear infinite;
+}
+
+@keyframes scan {
+  0% { top: 0%; opacity: 0.2; }
+  50% { top: 100%; opacity: 1; }
+  100% { top: 0%; opacity: 0.2; }
+}
+
+.animate-scan {
+  animation: scan 2s ease-in-out infinite;
+}

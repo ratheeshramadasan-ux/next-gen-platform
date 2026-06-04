@@ -1,0 +1,5 @@
+{
+  "orchestratorUrl": "http://localhost:4000/api/orchestrator",
+  "activationToken": "c95502dc-3bc6-4c3e-a48b-8b17033ae6f6",
+  "agentTheme": "Jade Pebble"
+}

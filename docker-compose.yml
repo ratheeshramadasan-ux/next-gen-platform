@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  orchestrator-api:
+    build:
+      context: .
+      dockerfile: docker/orchestrator.Dockerfile
+    environment:
+      PORT: 3001
+      REDIS_URL: redis://redis:6379
+      OPENAI_MODEL: gpt-4.1-mini
+    ports:
+      - "3001:3001"
+    depends_on:
+      - redis
+
+  web-studio:
+    image: node:22-alpine
+    working_dir: /workspace
+    command: sh -lc "corepack enable && pnpm install --filter @rpa/web-studio... --no-frozen-lockfile && pnpm --filter @rpa/web-studio dev"
+    environment:
+      ORCHESTRATOR_API_URL: http://orchestrator-api:3001/run-intent
+    volumes:
+      - .:/workspace
+    ports:
+      - "3000:3000"
+    depends_on:
+      - orchestrator-api
+

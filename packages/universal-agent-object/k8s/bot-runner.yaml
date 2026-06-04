@@ -1,0 +1,252 @@
+# ============================================================
+# NextGen Bot Runner — Kubernetes Manifests
+# ============================================================
+# Includes:
+#   1. Namespace
+#   2. Secret (activation token)
+#   3. ConfigMap (non-sensitive config)
+#   4. Deployment
+#   5. HorizontalPodAutoscaler
+#   6. ServiceAccount + RBAC
+# ============================================================
+
+---
+# ── 1. Namespace ─────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nextgen-runners
+  labels:
+    app.kubernetes.io/managed-by: nextgen-platform
+
+---
+# ── 2. ServiceAccount ────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nextgen-runner-sa
+  namespace: nextgen-runners
+  labels:
+    app: nextgen-bot-runner
+
+---
+# ── 3. Secret (activation token — replace in CI/CD) ──────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nextgen-runner-secret
+  namespace: nextgen-runners
+type: Opaque
+stringData:
+  NEXTGEN_ACTIVATION_TOKEN: "REPLACE_IN_CICD_OR_VAULT"
+
+---
+# ── 4. ConfigMap (non-sensitive env vars) ────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextgen-runner-config
+  namespace: nextgen-runners
+data:
+  NEXTGEN_ORCHESTRATOR_URL: "https://portal.nextgen.example.com"
+  NEXTGEN_AGENT_VERSION: "1.0.0"
+  NEXTGEN_HEARTBEAT_MS: "10000"
+  NEXTGEN_REGION: "us-east-1"
+  NEXTGEN_TIER: "standard"
+  NODE_ENV: "production"
+
+---
+# ── 5. Deployment ─────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextgen-bot-runner
+  namespace: nextgen-runners
+  labels:
+    app: nextgen-bot-runner
+    version: "1.0.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nextgen-bot-runner
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0        # Zero-downtime deploys
+  template:
+    metadata:
+      labels:
+        app: nextgen-bot-runner
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: nextgen-runner-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+
+      # ── Graceful shutdown: wait for active jobs ───────────
+      terminationGracePeriodSeconds: 60
+
+      containers:
+        - name: bot-runner
+          image: nextgen/bot-runner:1.0.0
+          imagePullPolicy: Always
+
+          # ── Resource limits ────────────────────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          # ── Environment ────────────────────────────────────
+          env:
+            # Identity (Downward API — auto-injected by K8s)
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NEXTGEN_AGENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+            # Tenant ID — injected per-deployment in CI/CD
+            - name: NEXTGEN_TENANT_ID
+              value: "REPLACE_WITH_TENANT_UUID"
+
+            # Non-sensitive config from ConfigMap
+            - name: NEXTGEN_ORCHESTRATOR_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nextgen-runner-config
+                  key: NEXTGEN_ORCHESTRATOR_URL
+            - name: NEXTGEN_AGENT_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: nextgen-runner-config
+                  key: NEXTGEN_AGENT_VERSION
+            - name: NEXTGEN_HEARTBEAT_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: nextgen-runner-config
+                  key: NEXTGEN_HEARTBEAT_MS
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: nextgen-runner-config
+                  key: NODE_ENV
+
+            # Sensitive token from Secret
+            - name: NEXTGEN_ACTIVATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: nextgen-runner-secret
+                  key: NEXTGEN_ACTIVATION_TOKEN
+
+          # ── Health Probes ──────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # ── Graceful shutdown hook ─────────────────────────
+          lifecycle:
+            preStop:
+              exec:
+                # Give the agent time to finish its current step
+                command: ["/bin/sh", "-c", "sleep 10"]
+
+          # ── Security context ───────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false    # Chromium needs /tmp
+            capabilities:
+              drop: ["ALL"]
+
+      # ── Node affinity (prefer runner node pool) ───────────
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: nextgen.io/node-pool
+                    operator: In
+                    values:
+                      - runner-pool
+
+      # ── Spread pods across zones for HA ───────────────────
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: nextgen-bot-runner
+
+---
+# ── 6. HorizontalPodAutoscaler ───────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nextgen-bot-runner-hpa
+  namespace: nextgen-runners
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nextgen-bot-runner
+  minReplicas: 2
+  maxReplicas: 50
+  metrics:
+    # CPU-based scaling
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Memory-based scaling
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 5
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Drain before scaling down
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 120

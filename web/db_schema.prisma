@@ -1,0 +1,1161 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  engineType      = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["platform", "public", "studio", "security"]
+}
+
+model Resource {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @map("resource_id") @db.Uuid
+  tenantId         String?      @map("tenant_id") @db.Uuid
+  parentResourceId String?      @map("parent_resource_id") @db.Uuid
+  resourceType     ResourceType @map("resource_type")
+  name             String
+  ownerType        String?      @map("owner_type")
+  ownerId          String?      @map("owner_id") @db.Uuid
+  status           String       @default("ACTIVE")
+  isLocked         Boolean      @default(false) @map("is_locked")
+  metadata         String       @default("{}")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at")
+  deletedAt        DateTime?    @map("deleted_at")
+  customer         Customer?
+  folder           Folder?
+  project          Project?
+  tenant           Tenant?
+  workspace        Workspace?
+
+  @@map("resources")
+  @@schema("platform")
+}
+
+model Customer {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyName            String                @map("company_name")
+  slug                   String?               @unique @map("slug")
+  isRegistrationEnabled  Boolean               @default(false) @map("is_registration_enabled")
+  industry               String                @map("industry")
+  location               String                @map("location")
+  status                 String                @default("Pending Approval") @map("status")
+  classification         String?               @map("classification")
+  priority               String?               @default("Standard") @map("priority")
+  description            String?               @map("description")
+  createdBy              String?               @map("created_by")
+  customerType           String?               @default("Enterprise") @map("customer_type")
+  customerTier           String?               @default("Enterprise") @map("customer_tier")
+  displayName            String?               @map("display_name")
+  currency               String                @default("USD") @map("currency")
+  timezone               String                @default("UTC") @map("timezone")
+  authType               String                @default("Email + Password") @map("auth_type")
+  allowedDomains         String?               @map("allowed_domains")
+  mfaEnforced            Boolean               @default(false) @map("mfa_enforced")
+  complianceMode         String                @default("Standard") @map("compliance_mode")
+  retentionPolicyDays    Int?                  @default(30) @map("retention_policy_days")
+  dataResidencyRegion    String?               @map("data_residency_region")
+  planType               String                @default("Free") @map("plan_type")
+  contractStartDate      DateTime              @default(now()) @map("contract_start_date")
+  billingEntity          String?               @map("billing_entity")
+  billingEmail           String?               @map("billing_email")
+  aiEnabled              Boolean               @default(true) @map("ai_enabled")
+  studioAccess           Boolean               @default(true) @map("studio_access")
+  apiAccess              Boolean               @default(true) @map("api_access")
+  marketplaceAccess      Boolean               @default(true) @map("marketplace_access")
+  tags                   String?               @map("tags")
+  accountOwner           String?               @map("account_owner")
+  onboardingSource       String?               @map("onboarding_source")
+  offboardingStatus      String?               @map("offboarding_status")
+  offboardingMode        String?               @map("offboarding_mode")
+  compliancePackagePath  String?               @map("compliance_package_path")
+  compliancePackageHash  String?               @map("compliance_package_hash")
+  offboardingInitiatedAt DateTime?             @map("offboarding_initiated_at")
+  offboardingExpiresAt   DateTime?             @map("offboarding_expires_at")
+  isGovernanceLocked     Boolean               @default(false) @map("is_governance_locked")
+  logoUrl                String?               @map("logo_url")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
+  resourceId             String?               @unique @map("resource_id") @db.Uuid
+  engagementTier         String?               @default("Bronze") @map("engagement_tier")
+  auditLogs              AuditLog[]
+  automationWorkflows    AutomationWorkflow[]
+  logFiles               CustomerLogFile[]
+  resource               Resource?             @relation(fields: [resourceId], references: [id])
+  orgSettings            OrganizationSettings?
+  smtpConfig             SmtpConfig?
+  tenantAdmins           TenantAdmin[]
+  tenants                Tenant[]
+  users                  AppUser[]
+  workspaces             Workspace[]
+
+  @@map("customers")
+  @@schema("platform")
+}
+
+model Tenant {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String               @map("name")
+  code                String               @unique @map("code")
+  description         String?              @map("description")
+  type                String               @default("DEV") @map("type")
+  status              String               @default("ACTIVE") @map("status")
+  isDefault           Boolean              @default(false) @map("is_default")
+  isProtected         Boolean              @default(false) @map("is_protected")
+  isGovernanceLocked  Boolean              @default(false) @map("is_governance_locked")
+  customerId          String               @map("customer_id") @db.Uuid
+  resourceId          String?              @unique @map("resource_id") @db.Uuid
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  automationWorkflows AutomationWorkflow[]
+  botHosts            BotHost[]
+  deployments         Deployment[]
+  jobs                StudioJob[]
+  config              TenantConfig[]
+  services            TenantService[]
+  customer            Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  resource            Resource?            @relation(fields: [resourceId], references: [id])
+  users               AppUser[]
+  sovereignWorkflows  Workflow[]
+  workflowQueues      WorkflowQueue[]
+  workspaces          Workspace[]
+
+  @@map("tenants")
+  @@schema("platform")
+}
+
+model TenantConfig {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId String @db.Uuid
+  key      String
+  value    String
+  category String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@map("tenant_configs")
+  @@schema("platform")
+}
+
+model TenantService {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @db.Uuid
+  serviceName String
+  enabled     Boolean  @default(false)
+  enabledBy   String?
+  enabledAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, serviceName])
+  @@map("tenant_services")
+  @@schema("platform")
+}
+
+model TenantAdmin {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firstName      String
+  lastName       String
+  dob            String?
+  gender         String?
+  email          String
+  employeeId     String?
+  jobTitle       String?
+  department     String?
+  manager        String?
+  employmentType String
+  workLocation   String
+  phone          String?
+  role           String   @default("Admin")
+  startDate      String?
+  endDate        String?
+  mfaEnabled     Boolean  @default(false)
+  customerId     String   @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_admins")
+  @@schema("platform")
+}
+
+model AuditLog {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  timestamp   DateTime  @default(now())
+  actor       String    @default("System")
+  action      String
+  target      String?
+  details     String?
+  ipAddress   String?
+  userAgent   String?
+  severity    String    @default("Info")
+  isChronicle Boolean   @default(false)
+  customerId  String?   @db.Uuid
+  customer    Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([timestamp])
+  @@map("audit_logs")
+  @@schema("platform")
+}
+
+model SecurityCredential {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type        String
+  ownerId     String?   @db.Uuid
+  privateKey  String
+  certificate String
+  isActive    Boolean   @default(true)
+  revokedAt   DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([ownerId])
+  @@index([type])
+  @@map("security_credentials")
+  @@schema("platform")
+}
+
+model AppUser {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String     @unique
+  fullName           String?
+  externalId         String?
+  authMethod         String     @default("local")
+  status             String     @default("active")
+  isEmailVerified    Boolean    @default(false)
+  verificationToken  String?
+  lastLogin          DateTime?
+  isGovernanceLocked Boolean    @default(false)
+  customerId         String?    @db.Uuid
+  tenantId           String?    @db.Uuid
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  customer           Customer?  @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant             Tenant?    @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  groups             AppGroup[] @relation("AppGroupToAppUser")
+  roles              AppRole[]  @relation("AppRoleToAppUser")
+
+  @@map("users")
+  @@schema("platform")
+}
+
+model AppRole {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String         @unique
+  description String?
+  isSystem    Boolean        @default(false)
+  permissions String?
+  mappings    GroupMapping[]
+  users       AppUser[]      @relation("AppRoleToAppUser")
+
+  @@map("roles")
+  @@schema("platform")
+}
+
+model AppGroup {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String         @unique
+  description String?
+  mappings    GroupMapping[]
+  users       AppUser[]      @relation("AppGroupToAppUser")
+
+  @@map("groups")
+  @@schema("platform")
+}
+
+model IdentityProvider {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String
+  type       String
+  configJson String
+  syncStatus String         @default("Healthy")
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  mappings   GroupMapping[]
+
+  @@map("identity_providers")
+  @@schema("platform")
+}
+
+model GroupMapping {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId        String           @db.Uuid
+  externalGroupName String
+  internalRoleId    String?          @db.Uuid
+  internalGroupId   String?          @db.Uuid
+  priority          Int              @default(1)
+  internalGroup     AppGroup?        @relation(fields: [internalGroupId], references: [id])
+  internalRole      AppRole?         @relation(fields: [internalRoleId], references: [id])
+  provider          IdentityProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("group_mappings")
+  @@schema("platform")
+}
+
+model StandardDictionary {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category String
+  label    String
+  isActive Boolean @default(true)
+  priority Int     @default(1)
+
+  @@unique([category, label])
+  @@map("standard_dictionaries")
+  @@schema("platform")
+}
+
+model LookupIndustry {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  value              String?
+  icon               String?
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_industries")
+  @@schema("platform")
+}
+
+model LookupRegion {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  value              String?
+  icon               String?
+  category           String?
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_regions")
+  @@schema("platform")
+}
+
+model LookupClassification {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_classifications")
+  @@schema("platform")
+}
+
+model LookupPriority {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_priorities")
+  @@schema("platform")
+}
+
+model LookupCurrency {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  code               String?
+  symbol             String?
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_currencies")
+  @@schema("platform")
+}
+
+model LookupTimezone {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_timezones")
+  @@schema("platform")
+}
+
+model LookupCustomerType {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_customer_types")
+  @@schema("platform")
+}
+
+model LookupEngagementTier {
+  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label              String  @unique
+  isActive           Boolean @default(true)
+  isGovernanceLocked Boolean @default(false)
+
+  @@map("lookup_engagement_tiers")
+  @@schema("platform")
+}
+
+model CustomerLogFile {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId String   @db.Uuid
+  fileName   String
+  fileSize   BigInt
+  fileType   String
+  uploadedBy String
+  blobUrl    String?
+  createdAt  DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("customer_log_files")
+  @@schema("platform")
+}
+
+model SmtpConfig {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  host       String
+  port       Int
+  username   String?
+  password   String?
+  secure     Boolean   @default(true)
+  fromEmail  String
+  fromName   String?
+  isDefault  Boolean   @default(false)
+  customerId String?   @unique @db.Uuid
+  updatedAt  DateTime  @updatedAt
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("smtp_configs")
+  @@schema("platform")
+}
+
+model Workspace {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String
+  description             String?
+  resourceId              String?   @unique @map("resource_id") @db.Uuid
+  customerId              String    @db.Uuid
+  tenantId                String    @db.Uuid
+  isGovernanceLocked      Boolean   @default(false)
+  slug                    String?   @unique
+  language                String    @default("en")
+  region                  String?
+  isMultiWorkspaceEnabled Boolean   @default(false)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  folders                 Folder[]
+  projects                Project[]
+  customer                Customer  @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resource                Resource? @relation(fields: [resourceId], references: [id])
+  tenant                  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("workspaces")
+  @@schema("platform")
+}
+
+model Folder {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  description        String?
+  parentId           String?            @db.Uuid
+  resourceId         String?            @unique @map("resource_id") @db.Uuid
+  workspaceId        String             @db.Uuid
+  customerId         String             @db.Uuid
+  tenantId           String             @db.Uuid
+  path               String?
+  isArchived         Boolean            @default(false)
+  isGovernanceLocked Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  permissions        FolderPermission[]
+  parent             Folder?            @relation("Subfolders", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subfolders         Folder[]           @relation("Subfolders")
+  resource           Resource?          @relation(fields: [resourceId], references: [id])
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects           Project[]
+  studioWorkflows    StudioWorkflow[]
+
+  @@index([path])
+  @@map("folders")
+  @@schema("platform")
+}
+
+model FolderPermission {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  folderId      String   @db.Uuid
+  principalType String
+  principalId   String   @db.Uuid
+  canView       Boolean  @default(false)
+  canCreate     Boolean  @default(false)
+  canEdit       Boolean  @default(false)
+  canDelete     Boolean  @default(false)
+  canManage     Boolean  @default(false)
+  inheritedFlag Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  folder        Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@map("folder_permissions")
+  @@schema("platform")
+}
+
+model Project {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  description        String?
+  resourceId         String?              @unique @map("resource_id") @db.Uuid
+  folderId           String?              @db.Uuid
+  workspaceId        String               @db.Uuid
+  customerId         String               @db.Uuid
+  tenantId           String               @db.Uuid
+  ownerId            String?              @db.Uuid
+  version            String               @default("1.0.0")
+  metadata           String?
+  isGovernanceLocked Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  workflows          AutomationWorkflow[]
+  folder             Folder?              @relation(fields: [folderId], references: [id])
+  resource           Resource?            @relation(fields: [resourceId], references: [id])
+  workspace          Workspace            @relation(fields: [workspaceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ragCollections     RagCollection[]
+  arguments          StudioArgument[]
+  assets             StudioAsset[]
+  variables          StudioVariable[]
+  studioWorkflows    StudioWorkflow?
+  projectVersions    ProjectVersion[]
+  executionWorkflows Workflow[]
+
+  @@map("projects")
+  @@schema("platform")
+}
+
+model ProjectVersion {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId     String   @map("project_id") @db.Uuid
+  versionNumber String   @map("version_number")
+  config        String
+  isActive      Boolean  @default(false) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_versions")
+  @@schema("platform")
+}
+
+model StudioAsset {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String  @db.Uuid
+  name      String
+  type      String
+  value     String
+  isSecure  Boolean @default(true)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("studio_assets")
+  @@schema("platform")
+}
+
+model StudioVariable {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String          @db.Uuid
+  name             String
+  dataType         String
+  defaultValue     String?
+  scope            String          @default("GLOBAL")
+  studioWorkflowId String?         @db.Uuid
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  studioWorkflow   StudioWorkflow? @relation(fields: [studioWorkflowId], references: [id])
+
+  @@map("studio_variables")
+  @@schema("platform")
+}
+
+model StudioArgument {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String          @db.Uuid
+  name             String
+  direction        String
+  dataType         String
+  defaultValue     String?
+  studioWorkflowId String?         @db.Uuid
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  studioWorkflow   StudioWorkflow? @relation(fields: [studioWorkflowId], references: [id])
+
+  @@map("studio_arguments")
+  @@schema("platform")
+}
+
+model AutomationWorkflow {
+  id                 String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  description        String?
+  targetUrl          String?
+  status             String                   @default("ready")
+  isGovernanceLocked Boolean                  @default(false)
+  projectId          String?                  @db.Uuid
+  customerId         String?                  @db.Uuid
+  tenantId           String?                  @db.Uuid
+  metadata           String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  executions         AutomationExecutionLog[]
+  steps              AutomationStep[]
+  customer           Customer?                @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  project            Project?                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant             Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("automation_workflows")
+  @@schema("platform")
+}
+
+model AutomationStep {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId   String             @db.Uuid
+  stepIndex    Float
+  actionType   String
+  selector     String?
+  selectorType String?
+  value        String?
+  aiLabel      String?
+  metadata     String?
+  createdAt    DateTime           @default(now())
+  workflow     AutomationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("automation_steps")
+  @@schema("platform")
+}
+
+model AutomationComponent {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique
+  category    String   @default("General")
+  description String?
+  steps       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("automation_components")
+  @@schema("platform")
+}
+
+model AutomationExecutionLog {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId     String             @db.Uuid
+  workflowName   String
+  status         String
+  totalSteps     Int
+  completedSteps Int                @default(0)
+  errorMessage   String?
+  startedAt      DateTime           @default(now())
+  completedAt    DateTime?
+  workflow       AutomationWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@map("automation_execution_logs")
+  @@schema("platform")
+}
+
+model StudioWorkflow {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String
+  description        String?
+  version            String               @default("1.0.0")
+  status             String               @default("Draft")
+  isGovernanceLocked Boolean              @default(false)
+  projectId          String               @unique @db.Uuid
+  folderId           String?              @db.Uuid
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  flowJson           String?              @map("flow_json")
+  arguments          StudioArgument[]
+  connections        StudioConnection[]
+  logs               StudioExecutionLog[]
+  studioJobs         StudioJob[]
+  nodes              StudioNode[]
+  variables          StudioVariable[]
+  folder             Folder?              @relation(fields: [folderId], references: [id])
+  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("studio_workflows")
+  @@schema("platform")
+}
+
+model StudioNode {
+  id              String             @id @db.Uuid
+  workflowId      String             @db.Uuid
+  nodeType        String
+  name            String
+  configJson      Json
+  positionX       Float              @default(0)
+  positionY       Float              @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  connectionsFrom StudioConnection[] @relation("FromNode")
+  connectionsTo   StudioConnection[] @relation("ToNode")
+  workflow        StudioWorkflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepLogs        StudioStepLog[]
+
+  @@map("studio_nodes")
+  @@schema("platform")
+}
+
+model StudioConnection {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId    String         @db.Uuid
+  fromNodeId    String         @db.Uuid
+  toNodeId      String         @db.Uuid
+  conditionType String?
+  createdAt     DateTime       @default(now())
+  fromNode      StudioNode     @relation("FromNode", fields: [fromNodeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  toNode        StudioNode     @relation("ToNode", fields: [toNodeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workflow      StudioWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("studio_connections")
+  @@schema("platform")
+}
+
+model StudioObject {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationName String
+  objectName      String   @unique
+  selectorType    String
+  selectorValue   String
+  dynamicTemplate String?
+  attributesJson  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("studio_objects")
+  @@schema("platform")
+}
+
+model StudioExecutionLog {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId   String          @db.Uuid
+  status       String
+  startTime    DateTime        @default(now())
+  endTime      DateTime?
+  errorMessage String?
+  metadataJson Json?
+  jobId        String?         @unique @db.Uuid
+  job          StudioJob?      @relation(fields: [jobId], references: [id])
+  workflow     StudioWorkflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepLogs     StudioStepLog[]
+
+  @@map("studio_execution_logs")
+  @@schema("platform")
+}
+
+model StudioStepLog {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  logId         String             @db.Uuid
+  nodeId        String             @db.Uuid
+  status        String
+  startTime     DateTime           @default(now())
+  endTime       DateTime?
+  durationMs    Int?
+  inputData     Json?
+  outputData    Json?
+  errorMessage  String?
+  screenshotUrl String?
+  log           StudioExecutionLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  node          StudioNode         @relation(fields: [nodeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("studio_step_logs")
+  @@schema("platform")
+}
+
+model BotHost {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  hostname           String
+  ipAddress          String?
+  macAddress         String?
+  osType             String       @default("Windows")
+  osVersion          String?
+  status             String       @default("Offline")
+  lastHeartbeat      DateTime?
+  activationToken    String?
+  fingerprint        String?
+  mtlsCertThumbprint String?
+  isGovernanceLocked Boolean      @default(false)
+  tenantId           String       @db.Uuid
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessions           BotSession[]
+
+  @@map("bot_hosts")
+  @@schema("platform")
+}
+
+model BotSession {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  botHostId    String      @db.Uuid
+  agentVersion String
+  status       String      @default("Idle")
+  startTime    DateTime    @default(now())
+  endTime      DateTime?
+  createdAt    DateTime    @default(now())
+  botHost      BotHost     @relation(fields: [botHostId], references: [id], onDelete: Cascade)
+  jobs         StudioJob[]
+
+  @@map("bot_sessions")
+  @@schema("platform")
+}
+
+model StudioJob {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId         String              @db.Uuid
+  botSessionId       String?             @db.Uuid
+  status             String              @default("Pending")
+  priority           Int                 @default(1)
+  triggerType        String              @default("Manual")
+  isGovernanceLocked Boolean             @default(false)
+  scheduledTime      DateTime?
+  tenantId           String              @db.Uuid
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  executionLog       StudioExecutionLog?
+  botSession         BotSession?         @relation(fields: [botSessionId], references: [id])
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workflow           StudioWorkflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("studio_jobs")
+  @@schema("platform")
+}
+
+model WorkflowQueue {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  status      String      @default("Active")
+  tenantId    String      @db.Uuid
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       QueueItem[]
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_queues")
+  @@schema("platform")
+}
+
+model QueueItem {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queueId             String        @db.Uuid
+  status              String        @default("New")
+  dataJson            Json
+  retryCount          Int           @default(0)
+  maxRetries          Int           @default(3)
+  nextRetryTime       DateTime?
+  processedBy         String?
+  processingStartTime DateTime?
+  processingEndTime   DateTime?
+  errorMessage        String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  queue               WorkflowQueue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+
+  @@map("queue_items")
+  @@schema("platform")
+}
+
+model RagCollection {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  projectId   String        @db.Uuid
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documents   RagDocument[]
+
+  @@map("rag_collections")
+  @@schema("platform")
+}
+
+model RagDocument {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collectionId  String        @db.Uuid
+  title         String
+  sourceUrl     String?
+  content       String
+  metadataJson  Json?
+  isIndexed     Boolean       @default(false)
+  lastIndexedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  collection    RagCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@map("rag_documents")
+  @@schema("platform")
+}
+
+model AiModel {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  provider        String    @default("OLLAMA")
+  endpoint        String?
+  apiKey          String?
+  modelIdentifier String?
+  isLocal         Boolean   @default(true)
+  isActive        Boolean   @default(true)
+  status          String    @default("UNKNOWN")
+  latencyMs       Int?
+  lastCheckedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("ai_models")
+  @@schema("platform")
+}
+
+model Workflow {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  tenantId    String         @db.Uuid
+  workspaceId String?        @db.Uuid
+  projectId   String?        @db.Uuid
+  version     Int            @default(1)
+  status      String
+  definition  Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  executions  ExecutionRun[]
+  project     Project?       @relation(fields: [projectId], references: [id])
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  edges       WorkflowEdge[]
+  nodes       WorkflowNode[]
+
+  @@map("workflow_definitions")
+  @@schema("platform")
+}
+
+model WorkflowNode {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId String   @db.Uuid
+  type       String
+  name       String
+  label      String?
+  config     Json
+  positionX  Float
+  positionY  Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_nodes")
+  @@schema("platform")
+}
+
+model WorkflowEdge {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId   String   @db.Uuid
+  sourceNodeId String   @db.Uuid
+  targetNodeId String   @db.Uuid
+  condition    Json?
+  createdAt    DateTime @default(now())
+  workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_edges")
+  @@schema("platform")
+}
+
+model ExecutionRun {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId   String           @db.Uuid
+  status       String
+  inputData    Json?
+  outputData   Json?
+  startedAt    DateTime         @default(now())
+  finishedAt   DateTime?
+  generationId String           @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  logs         ExecutionLog[]
+  events       ExecutionEvent[]
+  workflow     Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("execution_runs")
+  @@schema("platform")
+}
+
+model ExecutionEvent {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  executionId     String       @db.Uuid
+  eventType       String
+  payload         Json?
+  correlationId   String?      @db.Uuid
+  causationId     String?      @db.Uuid
+  rootExecutionId String?      @db.Uuid
+  timestamp       DateTime     @default(now())
+  execution       ExecutionRun @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([correlationId])
+  @@map("execution_events")
+  @@schema("platform")
+}
+
+model ExecutionLog {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  executionId String       @db.Uuid
+  nodeId      String       @db.Uuid
+  nodeName    String?
+  status      String
+  input       Json?
+  output      Json?
+  error       String?
+  durationMs  Int?
+  timestamp   DateTime     @default(now())
+  execution   ExecutionRun @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@map("execution_logs")
+  @@schema("platform")
+}
+
+model OrganizationSettings {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId        String   @unique @db.Uuid
+  cicdMode          String   @default("INTERNAL")
+  provider          String?
+  repoUrl           String?
+  repoName          String?
+  branchMapping     Json?
+  autoDeployEnabled Boolean  @default(false)
+  approvalRequired  Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("organization_settings")
+  @@schema("platform")
+}
+
+model Deployment {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String           @db.Uuid
+  customerId  String           @db.Uuid
+  version     String
+  status      DeploymentStatus @default(DRAFT)
+  initiatedAt DateTime         @default(now())
+  initiatedBy String?
+  approvedAt  DateTime?
+  approvedBy  String?
+  metadata    Json?
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("deployments")
+  @@schema("platform")
+}
+
+enum ResourceType {
+  CUSTOMER
+  TENANT
+  WORKSPACE
+  FOLDER
+  PROJECT
+  STUDIO_WORKFLOW
+  BOT_HOST
+
+  @@schema("platform")
+}
+
+enum DeploymentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  VALIDATING
+  APPROVED
+  DEPLOYING
+  SUCCESS
+  FAILED
+  ROLLED_BACK
+
+  @@schema("platform")
+}
+
+model UserPersonalization {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String   @map("user_id") @db.Uuid
+  navigationMode          String   @default("hybrid") @map("navigation_mode")
+  themeKey                String   @default("midnight-ai") @map("theme_key")
+  animationLevel          String   @default("standard") @map("animation_level")
+  leftNavCollapsed        Boolean  @default(false) @map("left_nav_collapsed")
+  immersiveEffectsEnabled Boolean  @default(true) @map("immersive_effects_enabled")
+  aiCommandBarEnabled     Boolean  @default(true) @map("ai_command_bar_enabled")
+  densityMode             String   @default("comfortable") @map("density_mode")
+  fontScale               String   @default("normal") @map("font_scale")
+  soundEffectsEnabled     Boolean  @default(false) @map("sound_effects_enabled")
+  defaultLandingService   String?  @map("default_landing_service") @db.Uuid
+  dashboardLayout         Json?    @map("dashboard_layout")
+  customSettings          Json?    @map("custom_settings")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("user_personalization")
+  @@schema("security")
+}
+
+model PlatformService {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceKey     String   @unique @map("service_key")
+  displayName    String   @map("display_name")
+  description    String?
+  route          String?
+  iconType       String?  @map("icon_type")
+  iconConfig     Json?    @map("icon_config")
+  accentColor    String?  @map("accent_color")
+  animationType  String?  @map("animation_type")
+  category       String?
+  enabled        Boolean  @default(true)
+  displayOrder   Int      @default(0) @map("display_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("platform_services")
+  @@schema("platform")
+}
+
+model RoleServiceAccess {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  serviceId    String   @map("service_id") @db.Uuid
+  canAccess    Boolean  @default(true) @map("can_access")
+  canCustomize Boolean  @default(false) @map("can_customize")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("role_service_access")
+  @@schema("security")
+}
+
+model UserFavoriteService {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  serviceId    String   @map("service_id") @db.Uuid
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("user_favorite_services")
+  @@schema("security")
+}
+
+model UserRecentService {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  serviceId      String   @map("service_id") @db.Uuid
+  lastAccessedAt DateTime @default(now()) @map("last_accessed_at")
+  accessCount    Int      @default(1) @map("access_count")
+
+  @@map("user_recent_services")
+  @@schema("security")
+}
+
+model PlatformTheme {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  themeKey    String   @unique @map("theme_key")
+  displayName String?  @map("display_name")
+  themeConfig Json?    @map("theme_config")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("platform_themes")
+  @@schema("platform")
+}

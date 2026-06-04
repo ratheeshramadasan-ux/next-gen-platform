@@ -1,0 +1,44 @@
+Seeding Hierarchical IAM data using existing prisma client...
+prisma:error 
+Invalid `prisma.tenant.upsert()` invocation in
+/Users/ratheesh/next-gen-platform/web/prisma/seed.ts:64:41
+
+  61   }
+  62 });
+  63 
+→ 64 const apexNyc = await prisma.tenant.upsert(
+Unique constraint failed on the fields: (`code`)
+Seeding failed: PrismaClientKnownRequestError: 
+Invalid `prisma.tenant.upsert()` invocation in
+/Users/ratheesh/next-gen-platform/web/prisma/seed.ts:64:41
+
+  61   }
+  62 });
+  63 
+→ 64 const apexNyc = await prisma.tenant.upsert(
+Unique constraint failed on the fields: (`code`)
+    at Gr.handleRequestError (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+    at Gr.handleAndLogRequestError (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+    at Gr.request (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async a (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:938:24)
+    at async main (/Users/ratheesh/next-gen-platform/web/prisma/seed.ts:64:21) {
+  code: 'P2002',
+  meta: {
+    modelName: 'Tenant',
+    driverAdapterError: DriverAdapterError: UniqueConstraintViolation
+        at PgTransaction.onError (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/adapter-pg/dist/index.js:678:11)
+        at PgTransaction.performIO (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/adapter-pg/dist/index.js:673:12)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async PgTransaction.queryRaw (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/adapter-pg/dist/index.js:604:30)
+        at async e.interpretNode (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:186:26)
+        at async e.interpretNode (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:213:41)
+        at async e.interpretNode (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:128:29)
+        at async e.interpretNode (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:288:18)
+        at async e.interpretNode (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:128:29)
+        at async e.interpretNode (/Users/ratheesh/next-gen-platform/web/node_modules/@prisma/client-engine-runtime/src/interpreter/query-interpreter.ts:272:41) {
+      cause: [Object]
+    }
+  },
+  clientVersion: '7.7.0'
+}

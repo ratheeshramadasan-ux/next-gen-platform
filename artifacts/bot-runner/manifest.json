@@ -1,0 +1,52 @@
+{
+  "agents": {
+    "windows": [
+      {
+        "version": "1.0.0",
+        "fileName": "BotRunnerSetup-win-x64.exe",
+        "publishedAt": "2026-04-27",
+        "changelog": "Initial production release — self-contained .NET 8 runtime with orchestrator binding and heartbeat telemetry."
+      }
+    ],
+    "linux": [
+      {
+        "version": "1.0.0",
+        "fileName": "bot-runner_1.0.0_amd64.deb",
+        "publishedAt": "2026-04-27",
+        "changelog": "Initial production release — self-contained .NET 8 runtime with systemd service and heartbeat telemetry."
+      }
+    ],
+    "mac": [
+      {
+        "version": "1.0.0",
+        "fileName": "BotRunnerSetup-macos-universal.pkg",
+        "publishedAt": "2026-04-27",
+        "changelog": "Initial production release — self-contained .NET 8 runtime with launchd service and heartbeat telemetry."
+      }
+    ],
+    "docker": [
+      {
+        "version": "1.0.0",
+        "fileName": null,
+        "publishedAt": "2026-04-27",
+        "changelog": "Initial production release — container runtime bundle with orchestrator client."
+      }
+    ],
+    "k8s": [
+      {
+        "version": "1.0.0",
+        "fileName": null,
+        "publishedAt": "2026-04-27",
+        "changelog": "Initial production release — Kubernetes deployment manifests with HPA autoscaling."
+      }
+    ],
+    "alo": [
+      {
+        "version": "1.0.0",
+        "fileName": "AloAgentSetup.dmg",
+        "publishedAt": "2026-04-27",
+        "changelog": "Initial production release — self-contained desktop companion with embedded .NET 8 and orchestrator WebSocket channel."
+      }
+    ]
+  }
+}

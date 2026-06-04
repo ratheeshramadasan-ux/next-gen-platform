@@ -1,0 +1,668 @@
+export enum TrainingStage {
+  INFRASTRUCTURE = "infrastructure",
+  DOCUMENT_UPLOAD = "document_upload",
+  OCR_CONFIGURATION = "ocr_configuration",
+  PAGE_SEGREGATION = "page_segregation",
+  CLASSIFICATION = "classification",
+  DOCUMENT_TYPE_RESOLUTION = "document_type_resolution",
+
+  EXTRACTION = "extraction",
+  VALIDATION = "validation",
+  TRAINING_REVIEW = "training_review",
+  PUBLISH = "publish"
+}
+
+export type StepStatus = "not_started" | "in_progress" | "completed" | "blocked" | "needs_review";
+
+export interface WorkflowStep {
+  id: TrainingStage;
+  label: string;
+  description: string;
+  status: StepStatus;
+  isLocked: boolean;
+}
+
+export interface DocumentField {
+  id: string;
+  name: string;
+  type: string;
+  required: boolean;
+}
+
+export type SupportedDocumentType = "pdf" | "tiff" | "png" | "jpg" | "jpeg" | "bmp";
+
+export interface OCRWord {
+  id: string;
+  text: string;
+  confidence: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type AnnotationType = 
+  | "bounding-box" 
+  | "polygon" 
+  | "table" 
+  | "anchor" 
+  | "key-value" 
+  | "signature" 
+  | "checkbox" 
+  | "repeating-section" 
+  | "conditional-region";
+
+export interface Annotation {
+  id: string;
+  type: AnnotationType;
+  pageId: string;
+  fieldId?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  points?: number[];
+  label?: string;
+  color?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ExtractionField {
+  id: string;
+  name: string;
+  type: "text" | "date" | "number" | "amount" | "address" | "table";
+  required: boolean;
+  confidence?: number;
+  value?: string;
+}
+
+export interface DocumentSegment {
+  id: string;
+  pageIndices: number[];
+  label: string;
+}
+
+export interface TrainingPage extends PageMetadata {
+  annotations: Annotation[];
+  ocrText?: string;
+  analysis?: PageAnalysis;
+  classification?: {
+    classId: string;
+    className: string;
+    confidence: number;
+    method?: "manual" | "system";
+    modelName?: string;
+    ocrEngineName?: string;
+  };
+}
+
+export interface TrainingDocument {
+  documentId: string;
+  name: string;
+  pages: TrainingPage[];
+  classification?: {
+    classId: string;
+    className: string;
+    confidence: number;
+    method?: "manual" | "system";
+    modelName?: string;
+    ocrEngineName?: string;
+  };
+  segmentation?: {
+    segments: DocumentSegment[];
+  };
+  extraction?: {
+    fields: ExtractionField[];
+    annotations: Annotation[];
+  };
+  unclassifiedSegment?: UnclassifiedSegment;
+  metadata?: Record<string, any>;
+}
+
+export interface DocumentClass {
+  classId: string;
+  name: string;
+  description: string;
+  sampleCount: number;
+  minConfidence: number;
+  requiredFields: string[];
+  optionalFields: string[];
+  keywords: string[];
+  anchorPhrases: string[];
+  layoutPatterns: string[];
+  isActive: boolean;
+  color: string;
+}
+
+export interface PageMetadata {
+  pageId: string;
+  pageNumber: number;
+  imageHash?: string;
+  imageUrl: string;
+  ocrText?: string;
+  textLayer?: OCRWord[];
+  headers?: string[];
+  footers?: string[];
+  keywords?: string[];
+  barcodeValues?: string[];
+  qrValues?: string[];
+  isBlank?: boolean;
+  confidence: number;
+  layoutSignature?: string;
+  width?: number;
+  height?: number;
+  detectedLanguage?: string;
+  semanticDocumentType?: string;
+  tablesDetected?: boolean;
+  signaturesDetected?: boolean;
+  forensicInsights?: Array<{ type: string; detail: string }>;
+  metadata?: Record<string, any>;
+}
+// Enterprise Segregation Architecture Core Types
+export interface PageAnalysis {
+  pageNumber: number;
+  imagePath?: string;
+  extractedText: string;
+  classification?: ClassificationResult;
+  boundary?: BoundaryResult;
+  continuity?: ContinuityResult;
+  confidence?: ConfidenceResult;
+  preprocessing?: PreprocessingResult;
+  explainability?: string[];
+  metadata?: any;
+}
+
+export interface BoundaryResult {
+  isNewDocument: boolean;
+  confidence: number;
+  reasons: string[];
+  scores: {
+    semanticShift: number;
+    layoutShift: number;
+    headerMismatch: number;
+    barcodeDetected: number;
+  };
+}
+
+export interface ClassificationResult {
+  documentType: string;
+  confidence: number;
+  alternativeMatches: {
+    type: string;
+    confidence: number;
+  }[];
+}
+
+export interface ContinuityResult {
+  belongsToPrevious: boolean;
+  confidence: number;
+  matchingFactors: string[];
+}
+
+export interface ConfidenceResult {
+  overall: number;
+  status: "HIGH" | "MEDIUM" | "LOW" | "REVIEW_REQUIRED";
+  breakdown: {
+    ocr: number;
+    classification: number;
+    continuity: number;
+    boundary: number;
+  };
+}
+
+export interface PreprocessingResult {
+  processedImage?: string;
+  dpi: number;
+  cleaned: boolean;
+}
+
+
+export interface ClassifiedPage extends PageMetadata {
+  index: number;
+  sourceType: SupportedDocumentType;
+  classId: string | null;
+  isConfirmed: boolean;
+  suggestedClassId?: string;
+  textLayer?: OCRWord[];
+  correctionHistory: { timestamp: string; from: string | null; to: string }[];
+}
+
+export interface TrainingBatch {
+  id: string;
+  name: string;
+  status: "DRAFT" | "READY" | "TRAINING" | "COMPLETED";
+  docCount: number;
+  pageCount: number;
+  uploadedAt: string;
+  pages: ClassifiedPage[];
+}
+
+// Enterprise Segregation Engine Types
+export interface BoundaryDetectionProperties {
+  enabled: boolean;
+  confidenceThreshold: number;
+  allowMultiDocumentBundles: boolean;
+  minimumPagesPerDocument: number;
+  maximumPagesPerDocument: number;
+  useOCRSimilarity: boolean;
+  similarityThreshold: number;
+  useHeaderMatching: boolean;
+  useFooterMatching: boolean;
+  useSemanticClassification: boolean;
+  useStructuralBoundary: boolean;
+  useBarcodeBoundary: boolean;
+  useKeywordBoundary: boolean;
+  usePageCountBoundary: boolean;
+  mergeSmallDocuments: boolean;
+  preserveOriginalOrder: boolean;
+}
+
+export interface PageContinuityProperties {
+  enabled: boolean;
+  useTextSimilarity: boolean;
+  similarityThreshold: number;
+  useTableContinuation: boolean;
+  useHeaderContinuation: boolean;
+  useFooterContinuation: boolean;
+  useSemanticGrouping: boolean;
+  allowMissingPages: boolean;
+  maxGapPages: number;
+}
+
+export interface SeparatorDetectionProperties {
+  enabled: boolean;
+  barcodeEnabled: boolean;
+  qrEnabled: boolean;
+  separatorKeywords: string[];
+  colorPageDetection: boolean;
+  blankSeparatorDetection: boolean;
+  separatorConfidence: number;
+}
+
+export interface BlankPageProperties {
+  enabled: boolean;
+  pixelThreshold: number;
+  textThreshold: number;
+  removeNoise: boolean;
+  autoDeskew: boolean;
+  autoDespeckle: boolean;
+  preserveSeparatorPages: boolean;
+  minimumInkCoverage: number;
+}
+
+export interface HeaderGroup {
+  id: string;
+  name: string;
+  patterns: string[];
+}
+
+export interface HeaderDetectionProperties {
+  enabled: boolean;
+  topRegionPercentage: number;
+  minimumOccurrences: number;
+  fuzzyMatching: boolean;
+  ignorePageNumbers: boolean;
+  multipleHeaderGroups: boolean;
+  normalizeWhitespace: boolean;
+  useAIHeaderDetection: boolean;
+  groups: HeaderGroup[];
+}
+
+export interface FooterGroup {
+  id: string;
+  name: string;
+  patterns: string[];
+}
+
+export interface FooterDetectionProperties {
+  enabled: boolean;
+  bottomRegionPercentage: number;
+  minimumOccurrences: number;
+  fuzzyMatching: boolean;
+  detectPageNumbers: boolean;
+  normalizeWhitespace: boolean;
+  multipleFooterGroups: boolean;
+  groups: FooterGroup[];
+}
+
+export interface KeywordSegregationProperties {
+  enabled: boolean;
+  keywords: string[];
+  matchType: "exact" | "contains" | "regex";
+  caseSensitive: boolean;
+  semanticSimilarity: boolean;
+  confidenceThreshold: number;
+  splitOnMatch: boolean;
+  mergeOnMatch: boolean;
+}
+
+export interface FixedPageSplitProperties {
+  enabled: boolean;
+  pagesPerDocument: number;
+  startPage?: number;
+  endPage?: number;
+  preserveLastPartialDocument: boolean;
+  resetOnSeparatorPage: boolean;
+}
+
+export interface UnclassifiedProperties {
+  enabled: boolean;
+  confidenceThreshold: number;
+  allowPartialClassification: boolean;
+  stopPipelineProcessing: boolean;
+  autoAssignReviewQueue: boolean;
+  reviewQueueName?: string;
+  retryWithAdvancedOCR: boolean;
+  retryWithAIClassification: boolean;
+  allowManualReclassification: boolean;
+  includeInTrainingDataset: boolean;
+  autoEscalateAfterHours: number;
+  preserveOriginalDocument: boolean;
+  mergeAdjacentUnclassifiedPages: boolean;
+}
+
+export interface RuleCondition {
+  type:
+    | "HEADER_MATCH"
+    | "FOOTER_MATCH"
+    | "KEYWORD_MATCH"
+    | "BARCODE_MATCH"
+    | "BLANK_PAGE"
+    | "SEMANTIC_MATCH"
+    | "PAGE_COUNT";
+  expectedValue?: any;
+  confidence?: number;
+}
+
+export interface SegregationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  operator: "AND" | "OR";
+  conditions: RuleCondition[];
+  action: "SPLIT" | "MERGE" | "IGNORE";
+}
+
+export interface SegregationLogicGroup {
+  id: string;
+  name: string;
+  enabled: boolean;
+  headerPatterns: string[];
+  headerEnabled: boolean;
+  footerPatterns: string[];
+  footerEnabled: boolean;
+  keywords: string[];
+  keywordEnabled: boolean;
+  barcodePatterns: string[];
+  pageRange?: { start: number; end: number };
+  pageCountEnabled: boolean;
+  operator: "AND" | "OR";
+  confidenceThreshold: number;
+  color: string;
+}
+
+export interface SegregationSettings {
+  boundary: BoundaryDetectionProperties;
+  continuity: PageContinuityProperties;
+  separator: SeparatorDetectionProperties;
+  blank: BlankPageProperties;
+  header: HeaderDetectionProperties;
+  footer: FooterDetectionProperties;
+  keyword: KeywordSegregationProperties;
+  pageCount: FixedPageSplitProperties;
+  unclassified: UnclassifiedProperties;
+  rules: SegregationRule[];
+  logicGroups: SegregationLogicGroup[];
+}
+
+export interface DocumentReaderProject {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  trainingDocuments: TrainingDocument[];
+  documentClasses: DocumentClass[];
+  segregationSettings: SegregationSettings;
+  groupInsights: Record<string, {
+    commonAnchors: { text: string; confidence: number; frequency: number; spatialY: number }[];
+    layoutSignature: string;
+    differentiatorScore: number;
+  }>;
+  metadata?: Record<string, any>;
+}
+
+export interface UnclassifiedSegment {
+  id: string;
+  pages: number[];
+  reason:
+    | "LOW_CONFIDENCE"
+    | "NO_MATCH"
+    | "MULTIPLE_MATCH"
+    | "OCR_FAILURE"
+    | "UNKNOWN_LAYOUT"
+    | "MANUAL_REJECTION";
+  confidenceScore: number;
+  requiresHumanReview: boolean;
+  autoRetryEnabled: boolean;
+  createdAt: string;
+}
+
+export interface DocReaderState {
+  activeStage: TrainingStage;
+  projectId: string | null;
+  folderId: string | null;
+  tenantId: string | null;
+  customerId: string | null;
+  steps: Record<TrainingStage, WorkflowStep>;
+  fields: DocumentField[];
+  batches: TrainingBatch[];
+  classes: DocumentClass[];
+  segregationSettings: SegregationSettings;
+}
+
+// Extraction Infrastructure Interfaces
+export enum SupportLevel {
+  AVAILABLE = "available",
+  PARTIAL = "partial",
+  UNSUPPORTED = "unsupported",
+  EXPERIMENTAL = "experimental",
+  PLUGIN_REQUIRED = "plugin_required",
+  GPU_REQUIRED = "gpu_required"
+}
+
+export interface OCREngine {
+  id: string;
+  name: string;
+  provider: string;
+  version: string;
+  runtimeType: "cloud" | "offline" | "hybrid";
+  deploymentMode: "saas" | "on-prem" | "edge";
+  isGpuSupported: boolean;
+  isOfflineSupported: boolean;
+  status: "active" | "inactive" | "maintenance" | "pending";
+  healthStatus: "healthy" | "degraded" | "critical";
+  accuracyScore: number | null;
+  latencyScore: number | null;
+  memoryRequirement: string;
+  supportedLanguages: string[];
+  capabilities: Record<string, SupportLevel>;
+  licenseType: "enterprise" | "open-source" | "trial";
+  gpuMemoryRequirement?: string;
+  helpUrl?: string;
+  description?: string;
+  deployedUrl?: string;
+  isConfigured: boolean;
+  port?: number;
+}
+
+export interface OfflineModel {
+  id: string;
+  engineId: string;
+  name: string;
+  version: string;
+  format: "ONNX" | "PyTorch" | "TensorFlow" | "HuggingFace" | "GGUF" | "PaddlePaddle" | "Cloud-Managed";
+  size: string;
+  isActive: boolean;
+  validationStatus: "valid" | "pending" | "failed";
+  lastValidated: string;
+  checksum: string;
+  benchmarkScore?: number;
+  description?: string;
+  helpUrl?: string;
+}
+
+export interface RuntimeProfile {
+  id: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  config: {
+    engineId: string;
+    thresholds: Record<string, number>;
+    useGpu: boolean;
+    useCaching: boolean;
+    pipeline: string[];
+  };
+}
+
+export interface RoutingPolicy {
+  id: string;
+  name: string;
+  documentType: string;
+  priority: number;
+  isEnabled: boolean;
+  primaryEngineId: string;
+  failoverEngineId: string | null;
+  threshold: number;
+  isFailoverEnabled: boolean;
+}
+
+export interface GPUStatus {
+  id: string;
+  name: string;
+  vramTotal: string;
+  vramUsed: string;
+  usagePercent: number;
+  temperature: number;
+  cudaVersion: string;
+  activePipelines: number;
+  status: "online" | "offline" | "maintenance";
+  powerUsage: string;
+  fanSpeed: string;
+  clockSpeed: string;
+}
+
+export interface BenchmarkResult {
+  id: string;
+  engineId: string;
+  timestamp: string;
+  accuracy: number;
+  latency: number;
+  memoryUsage: string;
+  gpuUsage?: number;
+  confidenceScore: number;
+}
+
+export interface PiiPattern {
+  id: string;
+  name: string;
+  pattern: string;
+  enabled: boolean;
+}
+
+export interface GovernanceSettings {
+  piiEntities: string[];
+  handlingMode: "redact" | "mask" | "hash";
+  customPatterns: PiiPattern[];
+  retentionDays: number;
+  dataResidency: string;
+  auditLevel: "standard" | "enhanced" | "forensic";
+  isImmutableLogEnabled: boolean;
+  enabledLanguages: string[];
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  target: string;
+  status: string;
+  engine: string;
+  compliance: string;
+  timestamp: string;
+  date: string;
+  actor: string;
+  rawTimestamp: number;
+}
+
+export interface ExtractionInfrastructure {
+  engines: OCREngine[];
+  offlineModels: OfflineModel[];
+  profiles: RuntimeProfile[];
+  policies: RoutingPolicy[];
+  gpuInventory: GPUStatus[];
+  benchmarks: BenchmarkResult[];
+  governance: GovernanceSettings;
+  primaryEngineId: string;
+  transparencyLogs: AuditLog[];
+}
+
+// --- ENTERPRISE INGESTION ARCHITECTURE ---
+
+export type IngestionSourceType = 
+  | "UPLOAD" 
+  | "EMAIL" 
+  | "S3" 
+  | "AZURE"
+  | "SFTP" 
+  | "API" 
+  | "SHARED_FOLDER" 
+  | "SCANNER";
+
+export interface IngestionSource {
+  id: string;
+  name: string;
+  type: IngestionSourceType;
+  enabled: boolean;
+  configuration: Record<string, any>;
+  status: "healthy" | "error" | "polling" | "maintenance";
+  lastPollAt?: string;
+  processedCount?: number;
+  queueDepth: number;
+  retryCount: number;
+}
+
+export interface IngestionDiagnostics {
+  ocrReadiness: number;
+  resolution: string;
+  rotation: number;
+  blur: number;
+  isVirusSafe: boolean;
+  isDuplicate: boolean;
+  metadata: Record<string, any>;
+}
+
+export interface IngestionAsset {
+  id: string;
+  sourceId: string;
+  fileName: string;
+  originalPath: string;
+  normalizedPath?: string;
+  mimeType: string;
+  fileSize: number;
+  checksum: string;
+  status: "PENDING" | "VIRUS_SCAN" | "NORMALIZING" | "OCR_READY" | "COMPLETED" | "ERROR";
+  diagnostics?: IngestionDiagnostics;
+  createdAt: string;
+}
+
+export interface IngestionBatch {
+  id: string;
+  batchName: string;
+  sourceType: IngestionSourceType;
+  totalFiles: number;
+  processedFiles: number;
+  failedFiles: number;
+  status: "PROCESSING" | "COMPLETED" | "FAILED";
+  createdAt: string;
+}
+// Force re-index

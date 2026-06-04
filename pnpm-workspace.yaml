@@ -1,0 +1,7 @@
+packages:
+  - "apps/orchestrator-api"
+  - "apps/web-studio"
+  - "packages/shared-contracts"
+  - "packages/sdk"
+  - "packages/universal-agent-object"
+

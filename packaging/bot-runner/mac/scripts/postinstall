@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+launchctl unload /Library/LaunchDaemons/com.nextgen.botrunner.plist >/dev/null 2>&1 || true
+launchctl load /Library/LaunchDaemons/com.nextgen.botrunner.plist
+
+# Launch the Desktop Agent Tray
+open -a "Alo Agent" || true
+

@@ -1,0 +1,2 @@
+/tmp/bot-runner-publish/windows/BotRunner.pdb
+/tmp/bot-runner-publish/windows/BotRunner.exe

@@ -1,0 +1,2 @@
+/tmp/bot-runner-publish/mac/BotRunner.pdb
+/tmp/bot-runner-publish/mac/BotRunner

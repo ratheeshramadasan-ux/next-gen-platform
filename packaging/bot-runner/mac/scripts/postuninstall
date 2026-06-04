@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+launchctl unload /Library/LaunchDaemons/com.nextgen.botrunner.plist >/dev/null 2>&1 || true
+
