@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Tag, Sparkles, AlertCircle, Anchor, Link2, Settings2, Trash2, CheckCheck } from "lucide-react";
+import { Tag, Sparkles, AlertCircle, Anchor, Link2, Settings2, Trash2, CheckCheck, Pencil, GripHorizontal } from "lucide-react";
 
 interface Annotation {
   id: string;
@@ -33,7 +33,7 @@ interface AnnotationLayerProps {
   activeLayer: "ocr" | "extraction" | "ai" | "validation";
   onDeleteAnnotation?: (id: string, type: string) => void;
   onAnnotationClick?: (e: React.MouseEvent, ann: Annotation) => void;
-  onAnnotationAction?: (action: "addAnchor" | "done" | "changeType" | "delete", ann: Annotation) => void;
+  onAnnotationAction?: (action: "addAnchor" | "done" | "changeType" | "delete" | "rename", ann: Annotation) => void;
   onUpdateAnnotation?: (id: string, updates: { x?: number; y?: number; width?: number; height?: number }) => void;
   onUpdateAnnotationComplete?: (id: string, coordinates: { x: number; y: number; width: number; height: number }) => void;
   deskewAngle?: number;
@@ -41,6 +41,8 @@ interface AnnotationLayerProps {
   zoom?: number;
   getUnscaledCoords?: (clientX: number, clientY: number) => { x: number; y: number };
   isDrawing?: boolean;
+  /** Only show the full action menu when in select/pointer mode — hide it during drawing tools so it doesn't block the canvas */
+  showActionMenu?: boolean;
 }
 
 interface DragOperation {
@@ -74,26 +76,58 @@ export function AnnotationLayer({
   isCorrected,
   zoom,
   getUnscaledCoords,
-  isDrawing = false
+  isDrawing = false,
+  showActionMenu = true
 }: AnnotationLayerProps) {
   const [dragOp, setDragOp] = useState<DragOperation | null>(null);
   const uiScale = 1 / Math.max(zoom || 1, 1);
-  
+
   const hasMovedRef = React.useRef(false);
   const latestCoordsRef = React.useRef({ x: 0, y: 0, width: 0, height: 0 });
 
+  // ── Draggable hover menu ──────────────────────────────────────────────────
+  const [menuOffset, setMenuOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingMenu, setIsDraggingMenu] = useState(false);
+  const menuDragStartRef = React.useRef<{ mouseX: number; mouseY: number; ox: number; oy: number } | null>(null);
+
+  // Reset position when the active annotation changes
+  useEffect(() => {
+    setMenuOffset({ x: 0, y: 0 });
+  }, [activeAnnotationId]);
+
+  useEffect(() => {
+    if (!isDraggingMenu) return;
+    const onMove = (e: MouseEvent) => {
+      if (!menuDragStartRef.current) return;
+      const z = Math.max(zoom || 1, 0.1);
+      // Translate screen-pixel delta → annotation-local-space delta (parent is zoom-scaled)
+      setMenuOffset({
+        x: menuDragStartRef.current.ox + (e.clientX - menuDragStartRef.current.mouseX) / z,
+        y: menuDragStartRef.current.oy + (e.clientY - menuDragStartRef.current.mouseY) / z
+      });
+    };
+    const onUp = () => { setIsDraggingMenu(false); menuDragStartRef.current = null; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [isDraggingMenu, zoom]);
+
   const startDrag = (e: React.MouseEvent, ann: Annotation, type: DragOperation["type"]) => {
-    const parent = e.currentTarget.parentElement;
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (!parent) return;
+    // For resize handles the currentTarget is the small corner div, NOT the annotation box.
+    // We always want:
+    //   annEl   = the annotation div  (holds position / size)
+    //   container = the AnnotationLayer wrapper (holds the coordinate space)
+    const isHandle = type !== "move";
+    const annEl = isHandle
+      ? (e.currentTarget as HTMLElement).parentElement   // handle → annotation div
+      : (e.currentTarget as HTMLElement);               // main div IS the annotation
+    const container = annEl?.parentElement;             // annotation → AnnotationLayer
+    if (!annEl || !container) return;
+
+    const annRect = annEl.getBoundingClientRect();      // annotation box screen bounds
 
     hasMovedRef.current = false;
-    latestCoordsRef.current = {
-      x: ann.x,
-      y: ann.y,
-      width: ann.width,
-      height: ann.height
-    };
+    latestCoordsRef.current = { x: ann.x, y: ann.y, width: ann.width, height: ann.height };
 
     setDragOp({
       annId: ann.id,
@@ -104,12 +138,12 @@ export function AnnotationLayer({
       startAnnY: ann.y,
       startAnnW: ann.width,
       startAnnH: ann.height,
-      parentW: parent.clientWidth || 800,
-      parentH: parent.clientHeight || 600,
-      startLeft: rect.left,
-      startTop: rect.top,
-      startWidth: rect.width,
-      startHeight: rect.height
+      parentW: container.clientWidth  || 800,  // AnnotationLayer CSS width
+      parentH: container.clientHeight || 600,  // AnnotationLayer CSS height
+      startLeft:   annRect.left,    // annotation screen left
+      startTop:    annRect.top,     // annotation screen top
+      startWidth:  annRect.width,   // annotation screen width  (includes zoom)
+      startHeight: annRect.height   // annotation screen height (includes zoom)
     });
   };
 
@@ -432,23 +466,47 @@ export function AnnotationLayer({
                 <div className="h-1.5 w-1.5 rounded-full bg-zinc-500 shadow-[0_0_0_2px_rgba(255,255,255,0.95)]" />
               </div>
             )}
-            {isActive && !isAnchor && (
+            {isActive && !isAnchor && showActionMenu && (
               <div
                 style={{
-                  transform: `translateX(-50%) scale(${uiScale})`,
-                  transformOrigin: "top center"
+                  transform: `translate(calc(-50% + ${menuOffset.x}px), ${menuOffset.y}px) scale(${uiScale})`,
+                  transformOrigin: "bottom center"
                 }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                className="absolute left-1/2 top-full z-50 mt-2 flex items-center gap-1 rounded-xl border border-border bg-white/95 p-1 shadow-2xl backdrop-blur-md"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onMouseEnter={(e) => e.stopPropagation()}
+                className="absolute left-1/2 bottom-full z-50 mb-2 flex items-center gap-1 rounded-xl border border-border bg-white/95 p-1 shadow-2xl backdrop-blur-md whitespace-nowrap"
               >
+                {/* Drag handle */}
+                <div
+                  title="Drag to reposition menu"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    setIsDraggingMenu(true);
+                    menuDragStartRef.current = { mouseX: e.clientX, mouseY: e.clientY, ox: menuOffset.x, oy: menuOffset.y };
+                  }}
+                  className={`flex h-7 w-5 items-center justify-center rounded-lg text-muted-foreground/40 hover:text-muted-foreground/70 hover:bg-muted/50 ${isDraggingMenu ? "cursor-grabbing" : "cursor-grab"}`}
+                >
+                  <GripHorizontal size={11} />
+                </div>
+                <div className="w-px h-5 bg-border/50 mr-0.5" />
+                {/* Rename */}
+                <button
+                  title="Rename field"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAnnotationAction?.("rename", ann);
+                  }}
+                  className="flex h-7 items-center gap-1.5 px-2 rounded-lg text-muted-foreground hover:bg-sky-50 hover:text-sky-700 text-[9px] font-black uppercase tracking-wide"
+                >
+                  <Pencil size={12} className="text-sky-500" />
+                  <span className="text-sky-600">Rename</span>
+                </button>
+                <div className="w-px h-5 bg-border mx-0.5" />
                 {[
-                  { action: "addAnchor" as const, label: "Add Anchor", icon: Link2, className: "text-emerald-600" },
-                  { action: "changeType" as const, label: "Change Type", icon: Settings2, className: "text-amber-600" },
+                  { action: "addAnchor" as const, label: "Anchor", icon: Link2, className: "text-emerald-600" },
+                  { action: "changeType" as const, label: "Type", icon: Settings2, className: "text-amber-600" },
                 ].map(item => (
                   <button
                     key={item.action}
@@ -476,7 +534,7 @@ export function AnnotationLayer({
                 </button>
                 <div className="w-px h-5 bg-border mx-0.5" />
                 <button
-                  title="Done"
+                  title="Done — deselect field"
                   onClick={(e) => {
                     e.stopPropagation();
                     onAnnotationAction?.("done", ann);
@@ -489,19 +547,15 @@ export function AnnotationLayer({
               </div>
             )}
 
-            {isActive && isAnchor && (
+            {isActive && isAnchor && showActionMenu && (
               <div
                 style={{
                   transform: `translateX(-50%) scale(${uiScale})`,
-                  transformOrigin: "top center"
+                  transformOrigin: "bottom center"
                 }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                className="absolute left-1/2 top-full z-50 mt-2 flex items-center gap-1 rounded-xl border border-border bg-white/95 p-1 shadow-2xl backdrop-blur-md"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute left-1/2 bottom-full z-50 mb-2 flex items-center gap-1 rounded-xl border border-border bg-white/95 p-1 shadow-2xl backdrop-blur-md"
               >
                 <button
                   title="Delete anchor"
@@ -509,15 +563,16 @@ export function AnnotationLayer({
                     e.stopPropagation();
                     onAnnotationAction?.("delete", ann);
                   }}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-rose-600 hover:bg-muted"
+                  className="flex h-7 items-center gap-1.5 px-2 rounded-lg text-rose-600 hover:bg-rose-50 text-[9px] font-black uppercase tracking-wide"
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={12} />
+                  Delete
                 </button>
               </div>
             )}
 
-            {/* Corner Markers for Resizing */}
-            {isActive && (
+            {/* Corner Markers for Resizing — only in select mode */}
+            {isActive && showActionMenu && (
               <>
                 <div 
                   onMouseDown={(e) => {

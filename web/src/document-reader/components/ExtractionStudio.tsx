@@ -180,6 +180,9 @@ export function ExtractionStudio() {
   const { updateStepStatus, setActiveStage } = useDocumentReader();
 
   const [activeTool, setActiveTool] = useState("select");
+  const [docPickerOpen, setDocPickerOpen] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isRefetchingOCR, setIsRefetchingOCR] = useState(false);
   const [activeLayer, setActiveLayer] = useState<"ocr" | "extraction" | "ai" | "validation">("extraction");
   const idCounterRef = React.useRef(0);
   const appliedPrebuiltRouteRef = React.useRef<Record<string, string>>({});
@@ -248,6 +251,8 @@ export function ExtractionStudio() {
     suggestedType: string;
     confidence: number;
     relatedObjects: string[];
+    autoAnchorText?: string;
+    autoAnchorBox?: SelectionBox;
   } | null>(null);
   const [anchorCaptureTargetFieldId, setAnchorCaptureTargetFieldId] = useState<string | null>(null);
   const [anchorCaptureRelationship, setAnchorCaptureRelationship] = useState("Primary Anchor");
@@ -335,6 +340,20 @@ export function ExtractionStudio() {
     lastDesignDocIdRef.current = nextDocId;
   }, [activeDocument, captureCurrentDesign, currentDocId]);
 
+  // Auto-extract when the page changes and there are positioned fields with no values
+  React.useEffect(() => {
+    if (!activePage || !fields.length) return;
+    const hasTextLayer = (activePage.textLayer || []).length > 0;
+    const hasUnfilledPositioned = fields.some(
+      f => f.x !== undefined && !f.value
+    );
+    if (hasTextLayer && hasUnfilledPositioned) {
+      extractAllFieldValues(false);
+    }
+  // Only fire when the page or fields array changes, not on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage?.pageNumber, activePage?.textLayer?.length, fields.length]);
+
   React.useEffect(() => {
     if (!currentDocId) return;
     const currentDesign = captureCurrentDesign();
@@ -402,6 +421,239 @@ export function ExtractionStudio() {
     };
   }, [isDraggingIntelligence, intelligenceDragOffset]);
 
+  // ─── Bilingual value normalisation ───────────────────────────────────────────
+  // Many documents (Canadian passport, EU IDs, Swiss forms …) print field values
+  // in two languages separated by "/" — e.g. "29 MAY/MAI 1977", "CANADIAN/CANADIENNE".
+  // These functions detect which language is dominant in the current page and strip
+  // the secondary-language alternate so only one clean value is stored.
+
+  const detectDocumentLanguage = React.useCallback((): "en" | "fr" | "es" | "de" | "other" => {
+    const raw = [
+      activePage?.ocrText || "",
+      ...(activePage?.textLayer || []).map(w => w.text || "")
+    ].join(" ").toLowerCase();
+
+    const score = (words: string[]) => words.filter(w => raw.includes(w)).length;
+
+    const fr = score(["passeport", "nationalite", "nationalité", "delivrance", "délivrance",
+      "naissance", "prénom", "prenoms", "prénoms", "expiration", "délivré",
+      "autorité", "autorite", "titulaire", "émetteur", "emetteur", "pays d"]);
+    const en = score(["passport", "nationality", "date of issue", "date of birth",
+      "given names", "surname", "expiry", "authority", "issuing country",
+      "place of birth", "place of issue", "bearer"]);
+    const es = score(["pasaporte", "apellido", "nombre", "fecha", "nacimiento",
+      "expedición", "vencimiento", "nacionalidad"]);
+    const de = score(["reisepass", "familienname", "geburtsort", "staatsangehörigkeit",
+      "ausstellungsdatum", "ablaufdatum"]);
+
+    const best = Math.max(en, fr, es, de);
+    if (best === 0) return "other";
+    if (en === best) return "en";
+    if (fr === best) return "fr";
+    if (es === best) return "es";
+    if (de === best) return "de";
+    return "other";
+  }, [activePage]);
+
+  // Known bilingual pairs: key = uppercase token, value = {en, fr, es, de}
+  const BILINGUAL_MONTHS: Record<string, Record<string, string>> = {
+    JAN:  { en: "JAN",  fr: "JANV" },
+    FEB:  { en: "FEB",  fr: "FÉVR" },
+    MAR:  { en: "MAR",  fr: "MARS" },
+    APR:  { en: "APR",  fr: "AVR"  },
+    MAY:  { en: "MAY",  fr: "MAI"  },
+    JUN:  { en: "JUN",  fr: "JUIN" },
+    JUL:  { en: "JUL",  fr: "JUIL" },
+    AUG:  { en: "AUG",  fr: "AOÛT" },
+    SEP:  { en: "SEP",  fr: "SEPT" },
+    OCT:  { en: "OCT",  fr: "OCT"  },
+    NOV:  { en: "NOV",  fr: "NOV"  },
+    DEC:  { en: "DEC",  fr: "DÉC"  },
+    // Reverse French→English lookup
+    JANV: { en: "JAN",  fr: "JANV" },
+    FÉVR: { en: "FEB",  fr: "FÉVR" },
+    MARS: { en: "MAR",  fr: "MARS" },
+    AVR:  { en: "APR",  fr: "AVR"  },
+    MAI:  { en: "MAY",  fr: "MAI"  },
+    JUIN: { en: "JUN",  fr: "JUIN" },
+    JUIL: { en: "JUL",  fr: "JUIL" },
+    AOÛT: { en: "AUG",  fr: "AOÛT" },
+    SEPT: { en: "SEP",  fr: "SEPT" },
+    DÉC:  { en: "DEC",  fr: "DÉC"  }
+  };
+
+  // ─── Date formatter ───────────────────────────────────────────────────────────
+  // Parses the raw OCR date string and re-formats it to the field's configured format.
+  // Handles: "29 MAY 1977", "29/05/1977", "1977-05-29", "MAY 29 1977", etc.
+  const MONTH_TO_NUM: Record<string, number> = {
+    JAN: 1, JANV: 1, FEB: 2, FÉVR: 2, FÉV: 2, MAR: 3, MARS: 3,
+    APR: 4, AVR: 4, MAY: 5, MAI: 5, JUN: 6, JUIN: 6,
+    JUL: 7, JUIL: 7, AUG: 8, AOÛT: 8, SEP: 9, SEPT: 9,
+    OCT: 10, NOV: 11, DEC: 12, DÉC: 12
+  };
+  const NUM_TO_MONTH = ["", "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                              "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+  const formatFieldValue = React.useCallback((field: StudioField): string => {
+    const raw = (field.value || "").trim();
+    if (!raw) return "";
+    if (field.type !== "date" || !field.dateFormat) return raw;
+
+    let day = 0, month = 0, year = 0;
+    let parsed = false;
+
+    const tryParse = (d: number, m: number, y: number) => {
+      if (d > 0 && d <= 31 && m > 0 && m <= 12 && y > 0) { day = d; month = m; year = y; parsed = true; }
+    };
+
+    // "29 MAY 1977" or "MAY 29 1977"
+    const alphaMonth = raw.match(/^(\d{1,2})\s+([A-ZÀ-Ö]{2,5})\s+(\d{4})$/i);
+    if (alphaMonth) {
+      const mn = MONTH_TO_NUM[(alphaMonth[2]).toUpperCase()];
+      if (mn) tryParse(+alphaMonth[1], mn, +alphaMonth[3]);
+    }
+    if (!parsed) {
+      const alphaMonthRev = raw.match(/^([A-ZÀ-Ö]{2,5})\s+(\d{1,2})\s+(\d{4})$/i);
+      if (alphaMonthRev) {
+        const mn = MONTH_TO_NUM[(alphaMonthRev[1]).toUpperCase()];
+        if (mn) tryParse(+alphaMonthRev[2], mn, +alphaMonthRev[3]);
+      }
+    }
+    // "29/05/1977", "29-05-1977", "29.05.1977"
+    if (!parsed) {
+      const sep = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+      if (sep) tryParse(+sep[1], +sep[2], +sep[3]);
+    }
+    // "1977/05/29", "1977-05-29"
+    if (!parsed) {
+      const iso = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (iso) tryParse(+iso[3], +iso[2], +iso[1]);
+    }
+    // "05/29/1977" (US format) — try if day > 12 to detect
+    if (!parsed) {
+      const us = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (us && +us[1] <= 12 && +us[2] > 12) tryParse(+us[2], +us[1], +us[3]);
+    }
+
+    if (!parsed) return raw; // can't parse → show original
+
+    const dd  = String(day).padStart(2, "0");
+    const mm  = String(month).padStart(2, "0");
+    const yyyy = String(year);
+    const yy   = yyyy.slice(-2);
+    const mmm  = NUM_TO_MONTH[month] || mm;
+
+    return (field.dateFormat)
+      .replace("YYYY", yyyy)
+      .replace("YY",   yy)
+      .replace("MMM",  mmm)
+      .replace("MM",   mm)
+      .replace("DD",   dd);
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const normalizeBilingualValue = React.useCallback((text: string): string => {
+    if (!text || !text.includes("/")) return text;
+
+    const lang = detectDocumentLanguage();
+    // Only normalise when we detected a clear language; "other" → leave as-is
+    if (lang === "other") return text;
+
+    // Replace WORD/WORD patterns where BOTH sides are alphabetic (not date digits)
+    const result = text.replace(/\b([A-ZÀ-ÖØ-Ýa-zà-öø-ý]+)\/([A-ZÀ-ÖØ-Ýa-zà-öø-ý]+)\b/g, (match, part1, part2) => {
+      const p1 = part1.toUpperCase();
+      const p2 = part2.toUpperCase();
+
+      // ── Month pairs ──────────────────────────────────────────────────────────
+      const pair = BILINGUAL_MONTHS[p1] || BILINGUAL_MONTHS[p2];
+      if (pair) {
+        const keep = pair[lang] ?? pair["en"];
+        // Return in the same case as the original part that matches
+        if (p1 === keep) return part1;
+        if (p2 === keep) return part2;
+        return keep;
+      }
+
+      // ── General word pair heuristic ──────────────────────────────────────────
+      // Convention in most bilingual docs: English first, French second.
+      // For English doc → keep part1; for French → keep part2; others → keep longer (more complete).
+      if (lang === "en") return part1;
+      if (lang === "fr") return part2;
+      if (lang === "es" || lang === "de") return part1; // English is typically first even in ES/DE passports
+      return part1.length >= part2.length ? part1 : part2; // keep the more complete form
+    });
+
+    return result.replace(/\s+/g, " ").trim();
+  }, [detectDocumentLanguage]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ─── Extract all field values from the current text layer ────────────────────
+  // Reads `activePage.textLayer` and populates the value of every positioned field
+  // that currently has no value (or forces a re-read when forceAll=true).
+  const extractAllFieldValues = React.useCallback((forceAll = false) => {
+    setIsExtracting(true);
+    let updated = 0;
+
+    setFields(prev => prev.map(field => {
+      // Skip fields with no position, or with a value already (unless forced)
+      if (field.x === undefined || field.y === undefined ||
+          field.width === undefined || field.height === undefined) return field;
+      if (!forceAll && field.value) return field;
+
+      const box = { x: field.x, y: field.y, width: field.width, height: field.height };
+      const words = (activePage?.textLayer || [])
+        .map(normalizeWordBox)
+        .filter(w => {
+          const cx = w.x + w.width / 2;
+          const cy = w.y + w.height / 2;
+          return cx >= box.x && cx <= box.x + box.width &&
+                 cy >= box.y && cy <= box.y + box.height;
+        });
+
+      const rawText = words
+        .sort((a, b) => {
+          const sameLine = Math.abs(a.y - b.y) < Math.max(a.height, b.height, 1.2);
+          return sameLine ? a.x - b.x : a.y - b.y;
+        })
+        .map(w => w.text || "").join(" ").trim();
+
+      if (!rawText) return field;
+
+      const value = normalizeBilingualValue(rawText);
+      const confidence = words.length > 0
+        ? words.reduce((s, w) => {
+            const c = w.confidence ?? 0;
+            return s + (c > 1 ? c / 100 : c);
+          }, 0) / words.length
+        : field.confidence;
+
+      updated++;
+      return { ...field, value, confidence };
+    }));
+
+    setIsExtracting(false);
+    toast.success(updated > 0
+      ? `Extracted values for ${updated} field${updated !== 1 ? "s" : ""}.`
+      : "All positioned fields already have values. Use Re-fetch OCR to re-read.");
+  }, [activePage, normalizeBilingualValue]);
+
+  // ─── Re-fetch OCR then extract ────────────────────────────────────────────────
+  const handleRefetchOCR = React.useCallback(async () => {
+    setIsRefetchingOCR(true);
+    try {
+      await executeOCR();
+      // Small tick to allow store state to propagate before extracting
+      await new Promise<void>(r => setTimeout(r, 300));
+      extractAllFieldValues(true);
+      toast.success("OCR complete. All field values updated.");
+    } catch {
+      toast.error("OCR failed — check the OCR Configuration stage.");
+    } finally {
+      setIsRefetchingOCR(false);
+    }
+  }, [executeOCR, extractAllFieldValues]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const normalizeWordBox = (word: OCRWord): OCRWord => {
     const pageWidth = activePage?.width || 0;
     const pageHeight = activePage?.height || 0;
@@ -417,92 +669,154 @@ export function ExtractionStudio() {
     };
   };
 
-  const getWordsInSelection = (box: SelectionBox, excludeLabels = false) => {
+  const getWordsInSelection = (box: SelectionBox, excludeLabels = false): OCRWord[] => {
     const normalizedWords = (activePage?.textLayer || []).map(normalizeWordBox);
-    const getOverlap = (word: OCRWord, padding = 0) => {
-      const left = Math.max(word.x, box.x - padding);
-      const right = Math.min(word.x + word.width, box.x + box.width + padding);
-      const top = Math.max(word.y, box.y - padding);
-      const bottom = Math.min(word.y + word.height, box.y + box.height + padding);
-      const width = Math.max(0, right - left);
-      const height = Math.max(0, bottom - top);
-      const overlapArea = width * height;
-      const wordArea = Math.max(0.01, word.width * word.height);
-      const boxArea = Math.max(0.01, box.width * box.height);
-      
-      const wordCenterX = word.x + word.width / 2;
-      const wordCenterY = word.y + word.height / 2;
-      const isCenterInside = 
-        wordCenterX >= (box.x - padding) && 
-        wordCenterX <= (box.x + box.width + padding) && 
-        wordCenterY >= (box.y - padding) && 
-        wordCenterY <= (box.y + box.height + padding);
-        
-      return {
-        word,
-        overlapArea,
-        wordCoverage: overlapArea / wordArea,
-        boxCoverage: overlapArea / boxArea,
-        isCenterInside
-      };
-    };
-    const sortReadingOrder = (a: OCRWord, b: OCRWord) => {
+
+    const readingOrder = (a: OCRWord, b: OCRWord) => {
       const sameLine = Math.abs(a.y - b.y) < Math.max(a.height, b.height, 1.2);
       return sameLine ? a.x - b.x : a.y - b.y;
     };
 
-    const isLikelyLabelWord = (text = "") => {
-      const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
-      const tokens = normalized.split(/\s+/).filter(Boolean);
-      const bilingualTokens = [
-        "passport", "passeport", "no", "number", "nom", "surname", "given", "names", "prenoms", 
-        "nationality", "nationalite", "date", "birth", "naissance", "place", "lieu", "issue", 
-        "delivrance", "expiry", "expiration", "authority", "autorite", "sex", "sexe", "pays", "issuing", "country"
+    const wordOverlap = (word: OCRWord, b: SelectionBox) => {
+      const left = Math.max(word.x, b.x);
+      const right = Math.min(word.x + word.width, b.x + b.width);
+      const top = Math.max(word.y, b.y);
+      const bottom = Math.min(word.y + word.height, b.y + b.height);
+      const area = Math.max(0, right - left) * Math.max(0, bottom - top);
+      return area / Math.max(0.01, word.width * word.height);
+    };
+
+    const isLabel = (text = "") => {
+      const t = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+      const tokens = t.split(/\s+/).filter(Boolean);
+      const labelTokens = [
+        "passport", "passeport", "no", "number", "nom", "surname", "given", "names", "prenoms",
+        "nationality", "nationalite", "date", "birth", "naissance", "place", "lieu", "issue",
+        "delivrance", "expiry", "expiration", "authority", "autorite", "sex", "sexe", "pays",
+        "issuing", "country", "type", "code", "signature", "holder", "titulaire"
       ];
-      return tokens.some(token => 
-        bilingualTokens.includes(token) || 
-        bilingualTokens.some(bt => (bt.length > 2 && token.includes(bt)) || (token.length > 2 && bt.includes(token)))
+      return tokens.some(token =>
+        labelTokens.includes(token) ||
+        labelTokens.some(bt => bt.length > 2 && (token.includes(bt) || bt.includes(token)))
       );
     };
 
-    // For anchor capture (excludeLabels=false) use strict thresholds — user drew a tight box
-    const strictMode = !excludeLabels;
-    const overlapThreshold = strictMode ? 0.60 : 0.40;
-    const maxWidthMultiplier = strictMode ? 1.6 : 2.2;
+    // Detect strikethrough / cancelled words — exclude from field capture.
+    // Sources: explicit OCR engine flags, very low confidence on short text, or dash/line-only patterns.
+    const isStrikethrough = (word: OCRWord): boolean => {
+      const w = word as OCRWord & { strikethrough?: boolean; struck?: boolean; decoration?: string; flags?: string };
+      if (w.strikethrough === true || w.struck === true) return true;
+      if (w.decoration === "strikethrough" || (w.flags || "").includes("struck")) return true;
+      const text = (w.text || "").trim();
+      // Purely dash / underscore / em-dash sequences → OCR rendering of a strikethrough line
+      if (/^[-_–—~]{2,}$/.test(text)) return true;
+      // Very low confidence on a short word with no alphanumeric meaning = likely artefact over struck text
+      const ww = w as OCRWord & { conf?: number };
+      const conf = typeof w.confidence === "number" ? w.confidence : typeof ww.conf === "number" ? ww.conf : 1;
+      const normConf = conf > 1 ? conf / 100 : conf;
+      if (normConf < 0.22 && text.length <= 3 && !/[a-z0-9]/i.test(text)) return true;
+      return false;
+    };
 
-    let exact = normalizedWords
-      .map(word => getOverlap(word))
-      .filter(item => {
-        const isNotTooTall = item.word.height <= Math.max(1.8, box.height * 1.8);
-        const isNotTooWide = item.word.width <= Math.max(strictMode ? 3.0 : 5.0, box.width * maxWidthMultiplier);
-        return item.overlapArea > 0 && isNotTooTall && isNotTooWide && (item.isCenterInside || item.wordCoverage >= overlapThreshold);
-      })
-      .map(item => item.word);
+    // ─── ANCHOR MODE ──────────────────────────────────────────────────────────────
+    // Anchors are fixed label texts — keep capture very tight to the drawn box.
+    // Only include words where ≥ 65% of the word's area sits inside the selection.
+    if (!excludeLabels) {
+      const anchored = normalizedWords
+        .filter(w => {
+          const cov = wordOverlap(w, box);
+          const notTooWide = w.width <= Math.max(2.5, box.width * 1.4);
+          const notTooTall = w.height <= Math.max(1.8, box.height * 1.8);
+          return cov >= 0.65 && notTooWide && notTooTall && !isStrikethrough(w);
+        })
+        .sort(readingOrder);
 
-    if (excludeLabels) {
-      exact = exact.filter(w => !isLikelyLabelWord(w.text));
+      if (anchored.length > 0) return anchored;
+
+      // Tiny fallback padding (0.1%) — avoids missing the anchor due to 1-pixel rounding
+      return normalizedWords
+        .filter(w => {
+          const padded = { x: box.x - 0.1, y: box.y - 0.1, width: box.width + 0.2, height: box.height + 0.2 };
+          return wordOverlap(w, padded) >= 0.65 &&
+            w.width <= Math.max(2.5, box.width * 1.4) &&
+            w.height <= Math.max(1.8, box.height * 1.8) &&
+            !isStrikethrough(w);
+        })
+        .sort(readingOrder);
     }
 
-    exact = exact.sort(sortReadingOrder);
-    if (exact.length > 0) return exact;
+    // ─── FIELD MODE ───────────────────────────────────────────────────────────────
+    // Fields contain dynamic values — draw a starting box, then:
+    //   1. Exclude any strikethrough / cancelled words
+    //   2. Expand rightward along the same line to the next label boundary or gap
+    //   3. Also include handwritten text written ABOVE the value area (corrections,
+    //      annotations), which is common on handwritten / counter-signed documents
 
-    let padded = normalizedWords
-      .map(word => getOverlap(word, strictMode ? 0.15 : 0.4))
-      .filter(item => {
-        const isNotTooTall = item.word.height <= Math.max(1.8, box.height * 1.8);
-        const isNotTooWide = item.word.width <= Math.max(strictMode ? 3.0 : 5.0, box.width * maxWidthMultiplier);
-        return item.overlapArea > 0 && isNotTooTall && isNotTooWide && (item.isCenterInside || item.wordCoverage >= overlapThreshold);
+    // Step 1: find seed words inside the drawn box.
+    // ≥ 35% word-area overlap, OR centre inside the box (handles narrow value cells).
+    const seeds = normalizedWords.filter(w => {
+      if (isStrikethrough(w)) return false;
+      const cov = wordOverlap(w, box);
+      const cx = w.x + w.width / 2;
+      const cy = w.y + w.height / 2;
+      const centreInside = cx >= box.x && cx <= box.x + box.width && cy >= box.y && cy <= box.y + box.height;
+      const notTooTall = w.height <= Math.max(1.8, box.height * 2.0);
+      return notTooTall && !isLabel(w.text) && (cov >= 0.35 || (centreInside && cov >= 0.15));
+    }).sort(readingOrder);
+
+    if (seeds.length === 0) return [];
+
+    // Step 2: establish the primary line band from seeds.
+    const seedMinY = Math.min(...seeds.map(w => w.y));
+    const seedCentreYs = seeds.map(w => w.y + w.height / 2);
+    const lineCY = seedCentreYs.reduce((a, b) => a + b, 0) / seedCentreYs.length;
+    const lineH = Math.max(...seeds.map(w => w.height), 1.5);
+    const lineTolerance = lineH * 0.9;
+    const seedLeft = Math.min(...seeds.map(w => w.x));
+    const seedRight = Math.max(...seeds.map(w => w.x + w.width));
+
+    // Step 3: walk rightward on the primary line, stopping at the next label or large gap.
+    const sameLine = normalizedWords
+      .filter(w => {
+        if (isStrikethrough(w)) return false;
+        const cy = w.y + w.height / 2;
+        return Math.abs(cy - lineCY) <= lineTolerance && w.x >= seedLeft - 0.3;
       })
-      .map(item => item.word);
+      .sort(readingOrder);
 
-    if (excludeLabels) {
-      padded = padded.filter(w => !isLikelyLabelWord(w.text));
+    const primaryResult: OCRWord[] = [];
+    for (const word of sameLine) {
+      if (isLabel(word.text || "")) break;
+      if (primaryResult.length > 0) {
+        const prev = primaryResult[primaryResult.length - 1];
+        const gap = word.x - (prev.x + prev.width);
+        const prevCharW = prev.width / Math.max(1, (prev.text || "x").length);
+        if (gap > prevCharW * 6) break;
+      }
+      primaryResult.push(word);
     }
 
-    padded = padded.sort(sortReadingOrder);
-    if (padded.length > 0) return padded;
+    // Step 4: capture handwritten text written ABOVE the value area.
+    // This covers manual corrections / amendments on handwritten or counter-signed documents.
+    // Search within a 2-line-height window above the seed top, within the horizontal span of the
+    // drawn box extended by the rightmost captured word.
+    const capturedRight = primaryResult.length > 0
+      ? Math.max(...primaryResult.map(w => w.x + w.width))
+      : seedRight;
+    const aboveWords = normalizedWords.filter(w => {
+      if (isStrikethrough(w)) return false;
+      if (isLabel(w.text || "")) return false;
+      const cy = w.y + w.height / 2;
+      // Must be in the vertical window above the seed line
+      const inAboveZone = cy < seedMinY - 0.2 && cy >= seedMinY - lineH * 2.5;
+      // Must fall within the horizontal extent of the selection + captured value
+      const inHorizontalRange = w.x + w.width >= box.x - 0.5 && w.x <= capturedRight + 1;
+      return inAboveZone && inHorizontalRange;
+    }).sort(readingOrder);
 
-    return [];
+    // Combine: above-field handwritten words first (top-to-bottom reading order), then primary line
+    const combined = [...aboveWords, ...primaryResult];
+    return combined.length > 0 ? combined : seeds;
   };
 
   const averageConfidence = (words: OCRWord[]) => {
@@ -548,6 +862,8 @@ export function ExtractionStudio() {
   const fieldTypeFromPrebuilt = (type: PrebuiltModel["fields"][number]["type"]) => {
     if (type === "boolean") return "checkbox";
     if (type === "array") return "multi-value";
+    // "string" is an alias for "text" — normalise to the canonical type
+    if (type === "string") return "text";
     return type;
   };
 
@@ -686,7 +1002,7 @@ export function ExtractionStudio() {
         searchDirection: "nearest",
         expansionMode: field.type === "table" ? "multiline" : field.type === "array" ? "until_next_label" : "line",
         stopAtNextLabel: true,
-        allowLongText: field.type === "string" || field.type === "array"
+        allowLongText: (field.type as string) === "text" || field.type === "string" || field.type === "array"
       });
 
       if (anchorBox && anchorId) {
@@ -779,7 +1095,7 @@ export function ExtractionStudio() {
         const words = getWordsInSelection(predictedBox, true);
         located = {
           ...predictedBox,
-          value: words.map(w => w.text).join(" ").trim()
+          value: normalizeBilingualValue(words.map(w => w.text).join(" ").trim())
         };
         foundAnchorBox = anchorBox;
         foundAnchorId = nextId("anchor");
@@ -791,7 +1107,7 @@ export function ExtractionStudio() {
         const words = getWordsInSelection({ x: field.x, y: field.y ?? 0, width: field.width ?? 10, height: field.height ?? 3 }, true);
         located = {
           x: field.x, y: field.y ?? 0, width: field.width ?? 10, height: field.height ?? 3,
-          value: words.map(w => w.text).join(" ").trim()
+          value: normalizeBilingualValue(words.map(w => w.text).join(" ").trim())
         };
       }
 
@@ -1003,6 +1319,232 @@ export function ExtractionStudio() {
     return canvas.toDataURL("image/png");
   };
 
+  // ─── Mark / Selection Detector ───────────────────────────────────────────────
+  // Analyses a cropped document region to determine whether a checkbox or radio
+  // button has been selected. Handles all common marking styles:
+  //   • Tick mark (✓) inside or just outside the box/circle
+  //   • Cross mark (✗ / X) inside
+  //   • Single diagonal or horizontal line through the box
+  //   • Full fill or highlight of the box/circle
+  //   • Dot or filled circle for radio buttons
+  const detectMarkInRegion = async (box: SelectionBox): Promise<{
+    isMarked: boolean;
+    confidence: number;
+    markType: "tick" | "cross" | "fill" | "line" | "dot" | "none" | "unknown";
+    displayValue: string;
+  }> => {
+    // Extend 1.5% in all directions to catch marks drawn just outside the box
+    const extended = {
+      x: Math.max(0, box.x - 1.5),
+      y: Math.max(0, box.y - 1.5),
+      width: Math.min(100, box.width + 3),
+      height: Math.min(100, box.height + 3)
+    };
+    extended.width  = Math.min(extended.width,  100 - extended.x);
+    extended.height = Math.min(extended.height, 100 - extended.y);
+
+    // ── 1. OCR character matching ─────────────────────────────────────────────
+    const textWords = (activePage?.textLayer || []).map(normalizeWordBox).filter(w => {
+      const cx = w.x + w.width / 2;
+      const cy = w.y + w.height / 2;
+      return cx >= extended.x && cx <= extended.x + extended.width &&
+             cy >= extended.y && cy <= extended.y + extended.height;
+    });
+    const ocrChars = textWords.map(w => w.text || "").join("");
+    const hasTick  = /[✓✔☑√]|^[vV]$/.test(ocrChars);
+    const hasCross = /[✗✘☒]|^[xX]$/.test(ocrChars);
+    if (hasTick)  return { isMarked: true,  confidence: 0.92, markType: "tick",  displayValue: "✓ Checked" };
+    if (hasCross) return { isMarked: true,  confidence: 0.90, markType: "cross", displayValue: "✗ Checked" };
+
+    // ── 2. Pixel density analysis ─────────────────────────────────────────────
+    const imageUrl = await cropSelectionImage(extended, false, 0);
+    if (!imageUrl) return { isMarked: false, confidence: 0, markType: "unknown", displayValue: "☐ Unknown" };
+
+    const img = new Image();
+    img.src = imageUrl;
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(); }).catch(() => null);
+    if (!img.naturalWidth) return { isMarked: false, confidence: 0.3, markType: "unknown", displayValue: "☐ Unknown" };
+
+    const scale = 3; // upscale for better density resolution
+    const canvas = document.createElement("canvas");
+    canvas.width  = img.naturalWidth  * scale;
+    canvas.height = img.naturalHeight * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { isMarked: false, confidence: 0, markType: "unknown", displayValue: "☐ Unknown" };
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const { data, width: W, height: H } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const total = W * H;
+    let dark = 0; // pixels below luminance threshold (ink)
+    // Track quadrant dark counts for diagonal line detection
+    const q = [0, 0, 0, 0]; // TL, TR, BL, BR quadrants
+    const halfW = Math.floor(W / 2);
+    const halfH = Math.floor(H / 2);
+
+    for (let i = 0; i < data.length; i += 4) {
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (lum < 140) {
+        dark++;
+        const px = (i / 4) % W;
+        const py = Math.floor((i / 4) / W);
+        const qi = (px < halfW ? 0 : 1) + (py < halfH ? 0 : 2);
+        q[qi]++;
+      }
+    }
+
+    const density = dark / total; // 0 = white, 1 = fully black
+
+    // ── 3. Classify by density and quadrant pattern ───────────────────────────
+    // Empty checkbox/circle border only → ~2-10% dark (just the printed border lines)
+    // Tick mark (✓) → TL + BR quadrants heavier → ~12-30% overall
+    // Cross / forward-slash line → TR + BL heavier → ~15-30%
+    // Horizontal / vertical line through box → balanced quadrants → ~12-25%
+    // Full fill or heavy highlight → >38% uniform
+
+    if (density < 0.08) {
+      // Very low ink — almost certainly empty
+      return { isMarked: false, confidence: 0.88, markType: "none", displayValue: "☐ Unchecked" };
+    }
+
+    if (density >= 0.38) {
+      // Very high ink — filled box or heavy highlight
+      return { isMarked: true, confidence: 0.93, markType: "fill", displayValue: "■ Checked (Filled)" };
+    }
+
+    if (density >= 0.10) {
+      // Moderate ink — some kind of mark present. Distinguish mark shape:
+      const diagTL_BR = (q[0] + q[3]); // top-left + bottom-right (tick direction)
+      const diagTR_BL = (q[1] + q[2]); // top-right + bottom-left (back-slash or cross)
+      const diagRatio = Math.max(diagTL_BR, diagTR_BL) / Math.max(1, Math.min(diagTL_BR, diagTR_BL));
+
+      // Dot / filled circle (radio) — dark cluster in centre quadrants
+      const centre = q[0] + q[1] + q[2] + q[3] > 0
+        ? (dark - (Math.max(q[0], q[3]) + Math.max(q[1], q[2]))) / Math.max(1, dark)
+        : 0;
+      if (density >= 0.22 && diagRatio < 1.4) {
+        return { isMarked: true, confidence: 0.82, markType: "dot", displayValue: "● Checked (Filled)" };
+      }
+
+      if (diagRatio >= 1.8) {
+        const isTick = diagTL_BR > diagTR_BL;
+        return {
+          isMarked: true,
+          confidence: Math.min(0.90, 0.70 + density),
+          markType: isTick ? "tick" : "cross",
+          displayValue: isTick ? "✓ Checked" : "✗ Checked"
+        };
+      }
+
+      // Line across the box (horizontal/diagonal slash)
+      return {
+        isMarked: true,
+        confidence: Math.min(0.85, 0.60 + density * 2),
+        markType: "line",
+        displayValue: "/ Checked (Line)"
+      };
+    }
+
+    // Borderline density (8-10%) — could be border artifact or faint mark
+    return { isMarked: false, confidence: 0.55, markType: "unknown", displayValue: "☐ Uncertain" };
+  };
+
+  // ─── Radio Group Analyser ──────────────────────────────────────────────────
+  // The user draws ONE box around the entire radio group. This function:
+  //   1. Finds each option row (text line) inside the box
+  //   2. Locates the circle/bubble area to the LEFT of each option label
+  //   3. Runs detectMarkInRegion on each circle independently
+  //   4. NORMALISES: only the option with the highest raw confidence is "selected"
+  //      — regardless of whether each individual detection said true/false.
+  //   Only one value can ever be true in a radio group.
+  const detectRadioGroup = async (box: SelectionBox): Promise<{
+    selectedLabel: string;
+    selectedConfidence: number;
+    markType: string;
+    options: Array<{ label: string; confidence: number; isSelected: boolean; markType: string }>;
+  }> => {
+    const boxWords = (activePage?.textLayer || []).map(normalizeWordBox).filter(w => {
+      const cx = w.x + w.width / 2;
+      const cy = w.y + w.height / 2;
+      return cx >= box.x - 0.5 && cx <= box.x + box.width + 0.5 &&
+             cy >= box.y - 0.5 && cy <= box.y + box.height + 0.5 &&
+             (w.text || "").trim().length > 0;
+    });
+
+    // Group words into horizontal lines
+    const lines: OCRWord[][] = [];
+    for (const word of [...boxWords].sort((a, b) => a.y - b.y)) {
+      const existing = lines.find(line => {
+        const refY = line[0].y;
+        const refH = Math.max(...line.map(l => l.height), 1);
+        return Math.abs(word.y - refY) < refH * 0.75;
+      });
+      if (existing) existing.push(word);
+      else lines.push([word]);
+    }
+
+    if (lines.length === 0) {
+      // No text lines found — fall back to single detection of the whole box
+      const single = await detectMarkInRegion(box);
+      return {
+        selectedLabel: "Option",
+        selectedConfidence: single.confidence,
+        markType: single.markType,
+        options: [{ label: "Option", confidence: single.confidence, isSelected: single.isMarked, markType: single.markType }]
+      };
+    }
+
+    // Analyse each line's circle region
+    const analysed = await Promise.all(lines.map(async (lineWords) => {
+      const sorted = [...lineWords].sort((a, b) => a.x - b.x);
+      const label = sorted.map(w => w.text).join(" ").trim();
+      const firstWord = sorted[0];
+      const lineH = Math.max(...lineWords.map(w => w.height), 2);
+
+      // The radio circle sits to the LEFT of the label text.
+      // Use a square region roughly [lineH × lineH] immediately before the first word.
+      const circleRight = firstWord.x - 0.1;
+      const circleLeft  = Math.max(box.x, circleRight - lineH * 1.8);
+      const circleTop   = Math.max(0, firstWord.y - lineH * 0.1);
+      const circleH     = Math.min(100 - circleTop, lineH * 1.2);
+
+      let circleBox: SelectionBox;
+      if (circleLeft < circleRight && circleRight - circleLeft > 0.3) {
+        circleBox = { x: circleLeft, y: circleTop, width: circleRight - circleLeft, height: circleH };
+      } else {
+        // Circle might be inline with text (e.g. the OCR sees the dot as a character)
+        circleBox = { x: firstWord.x, y: firstWord.y, width: firstWord.width, height: firstWord.height };
+      }
+
+      const det = await detectMarkInRegion(circleBox);
+      return { label, confidence: det.confidence, markType: det.markType, rawIsMarked: det.isMarked };
+    }));
+
+    // Normalise: pick the single option with the HIGHEST raw confidence.
+    // This guarantees only one radio option is ever "selected".
+    const bestIdx = analysed.reduce(
+      (bi, opt, i) => opt.confidence > analysed[bi].confidence ? i : bi,
+      0
+    );
+    const bestConfidence = analysed[bestIdx].confidence;
+    // Only call it "selected" if it meaningfully exceeds the empty-circle baseline (~0.45)
+    const actuallyMarked = bestConfidence > 0.45;
+
+    const options = analysed.map((opt, i) => ({
+      label: opt.label,
+      confidence: opt.confidence,
+      markType: opt.markType,
+      isSelected: i === bestIdx && actuallyMarked
+    }));
+
+    return {
+      selectedLabel: actuallyMarked ? analysed[bestIdx].label : "None",
+      selectedConfidence: bestConfidence,
+      markType: analysed[bestIdx].markType,
+      options
+    };
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const runOcrImage = async (imageUrl: string) => {
     const primaryEngineId = infrastructure?.primaryEngineId || "tesseract-ocr-v5";
     const primaryEngine = infrastructure?.engines?.find(e => e.id === primaryEngineId);
@@ -1092,6 +1634,57 @@ export function ExtractionStudio() {
     return /date|birth|place|issue|expiry|passport|number|name|surname|given|sex|nationality|country|type|code|signature/i.test(cleaned);
   };
 
+  // Finds the nearest label text AND its bounding box — used for auto-anchor creation.
+  // Searches left of the selection first (most forms), then above (column headers).
+  const findNearestLabel = (valueBox: SelectionBox): { text: string; wordBox: SelectionBox } | null => {
+    const normalizedWords = (activePage?.textLayer || []).map(normalizeWordBox);
+    if (normalizedWords.length === 0) return null;
+
+    const isGenericOrValue = (text: string) => /^\d|^[A-Z]{2,}\d|reading|selected/i.test(text.trim());
+
+    // Left-side candidates: words ending just before the value box, on the same line
+    const leftWords = normalizedWords.filter(w => {
+      const right = w.x + w.width;
+      const vCenter = w.y + w.height / 2;
+      return right <= valueBox.x + 0.5
+        && valueBox.x - right < 30
+        && vCenter >= valueBox.y - 1
+        && vCenter <= valueBox.y + valueBox.height + 1
+        && !isGenericOrValue(w.text || "");
+    }).sort((a, b) => (b.x + b.width) - (a.x + a.width)); // closest first
+
+    if (leftWords.length > 0) {
+      // Group words on the same line
+      const baseline = leftWords[0].y;
+      const sameLine = leftWords.filter(w => Math.abs(w.y - baseline) < Math.max(w.height, 1.5));
+      const sorted = sameLine.slice(0, 8).sort((a, b) => a.x - b.x);
+      const text = cleanHeaderCandidate(sorted.map(w => w.text).join(" "));
+      const box = boxFromWords(sorted);
+      if (text.length > 1 && box) return { text, wordBox: box };
+    }
+
+    // Above candidates: words directly above the value box
+    const aboveWords = normalizedWords.filter(w => {
+      const bottom = w.y + w.height;
+      return bottom <= valueBox.y + 0.5
+        && valueBox.y - bottom < 8
+        && w.x + w.width > valueBox.x - 2
+        && w.x < valueBox.x + valueBox.width + 2
+        && !isGenericOrValue(w.text || "");
+    }).sort((a, b) => (b.y + b.height) - (a.y + a.height));
+
+    if (aboveWords.length > 0) {
+      const baseline = aboveWords[0].y;
+      const sameLine = aboveWords.filter(w => Math.abs(w.y - baseline) < Math.max(w.height, 1.5));
+      const sorted = sameLine.slice(0, 8).sort((a, b) => a.x - b.x);
+      const text = cleanHeaderCandidate(sorted.map(w => w.text).join(" "));
+      const box = boxFromWords(sorted);
+      if (text.length > 1 && box) return { text, wordBox: box };
+    }
+
+    return null;
+  };
+
   const getNearbyHeaderText = (box: SelectionBox) => {
     const normalizedWords = (activePage?.textLayer || []).map(normalizeWordBox);
     const centerX = box.x + box.width / 2;
@@ -1127,6 +1720,11 @@ export function ExtractionStudio() {
 
   const createFieldFromSelection = (name: string, type?: string, options?: { keepPending?: boolean }) => {
     if (!pendingAnnotation) return null;
+
+    // Sanitise value — never save the loading placeholder as a real value
+    const rawValue = pendingAnnotation.extractedText || "";
+    const value = /reading selected area|no ocr text/i.test(rawValue) ? "" : rawValue;
+
     const fieldId = nextId("field");
     const newField: StudioField = {
       id: fieldId,
@@ -1135,7 +1733,7 @@ export function ExtractionStudio() {
       required: true,
       enabled: true,
       confidence: pendingAnnotation.confidence / 100,
-      value: pendingAnnotation.extractedText,
+      value,
       x: pendingAnnotation.box.x,
       y: pendingAnnotation.box.y,
       width: pendingAnnotation.box.width,
@@ -1150,22 +1748,43 @@ export function ExtractionStudio() {
       categoryId: selectedCategoryId || null
     };
     setFields(prev => [...prev, newField]);
-    setSelectedFieldId(newField.id);
-    setSelectedCategoryId(null);
-    if (!options?.keepPending) {
-      setPendingAnnotation(null);
+
+    // Auto-create anchor from the detected label — no separate "Add Anchor" step needed
+    if (pendingAnnotation.autoAnchorBox && pendingAnnotation.autoAnchorText) {
+      const anchorId = nextId("anchor");
+      setAnchors(prev => [...prev, {
+        id: anchorId,
+        value: pendingAnnotation.autoAnchorText!,
+        type: "primary",
+        x: pendingAnnotation.autoAnchorBox!.x,
+        y: pendingAnnotation.autoAnchorBox!.y,
+        width: pendingAnnotation.autoAnchorBox!.width,
+        height: pendingAnnotation.autoAnchorBox!.height,
+        confidence: 0.95
+      }]);
+      setLinks(prev => [...prev, { fieldId, anchorId, relationship: "Primary Anchor", confidence: 0.95 }]);
     }
-    toast.success(`Accepted ${newField.name}`);
+
+    setSelectedFieldId(fieldId);
+    setSelectedCategoryId(null);
+    if (!options?.keepPending) setPendingAnnotation(null);
+    toast.success(`Created "${newField.name}"${pendingAnnotation.autoAnchorText ? ` · anchored to "${pendingAnnotation.autoAnchorText}"` : ""}`);
     return fieldId;
   };
 
   const promptForFieldFromSelection = () => {
     if (!pendingAnnotation) return;
+    // Use auto-detected label text as the default name; fall back to detectedObject only if it's meaningful
+    const genericNames = new Set(["OCR Text", "Document Region", "Selected Region"]);
+    const defaultName = pendingAnnotation.autoAnchorText
+      || (genericNames.has(pendingAnnotation.detectedObject) ? "" : pendingAnnotation.detectedObject);
     setCustomPrompt({
       title: "Create Field",
-      message: "Enter field name for this selected area:",
+      message: pendingAnnotation.autoAnchorText
+        ? `Field name (anchor "${pendingAnnotation.autoAnchorText}" will be auto-linked):`
+        : "Enter field name for this selected area:",
       placeholder: "e.g. Passport Number",
-      defaultValue: pendingAnnotation.detectedObject === "OCR Text" ? "" : pendingAnnotation.detectedObject,
+      defaultValue: defaultName,
       onConfirm: (name: string) => {
         if (!name.trim()) {
           toast.warning("Field name is required");
@@ -1273,6 +1892,93 @@ export function ExtractionStudio() {
     if (!anchorCaptureTargetFieldId && !selectedFieldId) {
       setSelectedCategoryId(null);
     }
+
+    // ── Checkbox / Radio: image-based mark detection ──────────────────────────
+    if ((activeTool === "checkbox" || activeTool === "radio") && !anchorCaptureTargetFieldId) {
+      const nearestLabel = findNearestLabel(box);
+      const groupLabel   = nearestLabel?.text || getNearbyHeaderText(box);
+
+      setPendingAnnotation({
+        box, clientPos,
+        extractedText: "Detecting mark…",
+        detectedObject: groupLabel || (activeTool === "radio" ? "Radio Group" : "Checkbox"),
+        suggestedType: activeTool, confidence: 0, relatedObjects: [],
+        autoAnchorText: nearestLabel?.text, autoAnchorBox: nearestLabel?.wordBox
+      });
+
+      if (activeTool === "radio") {
+        // ── Radio group: analyse each option separately, normalise to ONE selected ──
+        const group = await detectRadioGroup(box).catch(() => null);
+        const selectedLabel    = group?.selectedLabel    ?? "None";
+        const selectedConf     = group?.selectedConfidence ?? 0;
+        const markType         = group?.markType         ?? "unknown";
+        const optionsSummary   = group?.options
+          .map(o => `${o.isSelected ? "●" : "○"} ${o.label}`)
+          .join(" | ") ?? "";
+
+        const fieldId   = nextId("field");
+        const fieldName = groupLabel || "Radio Group";
+        setFields(prev => [...prev, {
+          id: fieldId, name: fieldName, type: "radio",
+          required: true, enabled: true,
+          confidence: selectedConf,
+          value: selectedLabel === "None" ? "☐ None selected" : `● ${selectedLabel}`,
+          x: box.x, y: box.y, width: box.width, height: box.height,
+          locatorStrategy: "hybrid", pageStrategy: "detect_by_text",
+          searchDirection: "nearest", expansionMode: "box",
+          stopAtNextLabel: true, allowLongText: false,
+          categoryId: selectedCategoryId || null
+        }]);
+        if (nearestLabel) {
+          const anchorId = nextId("anchor");
+          setAnchors(prev => [...prev, {
+            id: anchorId, value: nearestLabel.text, type: "primary",
+            x: nearestLabel.wordBox.x, y: nearestLabel.wordBox.y,
+            width: nearestLabel.wordBox.width, height: nearestLabel.wordBox.height,
+            confidence: 0.95
+          }]);
+          setLinks(prev => [...prev, { fieldId, anchorId, relationship: "Primary Anchor", confidence: 0.95 }]);
+        }
+        setSelectedFieldId(fieldId);
+        setPendingAnnotation(null);
+        const icon = selectedLabel !== "None" ? "●" : "○";
+        toast.success(`${icon} "${fieldName}" → ${selectedLabel}${markType !== "unknown" ? ` (${markType})` : ""}${optionsSummary ? `  [${optionsSummary}]` : ""}`);
+        return;
+      }
+
+      // ── Checkbox: single mark detection ──────────────────────────────────────
+      const detection    = await detectMarkInRegion(box).catch(() => null);
+      const displayValue = detection?.displayValue ?? "☐ Unknown";
+      const confidence   = detection?.confidence   ?? 0;
+      const fieldId      = nextId("field");
+      const fieldName    = groupLabel || "Checkbox";
+      setFields(prev => [...prev, {
+        id: fieldId, name: fieldName, type: "checkbox",
+        required: true, enabled: true,
+        confidence, value: displayValue,
+        x: box.x, y: box.y, width: box.width, height: box.height,
+        locatorStrategy: "hybrid", pageStrategy: "detect_by_text",
+        searchDirection: "nearest", expansionMode: "box",
+        stopAtNextLabel: true, allowLongText: false,
+        categoryId: selectedCategoryId || null
+      }]);
+      if (nearestLabel) {
+        const anchorId = nextId("anchor");
+        setAnchors(prev => [...prev, {
+          id: anchorId, value: nearestLabel.text, type: "primary",
+          x: nearestLabel.wordBox.x, y: nearestLabel.wordBox.y,
+          width: nearestLabel.wordBox.width, height: nearestLabel.wordBox.height,
+          confidence: 0.95
+        }]);
+        setLinks(prev => [...prev, { fieldId, anchorId, relationship: "Primary Anchor", confidence: 0.95 }]);
+      }
+      setSelectedFieldId(fieldId);
+      setPendingAnnotation(null);
+      toast.success(`${detection?.isMarked ? "✓" : "☐"} "${fieldName}" — ${displayValue}${detection?.markType ? ` (${detection.markType})` : ""}${nearestLabel ? ` · anchored to "${nearestLabel.text}"` : ""}`);
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const isAnchor = !!anchorCaptureTargetFieldId || activeTool === "anchor";
     const intersecting = getWordsInSelection(box, !isAnchor);
     let textLayerText = intersecting.map((word) => word.text).join(" ").trim();
@@ -1282,71 +1988,87 @@ export function ExtractionStudio() {
       textLayerText = textLayerText.replace(/\s[A-Z]$/i, "").trim();
     }
     textLayerText = textLayerText.replace(/[-_~|.,]+$/, "").trim();
+    // Strip secondary-language alternates (e.g. "29 MAY/MAI 1977" → "29 MAY 1977")
+    textLayerText = normalizeBilingualValue(textLayerText);
 
     const headerText = getNearbyHeaderText(box);
+    const nearestLabel = findNearestLabel(box); // better label + its bounding box
+
     if (textLayerText) {
       const confidence = averageConfidence(intersecting) * 100;
       if (anchorCaptureTargetFieldId) {
         createLinkedAnchor(anchorCaptureTargetFieldId, box, textLayerText, confidence || 96, anchorCaptureRelationship);
         return;
       }
-      // Only remap to the currently-selected field when using the select tool (not when drawing a new field)
+      // Anchor tool: link the drawn region as an anchor to the currently-selected field
+      if (activeTool === "anchor") {
+        if (selectedFieldId) {
+          createLinkedAnchor(selectedFieldId, box, textLayerText, confidence || 96, "Primary Anchor");
+        } else {
+          toast.warning("Select a field first, then draw its anchor label with the Anchor tool.");
+        }
+        return;
+      }
+      // Only remap to the currently-selected field when using the select tool
       if (selectedFieldId && activeTool === "select") {
         setFields(prev => prev.map(f => f.id === selectedFieldId ? {
-          ...f,
-          value: textLayerText,
-          x: box.x,
-          y: box.y,
-          width: box.width,
-          height: box.height
+          ...f, value: textLayerText, x: box.x, y: box.y, width: box.width, height: box.height
         } : f));
         toast.success(`Mapped to selected field`);
         return;
       }
       const intelligence = inferSelection(textLayerText);
+      // Best field name: nearest label text → nearby header → type-derived
+      const bestName = nearestLabel?.text || headerText || intelligence.detectedObject;
 
-      // Smart Detect: auto-create field immediately without prompting
+      // Smart Detect: fully automatic — create field + anchor in one step, no popup
       if (activeTool === "smart") {
-        const detectedName = headerText || intelligence.detectedObject;
         const fieldId = nextId("field");
-        const newField: StudioField = {
-          id: fieldId,
-          name: detectedName,
+        setFields(prev => [...prev, {
+          id: fieldId, name: bestName,
           type: intelligence.suggestedType || "text",
-          required: true,
-          enabled: true,
+          required: true, enabled: true,
           confidence: (confidence || intelligence.confidence) / 100,
           value: textLayerText,
-          x: box.x,
-          y: box.y,
-          width: box.width,
-          height: box.height,
-          locatorStrategy: "hybrid",
-          pageStrategy: "detect_by_text",
-          searchDirection: "nearest",
-          expansionMode: "line",
-          stopAtNextLabel: true,
-          allowLongText: true,
+          x: box.x, y: box.y, width: box.width, height: box.height,
+          locatorStrategy: "hybrid", pageStrategy: "detect_by_text",
+          searchDirection: "nearest", expansionMode: "line",
+          stopAtNextLabel: true, allowLongText: true,
           categoryId: selectedCategoryId || null
-        };
-        setFields(prev => [...prev, newField]);
+        }]);
+        if (nearestLabel) {
+          const anchorId = nextId("anchor");
+          setAnchors(prev => [...prev, {
+            id: anchorId, value: nearestLabel.text, type: "primary",
+            x: nearestLabel.wordBox.x, y: nearestLabel.wordBox.y,
+            width: nearestLabel.wordBox.width, height: nearestLabel.wordBox.height,
+            confidence: 0.96
+          }]);
+          setLinks(prev => [...prev, { fieldId, anchorId, relationship: "Primary Anchor", confidence: 0.96 }]);
+        }
         setSelectedFieldId(fieldId);
-        toast.success(`Smart detected: "${detectedName}" (${intelligence.suggestedType})`);
+        toast.success(`Smart: "${bestName}"${nearestLabel ? ` · auto-anchored to "${nearestLabel.text}"` : ""}`);
         return;
       }
 
       setPendingAnnotation({
-        box,
-        clientPos,
-        extractedText: textLayerText,
+        box, clientPos, extractedText: textLayerText,
         ...intelligence,
-        detectedObject: headerText || intelligence.detectedObject,
-        confidence: confidence || intelligence.confidence
+        detectedObject: bestName,
+        confidence: confidence || intelligence.confidence,
+        autoAnchorText: nearestLabel?.text,
+        autoAnchorBox: nearestLabel?.wordBox
       });
       return;
     }
 
-    if (!anchorCaptureTargetFieldId) {
+    if (activeTool === "anchor") {
+      // No text found in the drawn region yet — wait for async OCR; don't show field popup
+      if (!anchorCaptureTargetFieldId && !selectedFieldId) {
+        toast.warning("Select a field first, then draw its anchor label with the Anchor tool.");
+        return;
+      }
+    } else if (!anchorCaptureTargetFieldId) {
       setPendingAnnotation({
         box,
         clientPos,
@@ -1365,6 +2087,7 @@ export function ExtractionStudio() {
         cleanedCropText = cleanedCropText.replace(/\s[A-Z]$/i, "").trim();
       }
       cleanedCropText = cleanedCropText.replace(/[-_~|.,]+$/, "").trim();
+      cleanedCropText = normalizeBilingualValue(cleanedCropText);
 
       const extractedText = cleanedCropText || "No OCR text found in selected area";
         
@@ -1373,14 +2096,19 @@ export function ExtractionStudio() {
         setPendingAnnotation(null);
         return;
       }
+      if (activeTool === "anchor") {
+        if (selectedFieldId) {
+          createLinkedAnchor(selectedFieldId, box, extractedText, cropOcr?.confidence ? cropOcr.confidence * 100 : 90, "Primary Anchor");
+        } else {
+          toast.warning("Select a field first, then draw its anchor label with the Anchor tool.");
+        }
+        setPendingAnnotation(null);
+        return;
+      }
       if (selectedFieldId && activeTool === "select") {
+        const safeValue = /reading selected area|no ocr text/i.test(extractedText) ? "" : extractedText;
         setFields(prev => prev.map(f => f.id === selectedFieldId ? {
-          ...f,
-          value: extractedText,
-          x: box.x,
-          y: box.y,
-          width: box.width,
-          height: box.height,
+          ...f, value: safeValue, x: box.x, y: box.y, width: box.width, height: box.height,
           confidence: cropOcr?.confidence ? cropOcr.confidence * 100 : 90
         } : f));
         setPendingAnnotation(null);
@@ -1388,43 +2116,45 @@ export function ExtractionStudio() {
         return;
       }
       const intelligence = inferSelection(cleanedCropText);
+      const bestName = nearestLabel?.text || headerText || intelligence.detectedObject;
+      const safeValue = /reading selected area|no ocr text/i.test(extractedText) ? "" : (cleanedCropText || extractedText);
 
       if (activeTool === "smart") {
-        const detectedName = headerText || intelligence.detectedObject;
         const fieldId = nextId("field");
-        const newField: StudioField = {
-          id: fieldId,
-          name: detectedName,
+        setFields(prev => [...prev, {
+          id: fieldId, name: bestName,
           type: intelligence.suggestedType || "text",
-          required: true,
-          enabled: true,
+          required: true, enabled: true,
           confidence: cropOcr?.confidence ?? intelligence.confidence / 100,
-          value: cleanedCropText || extractedText,
-          x: box.x,
-          y: box.y,
-          width: box.width,
-          height: box.height,
-          locatorStrategy: "hybrid",
-          pageStrategy: "detect_by_text",
-          searchDirection: "nearest",
-          expansionMode: "line",
-          stopAtNextLabel: true,
-          allowLongText: true,
+          value: safeValue,
+          x: box.x, y: box.y, width: box.width, height: box.height,
+          locatorStrategy: "hybrid", pageStrategy: "detect_by_text",
+          searchDirection: "nearest", expansionMode: "line",
+          stopAtNextLabel: true, allowLongText: true,
           categoryId: selectedCategoryId || null
-        };
-        setFields(prev => [...prev, newField]);
+        }]);
+        if (nearestLabel) {
+          const anchorId = nextId("anchor");
+          setAnchors(prev => [...prev, {
+            id: anchorId, value: nearestLabel.text, type: "primary",
+            x: nearestLabel.wordBox.x, y: nearestLabel.wordBox.y,
+            width: nearestLabel.wordBox.width, height: nearestLabel.wordBox.height,
+            confidence: 0.96
+          }]);
+          setLinks(prev => [...prev, { fieldId, anchorId, relationship: "Primary Anchor", confidence: 0.96 }]);
+        }
         setSelectedFieldId(fieldId);
-        toast.success(`Smart detected: "${detectedName}" (${intelligence.suggestedType})`);
+        toast.success(`Smart: "${bestName}"${nearestLabel ? ` · auto-anchored to "${nearestLabel.text}"` : ""}`);
         return;
       }
 
       setPendingAnnotation({
-        box,
-        clientPos,
-        extractedText,
+        box, clientPos, extractedText: safeValue,
         ...intelligence,
-        detectedObject: headerText || intelligence.detectedObject,
-        confidence: cropOcr?.confidence ? cropOcr.confidence * 100 : intelligence.confidence
+        detectedObject: bestName,
+        confidence: cropOcr?.confidence ? cropOcr.confidence * 100 : intelligence.confidence,
+        autoAnchorText: nearestLabel?.text,
+        autoAnchorBox: nearestLabel?.wordBox
       });
     } catch (error) {
       console.error("Selected-area OCR failed:", error);
@@ -1534,10 +2264,15 @@ export function ExtractionStudio() {
 
   const handleDeleteField = (id: string) => {
     setLinks(prevLinks => {
-      const linkedAnchorIds = prevLinks.filter(link => link.fieldId === id).map(link => link.anchorId);
-      setAnchors(prevAnchors => prevAnchors.filter(anchor => !linkedAnchorIds.includes(anchor.id)));
-      toast.info(linkedAnchorIds.length > 0 ? "Deleted field and linked anchors" : "Deleted field");
-      return prevLinks.filter(link => link.fieldId !== id);
+      const ownedAnchorIds = prevLinks.filter(l => l.fieldId === id).map(l => l.anchorId);
+      const sharedAnchorIds = prevLinks.filter(l => l.fieldId !== id).map(l => l.anchorId);
+      // Only delete anchors that belong exclusively to this field
+      const exclusiveAnchorIds = ownedAnchorIds.filter(aid => !sharedAnchorIds.includes(aid));
+      if (exclusiveAnchorIds.length > 0) {
+        setAnchors(prev => prev.filter(a => !exclusiveAnchorIds.includes(a.id)));
+      }
+      toast.info(exclusiveAnchorIds.length > 0 ? "Deleted field and its anchors" : "Deleted field");
+      return prevLinks.filter(l => l.fieldId !== id);
     });
     setFields(prev => prev.filter(f => f.id !== id));
     setSelectedFieldId(prev => prev === id ? null : prev);
@@ -1918,7 +2653,7 @@ export function ExtractionStudio() {
     activeDocument?.classification?.className ? {
       id: "document_type",
       name: "Document Type",
-      type: "string",
+      type: "text",
       enabled: true,
       value: activeDocument.classification.className,
       confidence: activeDocument.classification.confidence || 0.99,
@@ -2163,26 +2898,119 @@ export function ExtractionStudio() {
             </p>
           </div>
 
-          <div className="w-[210px] shrink-0">
+          {/* Document Navigator — replaces dropdown */}
+          <div className="relative shrink-0">
             <label className="mb-1 block text-[8px] font-black uppercase tracking-widest text-muted-foreground">
-              Review Document
+              Document
             </label>
-            <select
-              value={activeDocument?.documentId || ""}
-              onChange={(event) => {
-                const nextDocument = trainingDocuments.find(document => document.documentId === event.target.value);
-                if (nextDocument) setActiveDocument(nextDocument);
-              }}
-              className="h-8 w-full rounded-lg border border-border/70 bg-card px-2 text-[10px] font-black uppercase text-foreground outline-none transition focus:border-primary"
+            <button
+              onClick={() => setDocPickerOpen(o => !o)}
+              className="flex h-8 min-w-[180px] max-w-[240px] items-center gap-2 rounded-lg border border-border/70 bg-card px-3 text-left transition hover:border-primary/50 hover:bg-muted/30"
             >
-              {trainingDocuments.length === 0 ? (
-                <option value="">No documents loaded</option>
-              ) : trainingDocuments.map(document => (
-                <option key={document.documentId} value={document.documentId}>
-                  {document.classification?.className || document.name}
-                </option>
-              ))}
-            </select>
+              <FileText size={12} className="shrink-0 text-primary" />
+              <span className="flex-1 truncate text-[10px] font-black uppercase text-foreground">
+                {activeDocument
+                  ? (activeDocument.classification?.className || activeDocument.name)
+                  : "No document"}
+              </span>
+              <span className="shrink-0 text-[8px] font-black text-muted-foreground">
+                {trainingDocuments.length > 0 ? `${trainingDocuments.indexOf(activeDocument!) + 1}/${trainingDocuments.length}` : "0"}
+              </span>
+              <ChevronDown size={11} className={cn("shrink-0 text-muted-foreground transition-transform", docPickerOpen && "rotate-180")} />
+            </button>
+
+            {docPickerOpen && (
+              <>
+                {/* Click-away backdrop */}
+                <div className="fixed inset-0 z-[90]" onClick={() => setDocPickerOpen(false)} />
+                {/* Panel */}
+                <div className="absolute left-0 top-full z-[100] mt-1 w-80 rounded-xl border border-border bg-card shadow-2xl overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-2.5 bg-muted/30">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                      {trainingDocuments.length} Document{trainingDocuments.length !== 1 ? "s" : ""}
+                    </span>
+                    <button onClick={() => setDocPickerOpen(false)} className="text-muted-foreground hover:text-foreground">
+                      <X size={13} />
+                    </button>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                    {trainingDocuments.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-[10px] font-bold text-muted-foreground">
+                        No documents loaded. Upload documents in the Intake stage.
+                      </div>
+                    ) : trainingDocuments.map((doc, idx) => {
+                      const isActive = doc.documentId === activeDocument?.documentId;
+                      const hasDesign = !!(doc.metadata?.extractionDesign?.fields?.length);
+                      const docClass = doc.classification?.className;
+                      const confidence = doc.classification?.confidence;
+                      return (
+                        <button
+                          key={doc.documentId}
+                          onClick={() => { setActiveDocument(doc); setDocPickerOpen(false); }}
+                          className={cn(
+                            "flex w-full items-start gap-3 px-4 py-3 text-left border-b border-border/50 last:border-0 transition-all",
+                            isActive ? "bg-primary/5 border-l-2 border-l-primary" : "hover:bg-muted/40"
+                          )}
+                        >
+                          {/* Doc index badge */}
+                          <div className={cn(
+                            "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[8px] font-black",
+                            isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                          )}>
+                            {idx + 1}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-[11px] font-black text-foreground uppercase tracking-tight">
+                                {doc.name}
+                              </span>
+                              {isActive && (
+                                <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[7px] font-black text-primary uppercase">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              {docClass && (
+                                <span className="truncate text-[9px] font-bold text-muted-foreground">
+                                  {docClass}
+                                  {confidence ? ` · ${Math.round(confidence * 100)}%` : ""}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className={cn(
+                                "flex items-center gap-1 text-[8px] font-black uppercase",
+                                hasDesign ? "text-emerald-600" : "text-muted-foreground/50"
+                              )}>
+                                <CheckCircle2 size={9} />
+                                {hasDesign ? "Extraction mapped" : "Not mapped"}
+                              </span>
+                              {doc.pages?.length ? (
+                                <span className="text-[8px] text-muted-foreground/60 font-bold">
+                                  · {doc.pages.length} page{doc.pages.length !== 1 ? "s" : ""}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Keyboard hint */}
+                  <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-2">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60">
+                      Click to switch · {trainingDocuments.filter(d => !!(d.metadata?.extractionDesign?.fields?.length)).length} mapped
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[8px] font-bold text-muted-foreground">↑</kbd>
+                      <kbd className="rounded border border-border bg-card px-1.5 py-0.5 text-[8px] font-bold text-muted-foreground">↓</kbd>
+                      <span className="text-[8px] text-muted-foreground/50 ml-1">navigate</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           
           <div className="h-8 w-[1px] shrink-0 bg-border" />
@@ -2232,7 +3060,36 @@ export function ExtractionStudio() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
-          <button 
+
+          {/* Extract Values — reads text layer into all positioned fields */}
+          <button
+            onClick={() => extractAllFieldValues(true)}
+            disabled={isExtracting || isRefetchingOCR}
+            title="Read OCR text layer and populate values for all positioned fields"
+            className="h-9 px-3 rounded-xl bg-card border border-sky-200 text-[9px] font-black uppercase tracking-widest hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 transition-all flex items-center gap-2 group shadow-lg text-sky-600 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isExtracting
+              ? <RefreshCw size={13} className="animate-spin" />
+              : <Zap size={13} className="group-hover:scale-110 transition-transform" />
+            }
+            Extract Values
+          </button>
+
+          {/* Re-fetch OCR — re-runs OCR engine then extracts */}
+          <button
+            onClick={handleRefetchOCR}
+            disabled={isRefetchingOCR || isExtracting}
+            title="Re-run OCR on all pages, then refresh extracted field values"
+            className="h-9 px-3 rounded-xl bg-card border border-violet-200 text-[9px] font-black uppercase tracking-widest hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 transition-all flex items-center gap-2 group shadow-lg text-violet-600 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isRefetchingOCR
+              ? <RefreshCw size={13} className="animate-spin" />
+              : <RefreshCw size={13} className="group-hover:rotate-180 transition-transform duration-500" />
+            }
+            {isRefetchingOCR ? "Running OCR…" : "Re-fetch OCR"}
+          </button>
+
+          <button
              onClick={() => {
                 setConfirmDialog({
                   title: "Clear Mappings",
@@ -2313,17 +3170,6 @@ export function ExtractionStudio() {
              Re-apply Model
           </button>
           
-          <button
-            onClick={async () => {
-              updateStepStatus(TrainingStage.EXTRACTION, "completed");
-              await saveState?.();
-              setActiveStage(TrainingStage.VALIDATION);
-            }}
-            className="h-9 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[9px] uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-primary/20 whitespace-nowrap"
-          >
-            Finalize & Proceed
-            <ChevronRight size={14} />
-          </button>
         </div>
       </div>
 
@@ -2512,16 +3358,16 @@ export function ExtractionStudio() {
                 {group.fields.map((field, index) => {
                   const isActive = activeTraceFieldId === field.id;
                   return (
-                <button
+                <div
                   key={field.id}
-                  onClick={() => setSelectedFieldId(selectedFieldId === field.id ? null : field.id)}
                   onMouseEnter={() => setHoveredFieldId(field.id)}
                   onMouseLeave={() => setHoveredFieldId(null)}
                   className={cn(
-                    "flex flex-col min-h-9 w-full gap-2 border-b border-slate-200 px-4 py-2 text-left transition-all",
+                    "group/field flex flex-col min-h-9 w-full gap-2 border-b border-slate-200 px-4 py-2 text-left transition-all cursor-pointer",
                     field.enabled === false && "opacity-45",
                     isActive ? "bg-emerald-50/70 shadow-[inset_3px_0_0_hsl(var(--primary))]" : "hover:bg-slate-50"
                   )}
+                  onClick={() => setSelectedFieldId(selectedFieldId === field.id ? null : field.id)}
                 >
                   <div className="flex w-full items-center gap-2">
                     <span className="flex w-10 shrink-0 items-center gap-1">
@@ -2538,6 +3384,17 @@ export function ExtractionStudio() {
                     <span className="min-w-0 flex-1 whitespace-normal text-[10px] font-black uppercase tracking-wide text-foreground">
                       {field.name}
                     </span>
+                    {/* Delete button — visible on hover */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteField(field.id);
+                      }}
+                      title="Delete field"
+                      className="ml-auto shrink-0 h-5 w-5 rounded flex items-center justify-center opacity-0 group-hover/field:opacity-100 transition-opacity text-muted-foreground hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 size={11} />
+                    </button>
                   </div>
                   <div className="flex w-full items-center gap-2 pl-12">
                     <select
@@ -2546,7 +3403,20 @@ export function ExtractionStudio() {
                       onChange={(event) => updateFieldConfig(field.id, { type: event.target.value, dateFormat: event.target.value === "date" ? field.dateFormat || "DD/MM/YYYY" : field.dateFormat })}
                       className="h-6 w-20 shrink-0 rounded border border-slate-300 bg-slate-50 px-1 text-[8px] font-black uppercase text-muted-foreground outline-none"
                     >
-                      {["string", "text", "date", "number", "checkbox", "radio", "barcode", "signature", "table", "object"].map(type => <option key={type} value={type}>{type}</option>)}
+                      {[
+                        ["text",      "Text — any plain text value"],
+                        ["number",    "Number — numeric / currency"],
+                        ["date",      "Date — use dateFormat field"],
+                        ["checkbox",  "Checkbox — checked / unchecked"],
+                        ["radio",     "Radio — one of multiple options"],
+                        ["table",     "Table — rows and columns"],
+                        ["barcode",   "Barcode / QR — decoded value"],
+                        ["signature", "Signature — presence detection"],
+                        ["image",     "Image — photo or visual region"],
+                        ["object",    "Object — structured sub-fields"],
+                      ].map(([val, label]) => (
+                        <option key={val} value={val}>{label}</option>
+                      ))}
                     </select>
                     {field.type === "date" ? (
                       <input
@@ -2577,7 +3447,7 @@ export function ExtractionStudio() {
                       className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 text-[8px] font-bold text-foreground outline-none"
                     />
                   </div>
-                </button>
+                </div>
                   );
                 })}
               </div>
@@ -2727,9 +3597,23 @@ export function ExtractionStudio() {
               activeAnnotationId={activeTraceFieldId}
               onAnnotationSelect={setSelectedFieldId}
               activeLayer={activeLayer}
+              showActionMenu={activeTool === "select" || selectedFieldId !== null}
               onDeleteAnnotation={handleDeleteAnnotation}
               onAnnotationAction={(action, ann) => {
-                if (action === "addAnchor") {
+                if (action === "rename") {
+                  const currentName = fields.find(f => f.id === ann.id)?.name || ann.label || "";
+                  setCustomPrompt({
+                    title: "Rename Field",
+                    placeholder: "e.g. Passport Number",
+                    defaultValue: currentName,
+                    onConfirm: (newName: string) => {
+                      if (newName.trim()) {
+                        updateFieldConfig(ann.id, { name: newName.trim() });
+                        toast.success(`Renamed to "${newName.trim()}"`);
+                      }
+                    }
+                  });
+                } else if (action === "addAnchor") {
                   beginAnchorCaptureForField(ann.id);
                 } else if (action === "done") {
                   setAnchorCaptureTargetFieldId(null);
@@ -2850,8 +3734,14 @@ export function ExtractionStudio() {
                   
                   <div className="pl-4 w-full">
                     <span className="font-mono text-[10px] font-bold text-foreground break-words whitespace-pre-wrap">
-                      {field.value || "No OCR value found"}
+                      {field.value ? formatFieldValue(field) : "No OCR value found"}
                     </span>
+                    {/* Show raw value below formatted date so user can verify */}
+                    {field.type === "date" && field.dateFormat && field.value && formatFieldValue(field) !== field.value && (
+                      <span className="block text-[8px] text-muted-foreground/60 font-mono mt-0.5">
+                        raw: {field.value}
+                      </span>
+                    )}
                   </div>
                   
                   <div className="flex items-center justify-between gap-2 pl-4 mt-1 w-full text-[8px] font-black uppercase text-muted-foreground">
@@ -2891,6 +3781,31 @@ export function ExtractionStudio() {
         />
       </div>
 
+      {/* STANDARD FOOTER — matches all other studio stages */}
+      <footer className="px-8 py-5 border-t border-border bg-card/50 flex items-center justify-between gap-4 shrink-0 z-50">
+        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+          <CheckCircle2 size={14} className={fields.length > 0 ? "text-emerald-500" : "text-muted-foreground/30"} />
+          <span>{fields.filter(f => f.value).length} / {fields.length} fields extracted</span>
+          {anchors.length > 0 && (
+            <>
+              <span className="text-border">·</span>
+              <span>{anchors.length} anchor{anchors.length !== 1 ? "s" : ""}</span>
+            </>
+          )}
+        </div>
+        <button
+          onClick={async () => {
+            updateStepStatus(TrainingStage.EXTRACTION, "completed");
+            await saveState?.();
+            setActiveStage(TrainingStage.VALIDATION);
+          }}
+          className="h-11 px-10 rounded-[9px] bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center gap-3 group shadow-lg shadow-primary/20"
+        >
+          Finalize Extraction &amp; Proceed
+          <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+        </button>
+      </footer>
+
       {/* FLOATING TAGGING MENU */}
       {pendingAnnotation && (() => {
         return (
@@ -2927,9 +3842,20 @@ export function ExtractionStudio() {
             </div>
 
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-2 flex flex-col gap-1">
-              <span className="text-[8px] font-black uppercase text-primary/60">OCR Result</span>
-              <span className="text-[11px] font-mono font-bold text-foreground truncate">{pendingAnnotation.extractedText}</span>
+              <span className="text-[8px] font-black uppercase text-primary/60">Extracted Value</span>
+              <span className="text-[11px] font-mono font-bold text-foreground truncate">
+                {pendingAnnotation.extractedText || <span className="text-muted-foreground italic">No text detected</span>}
+              </span>
             </div>
+            {pendingAnnotation.autoAnchorText && (
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 flex items-center gap-2">
+                <Anchor size={10} className="text-zinc-500 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[7px] font-black uppercase text-zinc-400 block">Auto-detected anchor</span>
+                  <span className="text-[10px] font-bold text-zinc-700 truncate block">{pendingAnnotation.autoAnchorText}</span>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
               <button
