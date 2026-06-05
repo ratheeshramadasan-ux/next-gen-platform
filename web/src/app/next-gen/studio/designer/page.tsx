@@ -124,6 +124,9 @@ function DesignerPage() {
   const [activeDesignerTabId, setActiveDesignerTabId] = useState<string>(initialTabId.current);
   const tabsRef = useRef<DesignerTab[]>([]);
   tabsRef.current = designerTabs;
+  // Stable ref so callbacks don't close over a stale value and avoid TDZ
+  const activeTabIdRef = useRef<string>(initialTabId.current);
+  activeTabIdRef.current = activeDesignerTabId;
 
   const takeSnapshot = useCallback(() => {
     // Functional update to ensure we use the most recent state
@@ -174,20 +177,20 @@ function DesignerPage() {
     const isInteractionEnd = changes.some((c: any) => (c.type === 'position' && !c.dragging) || c.type === 'remove' || c.type === 'add');
     if (isInteractionEnd) {
       takeSnapshot();
-      // Mark active tab dirty
-      setDesignerTabs(prev => prev.map(t => t.id === activeDesignerTabId ? { ...t, isDirty: true } : t));
+      // Use ref so this callback is never stale and never hits TDZ
+      setDesignerTabs(prev => prev.map(t => t.id === activeTabIdRef.current ? { ...t, isDirty: true } : t));
     }
     onNodesChange(changes);
-  }, [onNodesChange, takeSnapshot, activeDesignerTabId]);
+  }, [onNodesChange, takeSnapshot]);   // ref is stable — no dep needed
 
   const onEdgesChangeWithHistory = useCallback((changes: any) => {
     const isInteractionEnd = changes.some((c: any) => c.type === 'remove' || c.type === 'add');
     if (isInteractionEnd) {
       takeSnapshot();
-      setDesignerTabs(prev => prev.map(t => t.id === activeDesignerTabId ? { ...t, isDirty: true } : t));
+      setDesignerTabs(prev => prev.map(t => t.id === activeTabIdRef.current ? { ...t, isDirty: true } : t));
     }
     onEdgesChange(changes);
-  }, [onEdgesChange, takeSnapshot, activeDesignerTabId]);
+  }, [onEdgesChange, takeSnapshot]);   // ref is stable — no dep needed
 
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
