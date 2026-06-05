@@ -53,8 +53,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            {/* Knowledge Base Panel — slides in from right */}
-            {!isDesigner && <KnowledgeBasePanel />}
+            {/* Knowledge Base Panel — slides in from right on all pages */}
+            <KnowledgeBasePanel />
           </div>
         </main>
 

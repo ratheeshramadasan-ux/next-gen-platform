@@ -208,7 +208,7 @@ export function StudioLayout({
     }
   };
 
-  const [activeRightSideTab, setActiveRightSideTab] = useState<"properties" | "flow-tool" | "flow-formatting">("properties");
+  const [activeRightSideTab, setActiveRightSideTab] = useState<"properties">("properties");
   
   const [bottomHeight, setBottomHeight] = useState(240);
   const [isResizingBottom, setIsResizingBottom] = useState(false);
@@ -274,15 +274,16 @@ export function StudioLayout({
   ].filter(tab => !hiddenTabs.includes(tab.id.toLowerCase()));
 
   const leftSideRailTabs = [
-    { id: 'project', label: 'Project Structure', icon: Folder },
-    { id: 'activities', label: 'Activity Toolbox', icon: Activity },
+    { id: 'project',          label: 'Project',    icon: Folder },
+    { id: 'activities',       label: 'Activities', icon: Activity },
+    { id: 'flow-tool',        label: 'Flow Tools', icon: GitBranch },
+    { id: 'flow-formatting',  label: 'Formatting', icon: LayoutGrid },
     ...(showBatchesTab ? [{ id: 'batches', label: 'Batches', icon: Layers }] : []),
   ].filter(tab => !(hideProjectPanel && tab.id === 'project'));
 
+  // Right panel: Properties only
   const rightSideRailTabs = [
-    { id: 'properties',     label: 'Properties', icon: Settings },
-    { id: 'flow-tool',      label: 'Flow Tools',  icon: GitBranch },
-    { id: 'flow-formatting',label: 'Formatting',  icon: LayoutGrid },
+    { id: 'properties', label: 'Properties', icon: Settings },
   ];
 
   return (
@@ -589,6 +590,16 @@ export function StudioLayout({
                     />
                   )}
                 </div>
+                <div className={cn("flex-1 overflow-hidden flex flex-col", activeSideTab !== "flow-tool" && "hidden")}>
+                  <FlowToolsPanel onEdgeTypeChange={onEdgeTypeChange} />
+                </div>
+                <div className={cn("flex-1 overflow-hidden flex flex-col", activeSideTab !== "flow-formatting" && "hidden")}>
+                  <FlowFormattingPanel
+                    onAlign={onAlign}
+                    onDistribute={onDistribute}
+                    onAutoLayout={onAutoLayout}
+                  />
+                </div>
               </div>
             </aside>
           </div>
@@ -854,7 +865,7 @@ export function StudioLayout({
                 borderRadius: "0",
               }}
             >
-              {/* Panel Header */}
+              {/* Panel Header — Properties only, no tab strip needed */}
               <div
                 className="h-12 flex items-center justify-between px-3 shrink-0"
                 style={{
@@ -862,6 +873,10 @@ export function StudioLayout({
                   borderBottom: "1px solid var(--studio-border)",
                 }}
               >
+                <div className="flex items-center gap-2">
+                  <Settings size={14} className="text-primary" />
+                  <span className="text-sm font-semibold text-foreground">Properties</span>
+                </div>
                 <button
                   onClick={() => setRightState("hidden")}
                   className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-colors"
@@ -869,45 +884,15 @@ export function StudioLayout({
                 >
                   <PanelRightClose size={15} />
                 </button>
-                <div className="flex items-center gap-0.5">
-                  {rightSideRailTabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveRightSideTab(tab.id as any)}
-                      className={cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all text-[12px] font-semibold",
-                        activeRightSideTab === tab.id
-                          ? "bg-primary text-primary-foreground shadow-md"
-                          : "text-muted-foreground/60 hover:bg-primary/5 hover:text-primary"
-                      )}
-                      title={tab.label}
-                    >
-                      <tab.icon size={14} />
-                      <span>{tab.label}</span>
-                    </button>
-                  ))}
-                </div>
               </div>
 
-              {/* Dynamic Content */}
+              {/* Properties only */}
               <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                <div className={cn("flex-1 overflow-hidden flex flex-col", activeRightSideTab !== "properties" && "hidden")}>
-                  {React.isValidElement(properties) && (
-                    typeof properties.type === 'string' 
-                      ? properties 
-                      : React.cloneElement(properties as React.ReactElement<any>, { embedded: true })
-                  )}
-                </div>
-                <div className={cn("flex-1 overflow-hidden flex flex-col", activeRightSideTab !== "flow-tool" && "hidden")}>
-                  <FlowToolsPanel onEdgeTypeChange={onEdgeTypeChange} />
-                </div>
-                <div className={cn("flex-1 overflow-hidden flex flex-col", activeRightSideTab !== "flow-formatting" && "hidden")}>
-                  <FlowFormattingPanel
-                    onAlign={onAlign}
-                    onDistribute={onDistribute}
-                    onAutoLayout={onAutoLayout}
-                  />
-                </div>
+                {React.isValidElement(properties) && (
+                  typeof properties.type === 'string'
+                    ? properties
+                    : React.cloneElement(properties as React.ReactElement<any>, { embedded: true })
+                )}
               </div>
             </aside>
           </div>
