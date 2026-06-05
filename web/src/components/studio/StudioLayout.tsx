@@ -482,6 +482,22 @@ export function StudioLayout({
       {/* Canvas area uses --background (white/base) so it sits visually
           below the surrounding panels which use --studio-surface (off-white) */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative gap-0" style={{ background: "var(--background)" }}>
+        {/* ── Collapsed-panel restore strips ── always visible, never hidden ── */}
+        {["studio", "application"].includes(activeTab) && (!showSideNav || folderState === "hidden") && (
+          <button
+            onClick={() => { setShowSideNav(true); setFolderState("expanded"); }}
+            className="h-full w-6 flex flex-col items-center justify-center gap-1 shrink-0 z-50 group transition-all hover:w-8"
+            style={{
+              background: "var(--studio-surface)",
+              borderRight: "1.5px solid var(--studio-border)",
+              boxShadow: "2px 0 8px rgba(0,0,0,0.06)",
+            }}
+            title="Show left panel"
+          >
+            <PanelLeftOpen size={13} className="text-muted-foreground group-hover:text-primary transition-colors" />
+          </button>
+        )}
+
         {/* Left Sidebars */}
         {["studio", "application"].includes(activeTab) && showSideNav && (
           <div className="flex h-full gap-1 overflow-hidden">
@@ -524,9 +540,9 @@ export function StudioLayout({
                   ))}
                 </div>
                 <button
-                  onClick={() => setFolderState("hidden")}
+                  onClick={() => { setShowSideNav(false); setFolderState("hidden"); }}
                   className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-colors"
-                  title="Close panel"
+                  title="Hide panel  (click edge strip or header button to restore)"
                 >
                   <PanelLeftClose size={15} />
                 </button>
@@ -727,12 +743,28 @@ export function StudioLayout({
 
         {/* Right Side Panels */}
         {!hideRightPanel && ["studio", "application"].includes(activeTab) && (
-          <div className="flex h-full gap-1 overflow-hidden">
+          <div className="flex h-full overflow-hidden">
+            {/* Right-edge restore strip — visible only when right panel is hidden */}
+            {rightState === "hidden" && (
+              <button
+                onClick={() => setRightState("expanded")}
+                className="h-full w-6 flex flex-col items-center justify-center gap-1 shrink-0 z-50 group transition-all hover:w-8"
+                style={{
+                  background: "var(--studio-surface)",
+                  borderLeft: "1.5px solid var(--studio-border)",
+                  boxShadow: "-2px 0 8px rgba(0,0,0,0.06)",
+                }}
+                title="Show right panel"
+              >
+                <PanelRightOpen size={13} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+            )}
+
             {/* Tab Content Panel */}
             <aside
               className={cn(
                 "transition-all duration-300 flex flex-col relative z-40 overflow-hidden min-h-0",
-                rightState === "expanded" ? "w-[380px]" : rightState === "collapsed" ? "w-0" : "w-0"
+                rightState === "expanded" ? "w-[380px]" : "w-0"
               )}
               style={{
                 background: "var(--studio-surface)",
@@ -752,7 +784,7 @@ export function StudioLayout({
                 <button
                   onClick={() => setRightState("hidden")}
                   className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-colors"
-                  title="Close panel"
+                  title="Hide panel  (click edge strip to restore)"
                 >
                   <PanelRightClose size={15} />
                 </button>
