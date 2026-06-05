@@ -2433,3 +2433,394 @@ model ExtractionTable {
   @@map("extraction_table")
   @@schema("studio")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTERPRISE FLOW ENGINE — Persistence Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FlowDefinition {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String         @map("tenant_id") @db.Uuid
+  workspaceId       String         @map("workspace_id") @db.Uuid
+  name              String
+  description       String?
+  category          String?
+  tags              String[]
+  status            String         @default("draft")
+  dataResidency     String?        @default("global") @map("data_residency")
+  dataClassification String?       @default("internal") @map("data_classification")
+  isGovernanceLocked Boolean       @default(false) @map("is_governance_locked")
+  createdBy         String         @map("created_by")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  versions          FlowVersion[]
+  instances         FlowInstance[]
+  calendars         FlowCalendarDefinition[]
+
+  @@index([tenantId, status])
+  @@map("flow_definitions")
+  @@schema("platform")
+}
+
+model FlowVersion {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowDefinitionId  String   @map("flow_definition_id") @db.Uuid
+  version           String
+  nodesJson         String   @map("nodes_json")    // AnyFlowNode[] serialized
+  edgesJson         String   @map("edges_json")    // edges serialized
+  validationStatus  String   @default("pending") @map("validation_status")
+  validationReport  String?  @map("validation_report")
+  publishedAt       DateTime? @map("published_at")
+  publishedBy       String?  @map("published_by")
+  changeDescription String?  @map("change_description")
+  isActive          Boolean  @default(false) @map("is_active")
+  createdBy         String   @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  definition        FlowDefinition @relation(fields: [flowDefinitionId], references: [id], onDelete: Cascade)
+  instances         FlowInstance[]
+  nodeSchemas       FlowNodeSchema[]
+
+  @@unique([flowDefinitionId, version])
+  @@map("flow_versions")
+  @@schema("platform")
+}
+
+model FlowNodeSchema {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowVersionId    String   @map("flow_version_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  nodeType         String   @map("node_type")
+  schemaJson       String   @map("schema_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  version          FlowVersion @relation(fields: [flowVersionId], references: [id], onDelete: Cascade)
+
+  @@map("flow_node_schemas")
+  @@schema("platform")
+}
+
+model FlowInstance {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowDefinitionId String   @map("flow_definition_id") @db.Uuid
+  flowVersionId    String   @map("flow_version_id") @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  correlationId    String?  @map("correlation_id")
+  traceId          String?  @map("trace_id")
+  status           String   @default("CREATED")
+  priority         String   @default("normal")
+  inputPayload     String?  @map("input_payload")      // encrypted
+  outputPayload    String?  @map("output_payload")     // encrypted
+  maskedPayload    String?  @map("masked_payload")     // PII-safe copy
+  dataClassification String? @map("data_classification")
+  startedAt        DateTime? @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  createdBy        String   @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  definition       FlowDefinition    @relation(fields: [flowDefinitionId], references: [id])
+  version          FlowVersion       @relation(fields: [flowVersionId], references: [id])
+  nodeExecutions   FlowNodeExecution[]
+  contextSnapshots FlowContextSnapshot[]
+  checkpoints      FlowCheckpoint[]
+  waitingInstances FlowWaitingInstance[]
+  timers           FlowTimer[]
+  humanTasks       FlowHumanTask[]
+  approvals        FlowApproval[]
+  auditLogs        FlowAuditLog[]
+  telemetrySpans   FlowTelemetrySpan[]
+  milestones       FlowMilestone[]
+  compensationStack FlowCompensationStack[]
+  idempotencyKeys  FlowIdempotencyKey[]
+
+  @@index([tenantId, status])
+  @@index([correlationId])
+  @@index([traceId])
+  @@map("flow_instances")
+  @@schema("platform")
+}
+
+model FlowNodeExecution {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  nodeType         String   @map("node_type")
+  nodeName         String?  @map("node_name")
+  status           String   @default("PENDING")
+  attempt          Int      @default(1)
+  startedAt        DateTime? @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  durationMs       Int?     @map("duration_ms")
+  inputSnapshot    String?  @map("input_snapshot")   // masked
+  outputSnapshot   String?  @map("output_snapshot")  // masked
+  errorCode        String?  @map("error_code")
+  errorMessage     String?  @map("error_message")    // masked, no PII
+  retryCount       Int      @default(0) @map("retry_count")
+  traceId          String?  @map("trace_id")
+  spanId           String?  @map("span_id")
+  auditHash        String?  @map("audit_hash")
+  previousEventHash String? @map("previous_event_hash")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, nodeId])
+  @@map("flow_node_executions")
+  @@schema("platform")
+}
+
+model FlowContextSnapshot {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  snapshotType     String   @map("snapshot_type") // BEFORE | AFTER | CHECKPOINT
+  contextJson      String   @map("context_json")  // encrypted
+  maskedJson       String?  @map("masked_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("flow_context_snapshots")
+  @@schema("platform")
+}
+
+model FlowCheckpoint {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  checkpointName   String?  @map("checkpoint_name")
+  stateJson        String   @map("state_json")        // encrypted
+  nodePosition     String?  @map("node_position")
+  compensationJson String?  @map("compensation_json")
+  timerJson        String?  @map("timer_json")
+  correlationJson  String?  @map("correlation_json")
+  resumeAttempts   Int      @default(0) @map("resume_attempts")
+  expiresAt        DateTime? @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("flow_checkpoints")
+  @@schema("platform")
+}
+
+model FlowWaitingInstance {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  correlationKey   String   @map("correlation_key")
+  correlationValue String   @map("correlation_value")
+  eventName        String   @map("event_name")
+  status           String   @default("WAITING")
+  waitingSince     DateTime @default(now()) @map("waiting_since")
+  expiresAt        DateTime? @map("expires_at")
+  resumedAt        DateTime? @map("resumed_at")
+  resumedBy        String?  @map("resumed_by")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([correlationKey, correlationValue, eventName])
+  @@map("flow_waiting_instances")
+  @@schema("platform")
+}
+
+model FlowEventCorrelation {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  eventName        String   @map("event_name")
+  correlationKey   String   @map("correlation_key")
+  correlationValue String   @map("correlation_value")
+  eventPayload     String   @map("event_payload")  // encrypted
+  status           String   @default("PENDING")
+  processedAt      DateTime? @map("processed_at")
+  receivedAt       DateTime @default(now()) @map("received_at")
+
+  @@index([tenantId, eventName, correlationKey, correlationValue])
+  @@map("flow_event_correlations")
+  @@schema("platform")
+}
+
+model FlowTimer {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  timerType        String   @map("timer_type") // DURATION | CYCLE | DATE
+  fireAt           DateTime @map("fire_at")
+  status           String   @default("PENDING")
+  firedAt          DateTime? @map("fired_at")
+  cancelledAt      DateTime? @map("cancelled_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([fireAt, status])
+  @@map("flow_timers")
+  @@schema("platform")
+}
+
+model FlowHumanTask {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  taskType         String   @map("task_type") // USER_TASK | APPROVAL_TASK
+  assignedTo       String?  @map("assigned_to")
+  assignedRole     String?  @map("assigned_role")
+  formId           String?  @map("form_id")
+  status           String   @default("PENDING")
+  action           String?  // APPROVE | REJECT | DELEGATE | etc.
+  actionBy         String?  @map("action_by")
+  actionAt         DateTime? @map("action_at")
+  actionReason     String?  @map("action_reason")
+  signature        String?  // cryptographic signature
+  dueAt            DateTime? @map("due_at")
+  escalatedAt      DateTime? @map("escalated_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("flow_human_tasks")
+  @@schema("platform")
+}
+
+model FlowApproval {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  level            Int      @default(1)
+  levelName        String?  @map("level_name")
+  approverPool     String   @map("approver_pool")
+  requiredApprovals Int     @map("required_approvals")
+  receivedApprovals Int     @default(0) @map("received_approvals")
+  status           String   @default("PENDING")
+  decisions        String?  // JSON array of individual decisions
+  completedAt      DateTime? @map("completed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("flow_approvals")
+  @@schema("platform")
+}
+
+model FlowCompensationStack {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  nodeName         String?  @map("node_name")
+  compensationAction String @map("compensation_action")
+  compensationParams String? @map("compensation_params") // JSON
+  executionOrder   Int      @map("execution_order")
+  status           String   @default("PENDING")
+  executedAt       DateTime? @map("executed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("flow_compensation_stack")
+  @@schema("platform")
+}
+
+model FlowIdempotencyKey {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  instanceId       String?  @map("instance_id") @db.Uuid
+  nodeId           String?  @map("node_id")
+  idempotencyKey   String   @map("idempotency_key")
+  resultRef        String?  @map("result_ref")
+  expiresAt        DateTime @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, idempotencyKey])
+  @@map("flow_idempotency_keys")
+  @@schema("platform")
+}
+
+model FlowAuditLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String?  @map("node_id")
+  eventType        String   @map("event_type")
+  actorId          String?  @map("actor_id")
+  actorRole        String?  @map("actor_role")
+  description      String
+  maskedPayload    String?  @map("masked_payload")
+  auditHash        String   @map("audit_hash")
+  previousHash     String?  @map("previous_hash")  // chain integrity
+  dataClassification String? @map("data_classification")
+  legalHold        Boolean  @default(false) @map("legal_hold")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, instanceId])
+  @@map("flow_audit_logs")
+  @@schema("platform")
+}
+
+model FlowTelemetrySpan {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  traceId          String   @map("trace_id")
+  spanId           String   @map("span_id")
+  parentSpanId     String?  @map("parent_span_id")
+  nodeId           String?  @map("node_id")
+  nodeType         String?  @map("node_type")
+  operationName    String   @map("operation_name")
+  startedAt        DateTime @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  durationMs       Int?     @map("duration_ms")
+  status           String   @default("OK")
+  inputSizeBytes   Int?     @map("input_size_bytes")
+  outputSizeBytes  Int?     @map("output_size_bytes")
+  retryCount       Int      @default(0) @map("retry_count")
+  errorCode        String?  @map("error_code")
+  costUnits        String?  @map("cost_units")
+  tokenUsage       Int?     @map("token_usage")
+  serviceLatencyMs Int?     @map("service_latency_ms")
+  queueLatencyMs   Int?     @map("queue_latency_ms")
+  tags             String?  // JSON key-value pairs
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([traceId, spanId])
+  @@map("flow_telemetry_spans")
+  @@schema("platform")
+}
+
+model FlowMilestone {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instanceId       String   @map("instance_id") @db.Uuid
+  nodeId           String   @map("node_id")
+  milestoneName    String   @map("milestone_name")
+  progress         Int      @default(0)
+  reachedAt        DateTime? @map("reached_at")
+  elapsedMs        Int?     @map("elapsed_ms")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  instance         FlowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("flow_milestones")
+  @@schema("platform")
+}
+
+model FlowCalendarDefinition {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowDefinitionId String?  @map("flow_definition_id") @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  name             String
+  timezone         String   @default("UTC")
+  workingHoursJson String   @map("working_hours_json")
+  holidaysJson     String   @map("holidays_json")
+  exceptionsJson   String?  @map("exceptions_json")
+  isGlobal         Boolean  @default(false) @map("is_global")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  definition       FlowDefinition? @relation(fields: [flowDefinitionId], references: [id], onDelete: SetNull)
+
+  @@map("flow_calendar_definitions")
+  @@schema("platform")
+}

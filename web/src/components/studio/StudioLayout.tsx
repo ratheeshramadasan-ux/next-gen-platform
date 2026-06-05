@@ -59,9 +59,9 @@ import {
   StudioInspector,
   StudioFolderPanel,
   StudioDock,
-  FlowToolsPanel,
   FlowFormattingPanel,
 } from "./StudioPanels";
+import { FlowToolsPalette } from "./flow-nodes/FlowToolsPalette";
 
 // Lazy-load monitoring and other heavier components
 const StudioMonitoring = dynamic(() => import("./StudioMonitoring").then(m => m.StudioMonitoring), { ssr: false });
@@ -591,7 +591,7 @@ export function StudioLayout({
                   )}
                 </div>
                 <div className={cn("flex-1 overflow-hidden flex flex-col", activeSideTab !== "flow-tool" && "hidden")}>
-                  <FlowToolsPanel onEdgeTypeChange={onEdgeTypeChange} />
+                  <FlowToolsPalette />
                 </div>
                 <div className={cn("flex-1 overflow-hidden flex flex-col", activeSideTab !== "flow-formatting" && "hidden")}>
                   <FlowFormattingPanel
