@@ -6,8 +6,8 @@ import React, {
   useState,
   useRef,
   useEffect,
-  createPortal,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   ReactFlow,
   Background,
