@@ -571,46 +571,99 @@ interface StudioCanvasProps {
   canRedo?: boolean;
 }
 
-// --- Zoom Controls Component ---
+// --- Zoom Controls Panel (Document-Designer style) ---
 function ZoomControls() {
   const { zoom } = useViewport();
   const { zoomIn, zoomOut, setViewport, fitView } = useReactFlow();
+  const pct = Math.round(zoom * 100);
+
   return (
-    <Panel position="bottom-right" className="m-4 mb-8 mr-4">
-      <div className="bg-card/80 backdrop-blur-3xl border border-border/40 rounded-md px-2 py-1.5 flex items-center gap-1 shadow-2xl">
-        <button
-          onClick={() => zoomOut({ duration: 200 })}
-          className="w-6 h-6 flex items-center justify-center rounded hover:bg-primary/10 text-foreground/40 hover:text-foreground transition-colors"
-          title="Zoom Out"
+    <Panel position="bottom-right" className="mb-3 mr-3">
+      <div
+        className="flex flex-col overflow-hidden rounded-xl"
+        style={{
+          background: "var(--card)",
+          border: "1px solid var(--studio-border, oklch(0.84 0 0))",
+          boxShadow: "var(--studio-shadow-md, 0 4px 12px -2px rgb(0 0 0 / 0.10), 0 0 0 1px rgb(0 0 0 / 0.05))",
+          width: 164,
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-3 py-2"
+          style={{
+            background: "var(--studio-surface-raised, oklch(0.96 0 0))",
+            borderBottom: "1px solid var(--studio-border, oklch(0.84 0 0))",
+          }}
         >
-          <Minus size={12} />
-        </button>
-        <button
-          onClick={() =>
-            setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 200 })
-          }
-          className="px-1.5 py-0.5 rounded hover:bg-primary/10 transition-colors cursor-pointer"
-          title="Reset to 100%"
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Canvas</span>
+          <button
+            onClick={() => fitView({ duration: 400, padding: 0.15 })}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            title="Fit all nodes into view"
+          >
+            <Maximize size={12} />
+            <span>Fit</span>
+          </button>
+        </div>
+
+        {/* Zoom row */}
+        <div className="flex items-center gap-1 px-2 py-2">
+          <button
+            onClick={() => zoomOut({ duration: 180 })}
+            disabled={pct <= 10}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+            title="Zoom out"
+          >
+            <Minus size={14} />
+          </button>
+
+          <button
+            onClick={() => setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 200 })}
+            className="flex-1 h-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
+            title="Reset to 100%"
+          >
+            <span
+              className="text-sm font-semibold tabular-nums"
+              style={{ color: "var(--foreground)", minWidth: "3.5ch", textAlign: "center" }}
+            >
+              {pct}%
+            </span>
+          </button>
+
+          <button
+            onClick={() => zoomIn({ duration: 180 })}
+            disabled={pct >= 200}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+            title="Zoom in"
+          >
+            <ZoomIn size={14} />
+          </button>
+        </div>
+
+        {/* Quick presets */}
+        <div
+          className="flex items-center gap-0.5 px-2 pb-2"
         >
-          <span className="text-xs font-bold text-foreground/50 hover:text-foreground w-8 text-center block">
-            {Math.round(zoom * 100)}%
-          </span>
-        </button>
-        <button
-          onClick={() => zoomIn({ duration: 200 })}
-          className="w-6 h-6 flex items-center justify-center rounded hover:bg-primary/10 text-foreground/40 hover:text-foreground transition-colors"
-          title="Zoom In"
-        >
-          <ZoomIn size={12} />
-        </button>
-        <div className="w-px h-4 bg-border/30 mx-0.5" />
-        <button
-          onClick={() => fitView({ duration: 300, padding: 0.2 })}
-          className="w-6 h-6 flex items-center justify-center rounded hover:bg-primary/10 text-foreground/40 hover:text-foreground transition-colors"
-          title="Fit to View"
-        >
-          <Maximize size={12} />
-        </button>
+          {[50, 100, 150].map(v => (
+            <button
+              key={v}
+              onClick={() => setViewport({ x: 0, y: 0, zoom: v / 100 }, { duration: 200 })}
+              className="flex-1 h-6 rounded-md text-xs transition-colors"
+              style={{
+                background: pct === v ? "color-mix(in srgb,var(--primary) 12%,transparent)" : "var(--muted)",
+                color: pct === v ? "var(--primary)" : "var(--muted-foreground)",
+                fontWeight: pct === v ? 600 : 400,
+                border: "1px solid transparent",
+              }}
+              onMouseEnter={e => { if (pct !== v) (e.currentTarget as HTMLElement).style.background = "var(--accent)"; }}
+              onMouseLeave={e => { if (pct !== v) (e.currentTarget as HTMLElement).style.background = "var(--muted)"; }}
+              title={`Set zoom to ${v}%`}
+            >
+              {v}%
+            </button>
+          ))}
+        </div>
       </div>
     </Panel>
   );
@@ -2095,11 +2148,14 @@ export function StudioCanvas({
         <ZoomControls />
         <MiniMap
           style={{
-            borderRadius: "8px",
-            border: "1px solid var(--border)",
+            borderRadius: "12px",
+            border: "1px solid var(--studio-border, oklch(0.84 0 0))",
             background: "var(--card)",
-            width: 150,
-            height: 100,
+            boxShadow: "var(--studio-shadow-sm, 0 1px 3px 0 rgb(0 0 0 / 0.08))",
+            width: 164,
+            height: 108,
+            bottom: 110,   /* sits above the zoom panel */
+            right: 12,
           }}
           nodeStrokeColor={(n) =>
             n.type === "eventNode"

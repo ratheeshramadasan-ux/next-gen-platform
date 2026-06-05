@@ -2253,7 +2253,27 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
   const [varSearch, setVarSearch] = useState("");
   const [activePickerTab, setActivePickerTab] = useState<"variables" | "functions">("variables");
   const [selectedFuncCategory, setSelectedFuncCategory] = useState<string | null>(null);
+  const [autocompleteHints, setAutocompleteHints] = useState<string[]>([]);
   const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  // ── Fuzzy / intelligent search ──────────────────────────────────────────
+  // Scores a string against a query using token overlap + substring bonus.
+  const fuzzyScore = React.useCallback((text: string, query: string): number => {
+    if (!query) return 1;
+    const t = text.toLowerCase();
+    const q = query.toLowerCase();
+    if (t === q) return 100;
+    if (t.startsWith(q)) return 80;
+    if (t.includes(q)) return 60;
+    // Token match: split query on spaces and check each word
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const hits = tokens.filter(tok => t.includes(tok)).length;
+    if (hits > 0) return 30 + (hits / tokens.length) * 20;
+    // Char-sequence (subsequence) match
+    let si = 0;
+    for (const ch of q) { const idx = t.indexOf(ch, si); if (idx === -1) return 0; si = idx + 1; }
+    return 15;
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'F2' && fx) {
@@ -2270,7 +2290,6 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
     const currentVal = String(value || '');
     const input = inputRef.current;
     const insertText = isVariable ? `{${token}}` : token;
-    
     if (input) {
       const start = input.selectionStart || currentVal.length;
       const end = input.selectionEnd || currentVal.length;
@@ -2288,21 +2307,52 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
     }
   };
 
+  // Update autocomplete hints while the user types in the expression area
+  const handleExpressionChange = (val: string) => {
+    onChange(val);
+    const lastWord = val.split(/[\s,(){}+\-*/=<>!&|]/).pop() || "";
+    if (lastWord.length < 2) { setAutocompleteHints([]); return; }
+    const allNames = FUNCTION_LIBRARY.flatMap(c => c.items.map(i => i.name.split("(")[0]));
+    const varNames = [...SYSTEM_VARIABLES, ...variables.map(v => v.name)];
+    const candidates = [...allNames, ...varNames]
+      .filter(n => fuzzyScore(n, lastWord) > 20)
+      .slice(0, 6);
+    setAutocompleteHints(candidates);
+  };
+
   const filteredVars = [
     { category: "System", vars: SYSTEM_VARIABLES },
     { category: "User Variables", vars: variables.map(v => v.name) }
   ].map(cat => ({
     ...cat,
-    vars: cat.vars.filter(v => v.toLowerCase().includes(varSearch.toLowerCase()))
+    vars: cat.vars
+      .map(v => ({ v, score: fuzzyScore(v, varSearch) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ v }) => v)
   })).filter(cat => cat.vars.length > 0);
 
-  const filteredFunctions = FUNCTION_LIBRARY.map(cat => ({
-    ...cat,
-    items: cat.items.filter(item => 
-      item.name.toLowerCase().includes(varSearch.toLowerCase()) || 
-      item.desc.toLowerCase().includes(varSearch.toLowerCase())
-    )
-  })).filter(cat => cat.items.length > 0);
+  // Flat intelligent search across all function categories
+  const allFunctionItems = FUNCTION_LIBRARY.flatMap(cat =>
+    cat.items.map(item => ({ ...item, category: cat.category, icon: cat.icon }))
+  );
+  const filteredFunctions = varSearch
+    ? (() => {
+        const scored = allFunctionItems
+          .map(item => ({
+            ...item,
+            score: Math.max(fuzzyScore(item.name, varSearch), fuzzyScore(item.desc, varSearch) * 0.7)
+          }))
+          .filter(i => i.score > 0)
+          .sort((a, b) => b.score - a.score);
+        // Re-group by category for display
+        const grouped: Record<string, typeof scored> = {};
+        scored.forEach(i => { (grouped[i.category] ??= []).push(i); });
+        return Object.entries(grouped).map(([category, items]) => ({
+          category, icon: items[0].icon, items
+        }));
+      })()
+    : FUNCTION_LIBRARY;
 
   const fxBadge = fx ? (
     <div className="flex items-center gap-1 shrink-0">
@@ -2322,7 +2372,15 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
   ) : null;
 
   const varPickerUI = showVarPicker ? (
-    <div className="absolute left-0 right-0 top-full mt-1 z-50 panel shadow-xl flex flex-col max-h-[320px]">
+    <div
+      className="absolute left-0 right-0 top-full mt-1 z-50 flex flex-col overflow-hidden rounded-xl"
+      style={{
+        maxHeight: 320,
+        background: "var(--studio-surface)",
+        border: "1px solid var(--studio-border, oklch(0.84 0 0))",
+        boxShadow: "var(--studio-shadow-md)",
+      }}
+    >
       {/* Tab bar */}
       <div className="tab-bar">
         <button
@@ -2334,18 +2392,25 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
           className={cn("tab-item", activePickerTab === "functions" && "tab-item-active")}
         >Functions</button>
         <div className="ml-auto flex items-center pr-2">
-          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">F2</span>
+          <kbd className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded" style={{ border: "1px solid var(--studio-border)" }}>F2</kbd>
         </div>
       </div>
 
       {/* Search */}
-      <div className="px-2 py-2 border-b border-border shrink-0">
+      <div className="px-2.5 py-2 shrink-0" style={{ borderBottom: "1px solid var(--studio-border)", background: "var(--studio-surface-raised)" }}>
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
-            type="text" value={varSearch} onChange={e => setVarSearch(e.target.value)}
-            placeholder={activePickerTab === "variables" ? "Search variables…" : "Search functions…"}
-            className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary/50 transition-colors"
+            type="text" value={varSearch} onChange={e => { setVarSearch(e.target.value); setSelectedFuncCategory(null); }}
+            placeholder={activePickerTab === "variables" ? "Search variables…" : "Describe what you need…"}
+            className="w-full pl-9 pr-3 py-1.5 text-sm outline-none rounded-lg"
+            style={{
+              background: "var(--studio-surface-sunken)",
+              border: "1.5px solid var(--studio-border)",
+              color: "var(--foreground)",
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = "var(--primary)")}
+            onBlur={e => (e.currentTarget.style.borderColor = "var(--studio-border)")}
             autoFocus
             onKeyDown={e => { if (e.key === 'Escape') setShowVarPicker(false); }}
           />
@@ -2554,37 +2619,46 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
       </div>
       {varPickerUI}
 
-      {/* Expression Builder Modal */}
+      {/* ── Expression Builder Modal ── */}
       <Dialog open={showZoom} onOpenChange={setShowZoom}>
-        <DialogContent className="max-w-3xl w-full bg-card border border-border shadow-2xl p-0 overflow-hidden rounded-xl">
-          <div className="flex flex-col h-[560px]">
+        <DialogContent
+          className="p-0 overflow-hidden rounded-xl border-0"
+          style={{
+            maxWidth: "min(920px, 92vw)",
+            width: "min(920px, 92vw)",
+            boxShadow: "var(--studio-shadow-panel)",
+            background: "var(--studio-surface)",
+          }}
+        >
+          <div className="flex flex-col" style={{ height: "min(620px, 88vh)" }}>
 
             {/* ── Header ── */}
-            <div className="panel-header border-b border-border justify-between">
+            <div className="panel-header justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
                   <Sparkles size={14} className="text-primary" />
                 </div>
-                <div>
-                  <span className="panel-title">Expression Builder</span>
-                  <span className="text-xs text-muted-foreground ml-2">— {label}</span>
-                </div>
+                <span className="panel-title">Expression Builder</span>
+                <span className="text-sm text-muted-foreground">— {label}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">F2 — insert variable</span>
-                <button onClick={() => setShowZoom(false)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                <kbd className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded border" style={{ borderColor: "var(--studio-border)" }}>F2 insert variable</kbd>
+                <button
+                  onClick={() => setShowZoom(false)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
                   <X size={15} />
                 </button>
               </div>
             </div>
 
-            {/* ── Body ── */}
+            {/* ── Body: 40 % browser | 60 % editor ── */}
             <div className="flex flex-1 overflow-hidden">
 
-              {/* Left — Variable / Function browser */}
-              <div className="w-64 border-r border-border flex flex-col bg-muted/10 shrink-0">
+              {/* ── LEFT: Variable / Function browser (40 %) ── */}
+              <div className="flex flex-col shrink-0 overflow-hidden" style={{ width: "40%", borderRight: "1px solid var(--studio-border)", background: "var(--studio-surface)" }}>
 
-                {/* Tab bar */}
+                {/* Tabs */}
                 <div className="tab-bar">
                   <button
                     onClick={() => { setActivePickerTab("variables"); setSelectedFuncCategory(null); }}
@@ -2596,68 +2670,115 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
                   >Functions</button>
                 </div>
 
-                {/* Search */}
-                <div className="px-3 py-2 border-b border-border bg-card">
+                {/* Search — clearly visible */}
+                <div className="px-3 py-2.5" style={{ borderBottom: "1px solid var(--studio-border)", background: "var(--studio-surface-raised)" }}>
                   <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                     <input
-                      placeholder={activePickerTab === "variables" ? "Search variables…" : "Search functions…"}
+                      placeholder={activePickerTab === "variables" ? "Search variables…" : "Describe what you need…"}
                       value={varSearch}
-                      onChange={e => setVarSearch(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary/50 transition-colors"
+                      onChange={e => { setVarSearch(e.target.value); setSelectedFuncCategory(null); }}
+                      className="w-full pl-9 pr-3 py-2 text-sm outline-none rounded-lg transition-colors"
+                      style={{
+                        background: "var(--studio-surface-sunken)",
+                        border: "1.5px solid var(--studio-border)",
+                        color: "var(--foreground)",
+                      }}
+                      onFocus={e => (e.currentTarget.style.borderColor = "var(--primary)")}
+                      onBlur={e => (e.currentTarget.style.borderColor = "var(--studio-border)")}
                       autoFocus
                       onKeyDown={e => e.key === 'Escape' && setShowVarPicker(false)}
                     />
                   </div>
+                  {varSearch && activePickerTab === "functions" && (
+                    <p className="text-xs text-muted-foreground mt-1.5 pl-1">
+                      Intelligent search — showing best matches
+                    </p>
+                  )}
                 </div>
 
                 {/* List */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                   {activePickerTab === "variables" ? (
                     filteredVars.length === 0 ? (
-                      <div className="text-sm text-muted-foreground text-center py-8">No variables found</div>
+                      <div className="text-sm text-muted-foreground text-center py-10">No matching variables</div>
                     ) : filteredVars.map(cat => (
                       <div key={cat.category}>
                         <div className="panel-section-label">{cat.category}</div>
                         {cat.vars.map(v => (
                           <button key={v} onClick={() => insertToken(v, true)}
-                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left hover:bg-primary/5 group transition-colors border-l-2 border-transparent hover:border-primary/50"
+                            className="flex items-center gap-3 w-full px-4 py-2.5 text-left group transition-colors"
+                            style={{ borderLeft: "3px solid transparent" }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb,var(--primary) 6%,transparent)"; (e.currentTarget as HTMLElement).style.borderLeftColor = "var(--primary)"; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ""; (e.currentTarget as HTMLElement).style.borderLeftColor = "transparent"; }}
                           >
-                            <Variable size={13} className="text-primary/50 group-hover:text-primary shrink-0" />
-                            <span className="text-sm font-mono text-foreground/70 group-hover:text-foreground">{v}</span>
+                            <Variable size={13} className="text-primary/60 shrink-0" />
+                            <span className="text-sm font-mono" style={{ color: "var(--foreground)" }}>{v}</span>
                           </button>
                         ))}
                       </div>
                     ))
                   ) : (
                     <div className="flex flex-col">
-                      {!selectedFuncCategory ? (
-                        filteredFunctions.map(cat => (
+                      {/* When searching: flat ranked list across all categories */}
+                      {varSearch ? (
+                        filteredFunctions.flatMap(cat => cat.items).length === 0 ? (
+                          <div className="text-sm text-muted-foreground text-center py-10">No matching functions</div>
+                        ) : filteredFunctions.flatMap(cat =>
+                          cat.items.map((item: any) => (
+                            <button key={item.name} onClick={() => insertToken(item.snippet, false)}
+                              className="px-4 py-3 text-left transition-colors"
+                              style={{ borderBottom: "1px solid var(--studio-border)" }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb,var(--primary) 6%,transparent)"}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
+                            >
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="text-sm font-mono" style={{ color: "var(--primary)" }}>{item.name}</span>
+                                <span className="text-xs text-muted-foreground ml-auto">{item.category ?? cat.category}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground leading-tight">{item.desc}</div>
+                            </button>
+                          ))
+                        )
+                      ) : !selectedFuncCategory ? (
+                        /* Category list */
+                        filteredFunctions.map((cat: any) => (
                           <button key={cat.category} onClick={() => setSelectedFuncCategory(cat.category)}
-                            className="flex items-center justify-between w-full px-4 py-3 hover:bg-primary/5 border-b border-border/30 group transition-colors"
+                            className="flex items-center justify-between w-full px-4 py-3 text-left group transition-colors"
+                            style={{ borderBottom: "1px solid var(--studio-border)" }}
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb,var(--primary) 6%,transparent)"}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
                           >
                             <div className="flex items-center gap-2.5">
                               <span className="text-base leading-none">{cat.icon}</span>
-                              <span className="text-sm text-foreground/70 group-hover:text-foreground">{cat.category}</span>
+                              <span className="text-sm" style={{ color: "var(--foreground)" }}>{cat.category}</span>
+                              <span className="text-xs text-muted-foreground">({cat.items.length})</span>
                             </div>
-                            <ChevronRight size={13} className="text-muted-foreground/40 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+                            <ChevronRight size={13} className="text-muted-foreground" />
                           </button>
                         ))
                       ) : (
+                        /* Items inside a chosen category */
                         <div className="flex flex-col">
                           <button onClick={() => setSelectedFuncCategory(null)}
-                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-primary hover:bg-primary/5 border-b border-border sticky top-0 bg-card z-10 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm transition-colors sticky top-0 z-10"
+                            style={{ color: "var(--primary)", borderBottom: "1px solid var(--studio-border)", background: "var(--studio-surface-raised)" }}
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb,var(--primary) 8%,transparent)"}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "var(--studio-surface-raised)"}
                           >
-                            <ChevronRight size={13} className="rotate-180" /> Back
+                            <ChevronRight size={13} className="rotate-180" /> Back to categories
                           </button>
-                          {FUNCTION_LIBRARY.find(c => c.category === selectedFuncCategory)?.items
-                            .filter(i => i.name.toLowerCase().includes(varSearch.toLowerCase()) || i.desc.toLowerCase().includes(varSearch.toLowerCase()))
-                            .map(item => (
+                          {(FUNCTION_LIBRARY.find(c => c.category === selectedFuncCategory)?.items ?? [])
+                            .filter((i: any) => !varSearch || fuzzyScore(i.name, varSearch) > 0 || fuzzyScore(i.desc, varSearch) > 0)
+                            .map((item: any) => (
                               <button key={item.name} onClick={() => insertToken(item.snippet, false)}
-                                className="px-4 py-3 text-left hover:bg-primary/5 border-b border-border/30 group transition-colors"
+                                className="px-4 py-3 text-left transition-colors"
+                                style={{ borderBottom: "1px solid var(--studio-border)" }}
+                                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb,var(--primary) 6%,transparent)"}
+                                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ""}
                               >
-                                <div className="text-sm font-mono text-primary group-hover:text-primary/80 mb-0.5">{item.name}</div>
-                                <div className="text-xs text-muted-foreground group-hover:text-foreground/70 leading-tight">{item.desc}</div>
+                                <div className="text-sm font-mono mb-0.5" style={{ color: "var(--primary)" }}>{item.name}</div>
+                                <div className="text-xs text-muted-foreground leading-tight">{item.desc}</div>
                               </button>
                             ))
                           }
@@ -2668,40 +2789,82 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
                 </div>
               </div>
 
-              {/* Right — Expression input */}
-              <div className="flex-1 flex flex-col overflow-hidden">
+              {/* ── RIGHT: Expression editor (60 %) ── */}
+              <div className="flex flex-col flex-1 overflow-hidden" style={{ background: "var(--studio-surface-sunken)" }}>
 
-                {/* Expression area label */}
-                <div className="panel-header">
+                {/* Mini toolbar */}
+                <div className="menu-bar" style={{ borderBottom: "1px solid var(--studio-border)" }}>
                   <span className="text-xs text-muted-foreground uppercase tracking-wide">Expression</span>
                   <span className="ml-auto text-xs text-muted-foreground">{String(value || "").length} chars</span>
                 </div>
 
-                {/* Textarea */}
-                <div className="flex-1 p-4 bg-background overflow-hidden">
+                {/* Main expression textarea — generous space */}
+                <div className="flex-1 flex flex-col overflow-hidden p-4 gap-3">
                   <textarea
                     ref={inputRef as React.RefObject<HTMLTextAreaElement>}
                     value={String(value || "")}
-                    onChange={e => onChange(e.target.value)}
+                    onChange={e => handleExpressionChange(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={`Enter expression…  e.g.  Sum({revenue}, 10) * 1.2`}
-                    className="w-full h-full bg-transparent text-[15px] font-mono text-foreground outline-none resize-none placeholder:text-muted-foreground/30 leading-relaxed"
+                    placeholder={`Type your expression here…\ne.g.  Sum({revenue}, {tax}) * 1.2\n      If({status} == 'Active', 'Yes', 'No')`}
+                    className="flex-1 font-mono outline-none resize-none leading-relaxed"
+                    style={{
+                      fontSize: "15px",
+                      color: "var(--foreground)",
+                      background: "transparent",
+                    }}
                     autoFocus
                   />
+
+                  {/* Autocomplete hints */}
+                  {autocompleteHints.length > 0 && (
+                    <div className="shrink-0">
+                      <p className="text-xs text-muted-foreground mb-1.5">Suggestions</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {autocompleteHints.map(hint => (
+                          <button
+                            key={hint}
+                            onClick={() => {
+                              const cur = String(value || "");
+                              const words = cur.split(/[\s,(){}+\-*/=<>!&|]/);
+                              const lastIdx = cur.lastIndexOf(words[words.length - 1]);
+                              onChange(cur.slice(0, lastIdx) + hint);
+                              setAutocompleteHints([]);
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-xs font-mono transition-colors"
+                            style={{
+                              background: "var(--studio-surface-raised)",
+                              border: "1px solid var(--studio-border)",
+                              color: "var(--primary)",
+                            }}
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "color-mix(in srgb,var(--primary) 10%,transparent)"}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "var(--studio-surface-raised)"}
+                          >
+                            {hint}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Status bar */}
-                <div className="menu-bar justify-between border-t border-border bg-muted/20">
+                <div className="menu-bar justify-between" style={{ borderTop: "1px solid var(--studio-border)" }}>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
                     <span className="text-sm text-muted-foreground">Syntax OK</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setShowZoom(false)}
-                      className="menu-item border border-border text-sm"
+                    <button
+                      onClick={() => setShowZoom(false)}
+                      className="menu-item"
+                      style={{ border: "1px solid var(--studio-border)" }}
                     >Cancel</button>
-                    <button onClick={() => setShowZoom(false)}
-                      className="px-4 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+                    <button
+                      onClick={() => setShowZoom(false)}
+                      className="px-4 py-1.5 text-sm rounded-lg transition-opacity"
+                      style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = "0.88"}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = "1"}
                     >Apply</button>
                   </div>
                 </div>

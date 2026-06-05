@@ -69,13 +69,22 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.18 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.25 0 0);
+  --muted-foreground: oklch(0.45 0 0);   /* raised from 0.25 — more readable on white */
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.88 0 0);             /* slightly darker — was 0.922, now visible */
+  --input: oklch(0.88 0 0);
   --ring: oklch(0.708 0 0);
+
+  /* ── Studio surface tokens: give panels real contrast on any theme ── */
+  --studio-surface:       oklch(0.975 0 0);   /* panel bg — just off-white */
+  --studio-surface-raised: oklch(0.96 0 0);   /* panel header / raised row */
+  --studio-surface-sunken: oklch(0.985 0 0);  /* content well / input bg */
+  --studio-border:        oklch(0.84 0 0);    /* stronger than --border */
+  --studio-shadow-sm:     0 1px 3px 0 rgb(0 0 0 / 0.08), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --studio-shadow-md:     0 4px 12px -2px rgb(0 0 0 / 0.10), 0 0 0 1px rgb(0 0 0 / 0.05);
+  --studio-shadow-panel:  0 8px 24px -4px rgb(0 0 0 / 0.12), 0 0 0 1px rgb(0 0 0 / 0.06);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -223,54 +232,120 @@
 
 /* ─────────────────────────────────────────────────
    SEMANTIC PANEL / MENU SYSTEM  (theme-driven)
+   All surfaces use --studio-* tokens so they stay
+   readable regardless of which colour theme is active.
    ───────────────────────────────────────────────── */
 
-/* A framed panel with a clear border */
+/* A framed panel — clear border + shadow so it reads as a container */
 .panel {
-  @apply bg-card border border-border rounded-xl overflow-hidden;
+  background-color: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: var(--studio-shadow-sm);
 }
 
-/* A panel header bar — always visible, clearly separated */
+/* Panel header — visually distinct from the content area */
 .panel-header {
-  @apply h-10 px-4 flex items-center gap-2.5 bg-muted/40 border-b border-border shrink-0;
+  height: 2.75rem;            /* 44px */
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background-color: var(--studio-surface-raised);
+  border-bottom: 1px solid var(--studio-border);
+  flex-shrink: 0;
+  box-shadow: 0 1px 0 0 var(--studio-border);
 }
 
-/* The title inside a panel header */
+/* Title text inside a panel header */
 .panel-title {
-  @apply text-sm font-semibold text-foreground leading-none;
+  font-size: 0.875rem;        /* 14px */
+  font-weight: 600;
+  color: var(--foreground);
+  line-height: 1;
 }
 
-/* Section label inside a panel list (category dividers) */
+/* Category / section divider row inside a list */
 .panel-section-label {
-  @apply text-xs font-medium text-muted-foreground uppercase tracking-wide px-4 py-2 bg-muted/20 border-b border-border/30;
+  font-size: 0.6875rem;       /* 11px */
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+  padding: 0.375rem 1rem 0.25rem;
+  background-color: var(--studio-surface-raised);
+  border-bottom: 1px solid var(--studio-border);
 }
 
-/* A horizontal menu/toolbar bar */
+/* Horizontal menu / toolbar bar */
 .menu-bar {
-  @apply h-10 bg-card border-b border-border flex items-center gap-0.5 px-3 shrink-0;
+  height: 2.5rem;             /* 40px */
+  background-color: var(--studio-surface-raised);
+  border-bottom: 1px solid var(--studio-border);
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0 0.75rem;
+  flex-shrink: 0;
 }
 
-/* A single item inside a menu bar */
+/* Individual menu item */
 .menu-item {
-  @apply px-3 py-1.5 text-sm text-foreground/70 hover:text-foreground hover:bg-muted/60 rounded-md transition-colors cursor-pointer select-none;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  border-radius: 0.5rem;
+  transition: background-color 0.15s, color 0.15s;
+  cursor: pointer;
+  user-select: none;
+}
+.menu-item:hover {
+  background-color: var(--studio-surface-raised);
+  color: var(--foreground);
 }
 
-/* Active state for a menu item */
+/* Active menu item */
 .menu-item-active {
-  @apply text-primary bg-primary/10;
+  color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
-/* Tab strip — sits below a panel header */
+/* Tab strip */
 .tab-bar {
-  @apply flex items-stretch h-9 border-b border-border bg-muted/20 shrink-0;
+  display: flex;
+  align-items: stretch;
+  height: 2.375rem;           /* 38px */
+  background-color: var(--studio-surface-raised);
+  border-bottom: 1px solid var(--studio-border);
+  flex-shrink: 0;
 }
 
+/* Individual tab */
 .tab-item {
-  @apply px-4 flex items-center text-sm text-muted-foreground/70 hover:text-foreground border-b-2 border-transparent hover:bg-muted/30 transition-colors cursor-pointer select-none;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  font-size: 0.8125rem;       /* 13px */
+  font-weight: 500;
+  color: var(--muted-foreground);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s, background-color 0.15s;
+  white-space: nowrap;
+}
+.tab-item:hover {
+  color: var(--foreground);
+  background-color: color-mix(in srgb, var(--muted) 50%, transparent);
 }
 
+/* Active tab */
 .tab-item-active {
-  @apply text-primary border-primary bg-card;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background-color: var(--card);
+  font-weight: 600;
 }
 
 /* Studio Glossy Card */
