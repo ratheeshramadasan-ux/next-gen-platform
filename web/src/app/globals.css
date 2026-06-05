@@ -216,9 +216,9 @@
   --studio-accent-purple: #8b5cf6;
   --studio-border: rgba(255, 255, 255, 0.05);
   /* --- Studio Legibility Scale --- */
-  --studio-font-size-base: 13.5px;
-  --studio-font-size-heading: 15px;
-  --studio-font-size-label: 12px;
+  --studio-font-size-base: 14px;
+  --studio-font-size-heading: 16px;
+  --studio-font-size-label: 13px;
 }
 
 /* Studio Glossy Card */

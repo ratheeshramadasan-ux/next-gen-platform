@@ -93,6 +93,7 @@ import {
   Star,
   StarOff,
   Grip,
+  GripVertical,
   MoreHorizontal,
   CheckSquare,
   Square,
@@ -453,7 +454,7 @@ export function StudioFolderPanel({
       <div className="p-4 space-y-4 border-b border-border/40 bg-primary/5">
          <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-               <button className="text-[11px] font-black uppercase tracking-[0.2em] text-primary border-b-2 border-primary pb-1">Project</button>
+               <button className="text-xs font-black uppercase tracking-[0.2em] text-primary border-b-2 border-primary pb-1">Project</button>
             </div>
             <button 
                onClick={() => fetchProcesses()}
@@ -763,7 +764,7 @@ function WorkflowItem({
                    <div className="flex items-center gap-1.5">
                      <span className={cn(
                        "truncate leading-none transition-all",
-                       depth === 0 || depth === 1 ? "font-bold text-[12px]" : depth === 2 ? "font-normal text-[11px]" : "font-normal text-[10px]",
+                       depth === 0 || depth === 1 ? "font-bold text-[12px]" : depth === 2 ? "font-normal text-xs" : "font-normal text-xs",
                        isSelected ? "text-primary-foreground" : "text-foreground/90"
                      )}>
                        {node.name}
@@ -1203,7 +1204,7 @@ export function StudioToolbox({
 
   const activityGroups = [
     {
-      key: "flow", name: "Core Flow Control", icon: GitBranch,
+      key: "flow", name: "Flow Control (If, Loop, Try...)", icon: GitBranch,
       items: [
         { 
           name: "Start", icon: CirclePlay, 
@@ -1313,7 +1314,7 @@ export function StudioToolbox({
       ]
     },
     {
-      key: "data_ops", name: "Data & Strings", icon: Table,
+      key: "data_ops", name: "Work with Data & Spreadsheets", icon: Table,
       items: [
         { 
           name: "String OP", icon: Wand2, 
@@ -1882,24 +1883,46 @@ export function StudioToolbox({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-card overflow-hidden text-card-foreground transition-colors duration-300 font-sans border-r border-border/40">
-      <div className="p-4 space-y-4 border-b border-border/40 bg-primary/5">
-          <div className="flex items-center gap-4">
-            <span className="text-[11px] font-black uppercase tracking-[0.2em] pb-1 text-primary border-b-2 border-primary">
-              Activities
-            </span>
-          </div>
+      <div className="p-4 space-y-3 border-b border-border/40 bg-primary/5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-primary border-b-2 border-primary pb-1">
+            Activity Library
+          </span>
+          <span className="text-xs font-bold text-muted-foreground/40 uppercase tracking-widest">Drag to canvas</span>
+        </div>
 
-         {!collapsed && (
+        {!collapsed && (
           <div className="relative group">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
-            <input 
-              placeholder="Search activities..." 
+            <input
+              placeholder="Search or describe what you want to do..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-3 py-2 text-xs bg-muted/50 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/30 transition-all placeholder:text-muted-foreground/30 font-bold"
             />
           </div>
-         )}
+        )}
+
+        {/* Quick-start chips for business users */}
+        {!collapsed && !searchTerm && (
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: "Send Email", key: "email" },
+              { label: "Read Excel", key: "excel" },
+              { label: "Web Action", key: "ui" },
+              { label: "If / Else", key: "flow" },
+              { label: "API Call", key: "api" },
+            ].map(chip => (
+              <button
+                key={chip.key}
+                onClick={() => setSearchTerm(chip.label)}
+                className="px-2 py-0.5 rounded-full bg-primary/5 border border-primary/20 text-xs font-black text-primary uppercase tracking-widest hover:bg-primary/10 transition-all"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar px-3 pb-20 space-y-1">
@@ -1937,14 +1960,13 @@ export function StudioToolbox({
                         e.dataTransfer.setData("application/reactflow", JSON.stringify(dragData));
                         e.dataTransfer.effectAllowed = "move";
                       }}
-                      className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-lg hover:bg-primary/5 cursor-grab active:cursor-grabbing transition-all group/item border border-transparent hover:border-primary/10"
+                      className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-primary/5 cursor-grab active:cursor-grabbing transition-all group/item border border-transparent hover:border-primary/15"
                     >
-                      <div className="w-10 h-10 rounded-full bg-card border border-border/40 flex items-center justify-center group-hover/item:border-primary group-hover/item:bg-primary/5 transition-all shadow-sm">
-                        {Icon && <Icon size={16} className="text-muted-foreground/60 group-hover/item:text-primary transition-colors" />}
+                      <div className="w-8 h-8 rounded-lg bg-amber-400/15 border border-amber-400/30 flex items-center justify-center shrink-0">
+                        {Icon && <Icon size={16} className="text-amber-500 group-hover/item:text-amber-600 transition-colors" />}
                       </div>
-                      <span className="text-[9px] font-bold text-muted-foreground/60 group-hover/item:text-foreground transition-colors text-center truncate w-full">{item.name}</span>
+                      <p className="text-[13px] font-semibold text-foreground/90 flex-1 truncate">{item.name}</p>
                     </div>
-
                   );
                 })}
               </div>
@@ -1955,12 +1977,14 @@ export function StudioToolbox({
         {/* ── Activities Section ── */}
         <button
           onClick={() => toggleSection("activities")}
-          className={cn("flex items-center gap-2 w-full py-2 px-1 group", collapsed && "justify-center px-0")}
+          className={cn("flex items-center gap-2.5 w-full py-2 px-1 group", collapsed && "justify-center px-0")}
         >
-          {!collapsed && <ChevronRight size={12} className={cn("text-foreground/80 transition-transform", expandedSections.activities && "rotate-90")} />}
-          <Activity size={14} className="text-foreground/90" />
-          {!collapsed && <span className="studio-label-caps">Activities</span>}
-          {!collapsed && <span className="text-xs font-bold text-foreground/80 ml-auto">{activityGroups.length}</span>}
+          {!collapsed && <ChevronRight size={13} className={cn("text-muted-foreground/50 transition-transform shrink-0", expandedSections.activities && "rotate-90")} />}
+          <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <Activity size={14} className="text-primary" />
+          </div>
+          {!collapsed && <span className="text-[13px] font-bold text-foreground">All Activities</span>}
+          {!collapsed && <span className="text-xs font-bold text-muted-foreground/40 ml-auto">{activityGroups.reduce((s, g) => s + g.items.filter(i => !i.isHeader).length, 0)}</span>}
         </button>
 
         {expandedSections.activities && (
@@ -1972,20 +1996,30 @@ export function StudioToolbox({
               <div key={group.key}>
                 <button
                   onClick={() => !collapsed && toggleSection(group.key)}
-                  className={cn("flex items-center gap-2 w-full py-1.5 px-2 rounded-sm hover:bg-muted/40 transition-all group", collapsed && "justify-center px-1")}
+                  className={cn(
+                    "flex items-center gap-2.5 w-full py-2 px-2 rounded-lg hover:bg-muted/50 transition-all group",
+                    collapsed && "justify-center px-1"
+                  )}
                 >
-                  {!collapsed && <ChevronRight size={10} className={cn("text-muted-foreground/30 transition-transform", expandedSections[group.key] && "rotate-90")} />}
-                  <group.icon size={13} className="text-foreground/90 group-hover:text-foreground transition-colors" />
-                  {!collapsed && <span className="text-xs font-semibold text-foreground/90 group-hover:text-foreground">{group.name}</span>}
+                  {!collapsed && <ChevronRight size={13} className={cn("text-muted-foreground/50 transition-transform shrink-0", expandedSections[group.key] && "rotate-90")} />}
+                  <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0", "bg-primary/10 border border-primary/20")}>
+                    <group.icon size={14} className="text-primary" />
+                  </div>
+                  {!collapsed && (
+                    <span className="text-[13px] font-semibold text-foreground flex-1 text-left leading-tight">{group.name}</span>
+                  )}
+                  {!collapsed && (
+                    <span className="text-xs font-bold text-muted-foreground/40 ml-auto shrink-0">{filteredGroupItems.filter(i => !i.isHeader).length}</span>
+                  )}
                 </button>
 
                     {(expandedSections[group.key] || (searchTerm && filteredGroupItems.length > 0)) && (
-                      <div className="pl-6 space-y-0.5">
+                      <div className={cn("space-y-0.5", !collapsed && "pl-2")}>
                         {filteredGroupItems.map((item, i) => {
                           if (item.isHeader) {
                             return (
-                              <div key={i} className="pt-3 pb-1 px-1">
-                                <span className="text-[10px] font-black uppercase tracking-[0.15em] text-[#633F2E]/40 border-b border-[#D8CBB7]/20 w-full block">
+                              <div key={i} className="pt-3 pb-1 px-2">
+                                <span className="text-xs font-black uppercase tracking-[0.12em] text-muted-foreground/40 border-b border-border/30 w-full block pb-1">
                                   {item.name}
                                 </span>
                               </div>
@@ -2008,17 +2042,33 @@ export function StudioToolbox({
                                 e.dataTransfer.effectAllowed = "move";
                               }}
                               className={cn(
-                                "flex flex-col items-center justify-center gap-1.5 p-2 rounded-lg hover:bg-primary/5 cursor-grab active:cursor-grabbing transition-all group/item border border-transparent hover:border-primary/10",
-                                collapsed && "px-1"
+                                "flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-primary/5 cursor-grab active:cursor-grabbing transition-all group/item border border-transparent hover:border-primary/15 select-none",
+                                collapsed && "justify-center px-1 py-2"
                               )}
                               title={item.desc || item.name}
                             >
-                              <div className="w-10 h-10 rounded-full bg-card border border-border/40 flex items-center justify-center group-hover/item:border-primary group-hover/item:bg-primary/5 transition-all shadow-sm">
-                                {Icon && <Icon size={16} className="text-muted-foreground/60 group-hover/item:text-primary transition-colors" />}
+                              {/* Icon container */}
+                              <div className={cn(
+                                "rounded-lg flex items-center justify-center shrink-0 transition-all",
+                                collapsed ? "w-9 h-9" : "w-8 h-8",
+                                "bg-muted border border-border/50 group-hover/item:bg-primary/10 group-hover/item:border-primary/30"
+                              )}>
+                                {Icon && <Icon size={collapsed ? 18 : 16} className="text-foreground/60 group-hover/item:text-primary transition-colors" />}
                               </div>
-                              {!collapsed && <span className="text-[9px] font-bold text-muted-foreground/60 group-hover/item:text-foreground transition-colors text-center truncate w-full">{item.name}</span>}
+                              {!collapsed && (
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[13px] font-semibold text-foreground/90 group-hover/item:text-foreground leading-tight truncate">{item.name}</p>
+                                  {item.desc && (
+                                    <p className="text-xs text-muted-foreground/60 leading-tight truncate mt-0.5">{item.desc}</p>
+                                  )}
+                                </div>
+                              )}
+                              {!collapsed && (
+                                <div className="shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                  <GripVertical size={14} className="text-muted-foreground/30" />
+                                </div>
+                              )}
                             </div>
-
                           );
                         })}
                       </div>
@@ -2377,7 +2427,7 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
           )}
         >
           <div className={cn(
-            "w-3 h-3 rounded-full bg-white absolute top-0.5 transition-all shadow-sm",
+            "w-3 h-3 rounded-full bg-background absolute top-0.5 transition-all shadow-sm",
             value ? "left-[18px]" : "left-[2px]"
           )} />
         </button>
@@ -2388,11 +2438,11 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
   if (type === "select" && options) {
     return (
       <div className="flex flex-col gap-1.5 mb-4">
-        <label className="text-[10px] font-black uppercase tracking-widest text-[#2D2D2D]/60">{label}:</label>
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{label}:</label>
         <select
           value={String(value || options[0])}
           onChange={e => onChange(e.target.value)}
-          className="w-full bg-[#E8DDCB] border border-[#D8CBB7] rounded-md px-2.5 py-1.5 text-xs font-bold text-[#2D2D2D]/80 outline-none focus:border-[#633F2E]/40 transition-all cursor-pointer"
+          className="w-full bg-muted/50 border border-border/50 rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground/80 outline-none focus:border-primary/40 transition-all cursor-pointer"
         >
           {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
@@ -2403,7 +2453,7 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
   if (multiline) {
     return (
       <div className="space-y-1 relative">
-        <label className="text-[10px] font-black uppercase tracking-widest text-[#2D2D2D]/60">{label}: {fx && <span className="text-xs text-[#2D2D2D]/20 ml-1">F2 = Variables</span>}</label>
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{label}: {fx && <span className="text-xs text-muted-foreground/40 ml-1">F2 = Variables</span>}</label>
         <div className="flex items-start gap-2">
           {fxBadge}
           <textarea
@@ -2412,7 +2462,7 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
             onChange={e => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className="flex-1 bg-[#E8DDCB] border border-[#D8CBB7] rounded-md px-3 py-2.5 text-sm font-bold text-[#2D2D2D]/80 outline-none focus:border-[#633F2E]/40 transition-all resize-none h-32 font-mono"
+            className="flex-1 bg-muted/50 border border-border/50 rounded-md px-3 py-2.5 text-sm font-medium text-foreground/80 outline-none focus:border-primary/40 transition-all resize-none h-32 font-mono"
           />
         </div>
         {varPickerUI}
@@ -2465,7 +2515,7 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
       <div className="flex items-center justify-between">
         <label className="text-sm font-semibold text-muted-foreground/60">{label}: {fx && <span className="text-xs text-muted-foreground/20 ml-1">F2 = Variables</span>}</label>
         {detectedPages !== null && (
-          <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded animate-in zoom-in duration-300">
+          <span className="text-xs font-black bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded animate-in zoom-in duration-300">
             Detected {detectedPages} Pages
           </span>
         )}
@@ -2691,7 +2741,7 @@ export function StudioInspector({
           <Activity size={32} />
         </div>
         <h3 className="text-sm font-bold text-foreground/40 uppercase tracking-widest">No Node Selected</h3>
-        <p className="text-[10px] text-muted-foreground/30 mt-2 max-w-[180px]">
+        <p className="text-xs text-muted-foreground/30 mt-2 max-w-[180px]">
           Select an activity on the canvas to configure its properties and data mappings.
         </p>
       </div>
@@ -2768,7 +2818,7 @@ export function StudioInspector({
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all relative",
+              "flex-1 py-3 text-xs font-black uppercase tracking-widest transition-all relative",
               activeTab === tab.id ? "text-primary" : "text-muted-foreground/40 hover:text-foreground/60"
             )}
           >
@@ -2786,7 +2836,7 @@ export function StudioInspector({
           <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
             {/* Display Label */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Activity Name</label>
+              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/40">Activity Name</label>
               <input
                 type="text"
                 value={localLabel}
@@ -2799,7 +2849,7 @@ export function StudioInspector({
             <div className="space-y-3">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-primary/40" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/60">Input Arguments</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Input Arguments</span>
               </div>
               <div className="space-y-4">
                 {Object.entries(selectedNode.data.inputs || {}).map(([key, val]) => {
@@ -2835,14 +2885,14 @@ export function StudioInspector({
                   );
                 })}
                 {(!selectedNode.data.inputs || Object.keys(selectedNode.data.inputs).length === 0) && (
-                  <p className="text-[10px] text-muted-foreground/40  pl-1">No inputs required for this activity.</p>
+                  <p className="text-xs text-muted-foreground/40  pl-1">No inputs required for this activity.</p>
                 )}
               </div>
             </div>
 
             {/* Description */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Description</label>
+              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/40">Description</label>
               <textarea
                 value={selectedNode.data.description || ""}
                 onChange={e => handleUpdate({ description: e.target.value })}
@@ -2860,7 +2910,7 @@ export function StudioInspector({
              <div className="space-y-3">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500/40" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/60">Result Outputs</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Result Outputs</span>
               </div>
               <div className="space-y-4">
                 {Object.entries(selectedNode.data.outputs || {}).map(([key, val]) => (
@@ -2875,7 +2925,7 @@ export function StudioInspector({
                   />
                 ))}
                 {(!selectedNode.data.outputs || Object.keys(selectedNode.data.outputs).length === 0) && (
-                  <p className="text-[10px] text-muted-foreground/40  pl-1">This activity does not return data.</p>
+                  <p className="text-xs text-muted-foreground/40  pl-1">This activity does not return data.</p>
                 )}
               </div>
             </div>
@@ -2896,7 +2946,7 @@ export function StudioInspector({
                 </div>
                 <div className="flex flex-col">
                   <span className="text-xs font-bold text-foreground">Risk Governance</span>
-                  <span className="text-[10px] text-muted-foreground/60 font-medium">
+                  <span className="text-xs text-muted-foreground/60 font-medium">
                     {selectedNode.data.risk?.disabled ? "Risk profiling is currently disabled" : "Active risk assessment tracking"}
                   </span>
                 </div>
@@ -2909,7 +2959,7 @@ export function StudioInspector({
                 )}
               >
                 <div className={cn(
-                  "absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                  "absolute top-0.5 w-4 h-4 rounded-full bg-background transition-all shadow-sm",
                   selectedNode.data.risk?.disabled ? "left-0.5" : "left-[22px]"
                 )} />
               </button>
@@ -2923,19 +2973,19 @@ export function StudioInspector({
 
                 <div className="space-y-1">
                     <h3 className="text-sm font-bold text-foreground tracking-tight">Governance Assessment</h3>
-                    <p className="text-[10px] text-muted-foreground/60 font-medium">Configure risk level and compliance strategy for this activity.</p>
+                    <p className="text-xs text-muted-foreground/60 font-medium">Configure risk level and compliance strategy for this activity.</p>
                 </div>
 
                 <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Risk Exposure Level</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Risk Exposure Level</label>
                       <div className="grid grid-cols-3 gap-2">
                         {['LOW', 'MEDIUM', 'HIGH'].map((level) => (
                           <button
                             key={level}
                             onClick={() => handleUpdate({ risk: { ...selectedNode.data.risk, level: level as any, rpn: (level === 'HIGH' ? 15 : level === 'MEDIUM' ? 8 : 2) } })}
                             className={cn(
-                              "py-2 rounded-xl border text-[10px] font-black transition-all",
+                              "py-2 rounded-xl border text-xs font-black transition-all",
                               selectedNode.data.risk?.level === level 
                                 ? level === 'HIGH' ? "bg-rose-500 border-rose-600 text-white shadow-lg shadow-rose-500/20" 
                                   : level === 'MEDIUM' ? "bg-amber-500 border-amber-600 text-white shadow-lg shadow-amber-500/20"
@@ -2950,7 +3000,7 @@ export function StudioInspector({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Risk Category</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Risk Category</label>
                       <select 
                         value={selectedNode.data.risk?.category || 'Operational'}
                         onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, category: e.target.value as any } })}
@@ -2965,7 +3015,7 @@ export function StudioInspector({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Mitigation Description</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Mitigation Description</label>
                       <textarea 
                         value={selectedNode.data.risk?.why || ""}
                         onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, why: e.target.value } })}
@@ -2987,7 +3037,7 @@ export function StudioInspector({
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/5 border border-primary/10">
                       <Scale size={10} className="text-primary" />
-                      <span className="text-[9px] font-bold text-primary/70 uppercase">Governance Ready</span>
+                      <span className="text-xs font-bold text-primary/70 uppercase">Governance Ready</span>
                     </div>
                 </div>
               </div>
@@ -2997,14 +3047,14 @@ export function StudioInspector({
                   <ShieldOff size={32} />
                 </div>
                 <h3 className="text-sm font-bold text-foreground/40 uppercase tracking-widest">Risk Analysis Suspended</h3>
-                <p className="text-[10px] text-muted-foreground/30 mt-2 max-w-[220px]">
+                <p className="text-xs text-muted-foreground/30 mt-2 max-w-[220px]">
                   Risk tracking has been disabled for this activity. It will not be flagged during compliance audits or runtime risk monitoring.
                 </p>
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={() => handleUpdate({ risk: { ...selectedNode.data.risk, disabled: false } })}
-                  className="mt-6 h-8 text-[9px] font-black uppercase tracking-widest border-primary/20 text-primary/60 hover:bg-primary/5"
+                  className="mt-6 h-8 text-xs font-black uppercase tracking-widest border-primary/20 text-primary/60 hover:bg-primary/5"
                 >
                   Restore Risk Tracking
                 </Button>
@@ -3012,12 +3062,12 @@ export function StudioInspector({
             )}
 
             <div className="space-y-4">
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground/40 flex items-center gap-2">
+              <h4 className="text-xs font-black uppercase tracking-widest text-foreground/40 flex items-center gap-2">
                 <History size={14} /> Audit Trail
               </h4>
               <div className="bg-muted/10 border border-dashed border-border/40 rounded-2xl p-6 text-center space-y-2">
-                 <p className="text-[10px] text-muted-foreground/40 font-medium">No recent risk modifications detected for this node.</p>
-                 <Button variant="ghost" size="sm" className="h-7 text-[9px] font-bold uppercase tracking-widest text-primary/60">View Full Log</Button>
+                 <p className="text-xs text-muted-foreground/40 font-medium">No recent risk modifications detected for this node.</p>
+                 <Button variant="ghost" size="sm" className="h-7 text-xs font-bold uppercase tracking-widest text-primary/60">View Full Log</Button>
               </div>
             </div>
           </div>
@@ -3029,7 +3079,7 @@ export function StudioInspector({
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-amber-500/40" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/60">Retry Policy</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Retry Policy</span>
               </div>
               <div className="space-y-4 pl-1">
                 <PropertyField 
@@ -3054,7 +3104,7 @@ export function StudioInspector({
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500/40" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/60">Timing & Performance</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Timing & Performance</span>
               </div>
               <div className="space-y-4 pl-1">
                 <PropertyField 
@@ -3078,7 +3128,7 @@ export function StudioInspector({
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-purple-500/40" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground/60">Governance & Logs</span>
+                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Governance & Logs</span>
               </div>
               <div className="space-y-4 pl-1">
                 <PropertyField 
@@ -3354,25 +3404,25 @@ export function StudioDock({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#F4EDE4] text-[#2D2D2D] font-sans">
+    <div className="flex flex-col h-full bg-card text-foreground font-sans">
       {/* Tab Bar */}
-      <div className="flex items-center justify-between border-b border-[#D8CBB7]/40 px-4 shrink-0 bg-[#633F2E]/5">
+      <div className="flex items-center justify-between border-b border-border/40 px-4 shrink-0 bg-primary/5">
         <div className="flex gap-0">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveDockTab(tab.id)}
               className={cn(
-                "flex items-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all relative",
-                activeDockTab === tab.id ? "text-[#633F2E]" : "text-[#2D2D2D]/40 hover:text-[#633F2E]/60"
+                "flex items-center gap-2 px-4 py-3 text-xs font-bold uppercase tracking-wider transition-all relative",
+                activeDockTab === tab.id ? "text-primary" : "text-muted-foreground/50 hover:text-primary/70"
               )}
             >
-              <tab.icon size={13} />
+              <tab.icon size={14} />
               {tab.label}
-              {tab.id === "variables" && <span className="text-[9px] text-[#2D2D2D]/20 ml-1">{variables.length}</span>}
-              {tab.id === "arguments" && <span className="text-[9px] text-[#2D2D2D]/20 ml-1">{arguments_.length}</span>}
-              {tab.id === "snapshots" && <span className="text-[9px] text-[#2D2D2D]/20 ml-1">{snapshots.length}</span>}
-              {activeDockTab === tab.id && <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#633F2E] rounded-t-full" />}
+              {tab.id === "variables" && variables.length > 0 && <span className="text-xs text-muted-foreground/40 ml-1 font-mono">{variables.length}</span>}
+              {tab.id === "arguments" && arguments_.length > 0 && <span className="text-xs text-muted-foreground/40 ml-1 font-mono">{arguments_.length}</span>}
+              {tab.id === "snapshots" && snapshots.length > 0 && <span className="text-xs text-muted-foreground/40 ml-1 font-mono">{snapshots.length}</span>}
+              {activeDockTab === tab.id && <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-t-full" />}
             </button>
           ))}
         </div>
@@ -3649,51 +3699,54 @@ export function FlowToolsPanel({ onEdgeTypeChange }: { onEdgeTypeChange?: (type:
   const [activeConnector, setActiveConnector] = useState("Angled");
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-5 overflow-y-auto">
       <div className="space-y-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#633F2E]/40 px-1">BPMN Elements</p>
-        <div className="grid grid-cols-3 gap-2">
+        <p className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">BPMN Elements — Drag to Canvas</p>
+        <div className="space-y-1">
           {bpmTools.map((tool, i) => (
-            <div 
-              key={i} 
-              draggable 
-              onDragStart={(e) => { 
-                e.dataTransfer.setData("application/reactflow", tool.dragType); 
-                e.dataTransfer.effectAllowed = "move"; 
+            <div
+              key={i}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/reactflow", tool.dragType);
+                e.dataTransfer.effectAllowed = "move";
               }}
-              className="flex flex-col items-center justify-center gap-2 group/tool cursor-grab active:cursor-grabbing"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-primary/5 cursor-grab active:cursor-grabbing transition-all group/tool border border-transparent hover:border-primary/20"
               title={tool.help}
             >
-              <div className="w-12 h-12 rounded-full bg-card border border-border/40 flex items-center justify-center group-hover/tool:border-primary group-hover/tool:bg-primary/5 transition-all shadow-sm group-hover/tool:shadow-md group-hover/tool:scale-110">
-                <tool.icon size={20} className="text-muted-foreground/60 group-hover/tool:text-primary transition-colors" />
+              <div className="w-8 h-8 rounded-lg bg-muted border border-border/50 flex items-center justify-center shrink-0 group-hover/tool:bg-primary/10 group-hover/tool:border-primary/30 transition-all">
+                <tool.icon size={16} className="text-foreground/60 group-hover/tool:text-primary transition-colors" />
               </div>
-              <span className="text-[9px] font-black uppercase tracking-tighter text-muted-foreground/40 group-hover/tool:text-primary transition-colors">{tool.label}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-foreground/90 group-hover/tool:text-foreground">{tool.label}</p>
+                <p className="text-xs text-muted-foreground/50">{tool.help}</p>
+              </div>
+              <GripVertical size={14} className="text-muted-foreground/20 group-hover/tool:text-muted-foreground/50 transition-colors shrink-0" />
             </div>
           ))}
-
         </div>
       </div>
 
-      <div className="space-y-3 pt-4 border-t border-[#D8CBB7]/40">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#633F2E]/40 px-1">Connector Styles</p>
+      <div className="space-y-3 pt-4 border-t border-border/30">
+        <p className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Connector Style</p>
         <div className="grid grid-cols-3 gap-2">
           {connectorTools.map((tool, i) => (
-            <button 
-              key={i} 
+            <button
+              key={i}
               onClick={() => {
                 setActiveConnector(tool.label);
                 onEdgeTypeChange?.(tool.edgeType);
               }}
               className={cn(
-                "flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all group/conn",
-                activeConnector === tool.label 
-                  ? "bg-[#633F2E] border-[#633F2E] text-white shadow-lg shadow-[#633F2E]/20" 
-                  : "bg-white border-[#D8CBB7]/40 text-[#633F2E]/60 hover:border-[#633F2E]/30"
+                "flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all",
+                activeConnector === tool.label
+                  ? "bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20"
+                  : "bg-card border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary"
               )}
               title={tool.help}
             >
-              <tool.icon size={16} className={cn("transition-colors", activeConnector === tool.label ? "text-white" : "text-[#633F2E]/60 group-hover/conn:text-[#633F2E]")} />
-              <span className="text-[10px] font-bold">{tool.label}</span>
+              <tool.icon size={17} />
+              <span className="text-xs font-bold">{tool.label}</span>
             </button>
           ))}
         </div>
@@ -3723,35 +3776,33 @@ export function FlowFormattingPanel({
   ];
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-5 overflow-y-auto">
       <div className="space-y-3">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#633F2E]/40 px-1">Alignment & Distribution</p>
-        <div className="grid grid-cols-3 gap-2">
+        <p className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Alignment & Distribution</p>
+        <div className="grid grid-cols-4 gap-1.5">
           {alignmentTools.map((tool, i) => (
-            <button 
-              key={i} 
+            <button
+              key={i}
               onClick={() => {
                 if (tool.label.startsWith("Dist")) onDistribute?.(tool.action);
                 else onAlign?.(tool.action);
               }}
-              className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-white border border-[#D8CBB7]/40 hover:border-[#633F2E]/30 hover:shadow-lg hover:shadow-[#633F2E]/5 transition-all group/align"
+              className="flex flex-col items-center justify-center gap-1.5 p-2.5 rounded-xl bg-card border border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all group/align"
               title={tool.help}
             >
-              <div className="w-8 h-8 rounded-lg bg-[#633F2E]/5 flex items-center justify-center group-hover/align:bg-[#633F2E]/10 transition-colors">
-                <tool.icon size={16} className="text-[#633F2E]/60 group-hover/align:text-[#633F2E]" />
-              </div>
-              <span className="text-[10px] font-bold text-[#633F2E]/60 group-hover/align:text-[#633F2E]">{tool.label}</span>
+              <tool.icon size={16} className="text-muted-foreground/60 group-hover/align:text-primary transition-colors" />
+              <span className="text-xs font-semibold text-muted-foreground/60 group-hover/align:text-primary leading-none">{tool.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="pt-4 border-t border-[#D8CBB7]/40">
-        <button 
+      <div className="pt-4 border-t border-border/30">
+        <button
           onClick={onAutoLayout}
-          className="w-full flex items-center justify-center gap-3 p-4 rounded-xl bg-[#633F2E] text-white font-black uppercase tracking-widest text-[11px] shadow-lg shadow-[#633F2E]/20 hover:opacity-90 active:scale-[0.98] transition-all"
+          className="w-full flex items-center justify-center gap-3 p-3.5 rounded-xl bg-primary text-primary-foreground font-bold uppercase tracking-wider text-xs shadow-lg shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition-all"
         >
-          <Sparkles size={16} />
+          <Sparkles size={15} />
           Auto-Arrange Flow
         </button>
       </div>

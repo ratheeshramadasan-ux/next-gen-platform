@@ -272,196 +272,196 @@ export function StudioLayout({
     { id: 'flow-formatting', label: 'Formatting', icon: LayoutGrid },
   ];
 
-  const headerScale = windowWidth < 1200 ? 0.85 : windowWidth < 1440 ? 0.92 : 1;
-  const headerHeight = Math.max(40, 48 * headerScale);
-
   return (
-    <div className="w-full h-full p-1 transition-all duration-300 overflow-hidden flex flex-col bg-background text-foreground font-sans">
-      {/* ── Top Bar ── */}
-      <header 
-        className={cn(
-          "m-0 rounded-sm border border-border/40 bg-muted/20 backdrop-blur-xl flex items-center justify-between shrink-0 z-40 shadow-xl transition-all duration-300",
-          windowWidth < 1200 ? "px-2" : "px-5"
-        )}
-        style={{ height: `${headerHeight}px` }}
-      >
+    <div className="w-full h-full transition-all duration-300 overflow-hidden flex flex-col bg-background text-foreground font-sans">
+      {/* ── Top Bar — Document-Processing style h-20 header ── */}
+      <header className="h-20 bg-card/80 backdrop-blur-md border-b border-border/50 px-6 flex items-center justify-between shrink-0 z-50 shadow-[0_1px_10px_rgba(0,0,0,0.04)]">
+        {/* Left: Back + Brand + Flow Identity */}
         <div className="flex items-center gap-4">
-          {/* Back button */}
           <a
             href={backHref}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-primary/5 transition-all group mr-1 relative z-50 cursor-pointer"
+            className="w-10 h-10 rounded-xl bg-card border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-all flex items-center justify-center shadow-sm group hover:-translate-x-0.5 shrink-0"
+            title={`Back to ${moduleName}`}
           >
-            <div className="w-6 h-6 rounded-md bg-primary/5 flex items-center justify-center border border-primary/10 group-hover:bg-primary/10 transition-colors pointer-events-none">
-              <ArrowLeft size={12 * (windowWidth < 1200 ? 0.85 : windowWidth < 1440 ? 0.92 : 1) + 2} className="text-muted-foreground/60 group-hover:text-primary" />
-            </div>
-            <span 
-              className="font-black uppercase tracking-[0.2em] text-muted-foreground/60 group-hover:text-primary hidden sm:block pointer-events-none"
-              style={{ fontSize: `${10 * (windowWidth < 1200 ? 0.85 : windowWidth < 1440 ? 0.92 : 1)}px` }}
-            >
-              {moduleName}
-            </span>
+            <ArrowLeft size={16} strokeWidth={3} className="transition-transform group-hover:scale-110" />
           </a>
 
+          {/* Branded Studio Icon */}
+          <div className="w-12 h-12 rounded-[14px] bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-primary-foreground shadow-[0_8px_20px_-6px_rgba(var(--primary),0.4)] border border-white/20 shrink-0">
+            <Workflow size={22} strokeWidth={2.5} />
+          </div>
 
-          <button
-            onClick={() => setShowSideNav(!showSideNav)}
-            className="w-8 h-8 rounded-lg hover:bg-primary/5 flex items-center justify-center transition-all text-muted-foreground/30 hover:text-primary"
-          >
-            {showSideNav ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-          </button>
-
-          <div className="h-6 w-px bg-border/20 mx-1" />
-
-          {/* Folder/Project Breadcrumb Path */}
-          <div className="flex items-center gap-1 px-2 py-1 bg-background/40 rounded-lg border border-border/30 overflow-hidden max-w-[120px] md:max-w-none">
-            {folderName && (
-              <>
-                <span 
-                  className="font-black uppercase tracking-widest text-muted-foreground/30 truncate"
-                  style={{ fontSize: `${windowWidth < 1200 ? 8 : 9}px` }}
-                >
-                  {folderName}
+          {/* Title + Identity */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-black tracking-tight text-foreground/80 uppercase whitespace-nowrap">{studioLabel.toUpperCase()} DESIGNER</h1>
+              <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-xs font-black text-primary uppercase tracking-widest whitespace-nowrap">
+                {moduleName}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {projectName && (
+                <span className="text-xs font-black text-foreground uppercase tracking-wide bg-muted px-2 py-0.5 rounded-lg border border-border truncate max-w-[200px]">
+                  {folderName ? `${folderName} / ` : ''}{projectName}
                 </span>
-                <ChevronRight size={windowWidth < 1200 ? 8 : 10} className="text-muted-foreground/20" />
-              </>
-            )}
-            <span 
-              className="font-black uppercase tracking-widest text-primary truncate"
-              style={{ fontSize: `${windowWidth < 1200 ? 8 : 10}px` }}
-            >
-              {projectName}
-            </span>
+              )}
+              {workflowName && (
+                <>
+                  <div className="w-1 h-1 rounded-full bg-border" />
+                  <span className="text-xs font-black text-primary uppercase tracking-wide truncate max-w-[160px]">{workflowName}</span>
+                </>
+              )}
+              <div className="w-1 h-1 rounded-full bg-border" />
+              <span className="text-xs font-black text-primary/60 uppercase tracking-[0.15em] opacity-80">v2.0 Flow</span>
+            </div>
           </div>
-
-
-          <div className="h-6 w-px bg-border/20 mx-1" />
-
-
-           {/* Visible tab rendering */}
-          <div className="flex items-center gap-0">
-            {navTabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "px-2 md:px-3 py-1.5 font-black uppercase tracking-widest transition-all rounded-md flex items-center gap-2 shrink-0",
-                  activeTab === tab.id
-                    ? "text-primary bg-primary/10 shadow-sm"
-                    : "text-muted-foreground/40 hover:text-primary hover:bg-primary/5"
-                )}
-                style={{ fontSize: `${10 * (windowWidth < 1200 ? 0.85 : windowWidth < 1440 ? 0.92 : 1)}px` }}
-              >
-                {tab.icon && <tab.icon size={10 * (windowWidth < 1200 ? 0.85 : windowWidth < 1440 ? 0.92 : 1) + 2} className={cn(activeTab === tab.id ? "text-primary" : "text-muted-foreground/30")} />}
-                <span className={cn(windowWidth < 1200 && tab.id !== activeTab && "hidden")}>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
         </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 ml-auto">
-            {lastSaved && (
-              <span className="text-[9px] font-bold text-muted-foreground/30 uppercase tracking-[0.15em] mr-2">
-                 Last saved: {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSave}
-              disabled={isBusy}
-              className="h-8 gap-2 border-border/60 bg-background/40 hover:bg-accent text-[10px] font-black uppercase tracking-widest px-2 md:px-4 rounded-sm shadow-sm"
-              title="Save changes"
-            >
-              <Save size={12} className={cn(isBusy && "animate-pulse")} />
-              <span className={cn(windowWidth < 1200 && "hidden")}>{isBusy ? "Processing..." : "Save"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onValidate}
-              disabled={isBusy}
-              className="h-8 gap-2 border-border/60 bg-background/40 hover:bg-accent text-[10px] font-black uppercase tracking-widest px-2 md:px-4 rounded-sm shadow-sm"
-              title="Validate model"
-            >
-              <ClipboardCheck size={12} className="text-emerald-500" />
-              <span className={cn(windowWidth < 1200 && "hidden")}>Validate</span>
-            </Button>
-            <Button
-              size="sm"
-              onClick={onRun}
-              disabled={isBusy}
-              className="h-8 gap-2 bg-primary text-primary-foreground hover:opacity-90 text-[10px] font-black uppercase tracking-widest px-2 md:px-5 rounded-sm shadow-lg shadow-primary/20"
-              title="Run workflow"
-            >
-              <Play size={12} fill="currentColor" className={cn(isBusy && "animate-pulse")} />
-              <span className={cn(windowWidth < 1200 && "hidden")}>Run</span>
-            </Button>
-            <Button
-              size="sm"
-              onClick={onDeploy}
-              disabled={isBusy}
-              className="h-8 gap-2 bg-primary text-primary-foreground hover:opacity-90 text-[10px] font-black uppercase tracking-widest px-2 md:px-4 rounded-sm shadow-lg shadow-primary/20"
-              title="Deploy to production"
-            >
-              <Rocket size={12} className={cn(isBusy && "animate-pulse")} />
-              <span className={cn(windowWidth < 1200 && "hidden")}>Deploy</span>
-            </Button>
-            <div className="h-8 w-px bg-border/20 mx-1" />
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/5">
-              <HistoryIcon size={16} className="text-muted-foreground/30" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/5">
-              <Bot size={16} className="text-muted-foreground/30" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/5">
-              <Settings size={16} className="text-muted-foreground/30" />
-            </Button>
+        {/* Right: Sync status + progress + actions */}
+        <div className="flex items-center gap-5">
+          {/* Local Sync Indicator */}
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Link2 size={12} className="text-emerald-500" />
+              <p className="text-xs font-black text-foreground/80 uppercase tracking-[0.2em]">Local Sync</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {[0,1,2,3,4].map((i) => (
+                <div key={i} className={cn(
+                  "h-1.5 rounded-full transition-all duration-500",
+                  lastSaved ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : "bg-muted/40",
+                  i === 2 && !lastSaved ? "w-8 bg-primary/40" : "w-5"
+                )} />
+              ))}
+            </div>
           </div>
+
+          <div className="h-10 w-px bg-border/50" />
+
+          {/* Save status */}
+          {lastSaved && (
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-black text-muted-foreground/50 uppercase tracking-[0.15em]">Last Saved</span>
+              <span className="text-xs font-bold text-emerald-500">{lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          )}
+
+          <div className="h-10 w-px bg-border/50" />
+
+          {/* Side nav toggle */}
+          <button
+            onClick={() => setShowSideNav(!showSideNav)}
+            className="w-10 h-10 rounded-xl border border-border/50 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+            title={showSideNav ? "Hide panel" : "Show panel"}
+          >
+            {showSideNav ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+          </button>
+
+          {/* Action buttons */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onValidate}
+            disabled={isBusy}
+            className="h-9 gap-2 border-border/60 bg-background/40 hover:bg-accent text-xs font-black uppercase tracking-widest px-3 rounded-xl shadow-sm"
+            title="Validate flow"
+          >
+            <ClipboardCheck size={13} className="text-emerald-500" />
+            <span className="hidden lg:block">Validate</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSave}
+            disabled={isBusy}
+            className="h-9 gap-2 border-border/60 bg-background/40 hover:bg-accent text-xs font-black uppercase tracking-widest px-3 rounded-xl shadow-sm"
+            title="Save flow"
+          >
+            <Save size={13} className={cn(isBusy && "animate-pulse")} />
+            <span className="hidden lg:block">{isBusy ? "Saving..." : "Save"}</span>
+          </Button>
+          <Button
+            size="sm"
+            onClick={onRun}
+            disabled={isBusy}
+            className="h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest px-4 rounded-xl shadow-lg shadow-emerald-600/20"
+            title="Run flow"
+          >
+            <Play size={13} fill="currentColor" className={cn(isBusy && "animate-pulse")} />
+            <span className="hidden lg:block">Run</span>
+          </Button>
+          <Button
+            size="sm"
+            onClick={onDeploy}
+            disabled={isBusy}
+            className="h-9 gap-2 bg-primary text-primary-foreground hover:opacity-90 text-xs font-black uppercase tracking-widest px-4 rounded-xl shadow-lg shadow-primary/20"
+            title="Deploy to production"
+          >
+            <Rocket size={13} className={cn(isBusy && "animate-pulse")} />
+            <span className="hidden lg:block">Deploy</span>
+          </Button>
+          <div className="h-9 w-px bg-border/50" />
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/5" title="History">
+            <HistoryIcon size={16} className="text-muted-foreground/60" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/5" title="AI Assistant">
+            <Bot size={16} className="text-muted-foreground/60" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/5" title="Settings">
+            <Settings size={16} className="text-muted-foreground/60" />
+          </Button>
         </div>
       </header>
 
-      {/* ── Sub-header Actions ── */}
-      {!hideSubHeader && ["studio", "application"].includes(activeTab) && (
-        <div className="px-5 py-2 flex items-center justify-between border-b border-border/10 bg-card/20 shrink-0">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-2">Zoom</span>
-              <button className="p-1 rounded hover:bg-primary/5 text-muted-foreground/40 transition-colors"><Minus size={12} /></button>
-              <span className="text-[10px] font-black text-primary px-2 min-w-[40px] text-center">100%</span>
-              <button className="p-1 rounded hover:bg-primary/5 text-muted-foreground/40 transition-colors"><Plus size={12} /></button>
-            </div>
-            <div className="h-4 w-px bg-border/20" />
-            <div className="flex items-center gap-3">
-              <button className="p-1.5 rounded-md text-muted-foreground/30 hover:bg-primary/5 hover:text-primary transition-all"><Undo2 size={14} /></button>
-              <button className="p-1.5 rounded-md text-muted-foreground/30 hover:bg-primary/5 hover:text-primary transition-all"><Redo2 size={14} /></button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
+      {/* ── Nav Tabs Sub-Header ── */}
+      <div className="h-10 bg-card/60 backdrop-blur-sm border-b border-border/40 px-6 flex items-center shrink-0 z-40 shadow-sm">
+        <div className="flex items-center gap-0 flex-1">
+          {navTabs.map((tab) => (
             <button
-              onClick={onExport}
-              className="px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all text-muted-foreground/60 hover:bg-primary/5 flex items-center gap-2"
-              title="Export Workflow as JSON"
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "px-3 py-1.5 h-10 font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shrink-0 border-b-2 text-xs",
+                activeTab === tab.id
+                  ? "text-primary border-primary bg-primary/5"
+                  : "text-muted-foreground/50 border-transparent hover:text-primary/70 hover:bg-primary/5"
+              )}
             >
-              <Download size={12} /> Export
+              {tab.icon && <tab.icon size={12} className={cn(activeTab === tab.id ? "text-primary" : "text-muted-foreground/40")} />}
+              <span className={cn(windowWidth < 1280 && tab.id !== activeTab ? "hidden" : "")}>{tab.label}</span>
             </button>
-            <button
-              onClick={() => document.getElementById('flow-import-input')?.click()}
-              className="px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all text-muted-foreground/60 hover:bg-primary/5 flex items-center gap-2"
-              title="Import Workflow from JSON"
-            >
-              <Upload size={12} /> Import
-            </button>
-          </div>
+          ))}
         </div>
-      )}
-
+        {/* Sub-header right: undo/redo + zoom + export */}
+        <div className="flex items-center gap-4 ml-auto">
+          {["studio", "application"].includes(activeTab) && !hideSubHeader && (
+            <>
+              <div className="flex items-center gap-1">
+                <button className="p-1.5 rounded-md text-muted-foreground/40 hover:bg-primary/5 hover:text-primary transition-all" title="Undo"><Undo2 size={13} /></button>
+                <button className="p-1.5 rounded-md text-muted-foreground/40 hover:bg-primary/5 hover:text-primary transition-all" title="Redo"><Redo2 size={13} /></button>
+              </div>
+              <div className="h-4 w-px bg-border/20" />
+              <button
+                onClick={onExport}
+                className="px-2 py-1 rounded-md text-xs font-black uppercase tracking-widest transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
+                title="Export"
+              >
+                <Download size={11} /> Export
+              </button>
+              <button
+                onClick={() => document.getElementById('flow-import-input')?.click()}
+                className="px-2 py-1 rounded-md text-xs font-black uppercase tracking-widest transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
+                title="Import"
+              >
+                <Upload size={11} /> Import
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* ── Main Workspace ── */}
-      <div className="flex-1 flex min-h-0 overflow-hidden relative mt-3 md:mt-4 pb-3 md:pb-4 px-3 md:px-4 gap-3 md:gap-4">
+      <div className="flex-1 flex min-h-0 overflow-hidden relative mt-2 pb-2 px-2 gap-2">
         {/* Left Sidebars */}
         {["studio", "application"].includes(activeTab) && showSideNav && (
           <div className="flex h-full gap-1 overflow-hidden">
@@ -473,32 +473,31 @@ export function StudioLayout({
               )}
             >
               {/* Panel Header */}
-              <div className="h-14 flex items-center justify-between px-3 bg-muted/5 border-b border-border/40 shrink-0">
-                <div className="flex items-center gap-1 bg-background/50 p-1 rounded-xl border border-border/20">
+              <div className="h-12 flex items-center justify-between px-3 bg-muted/30 border-b border-border/40 shrink-0">
+                <div className="flex items-center gap-0.5">
                   {leftSideRailTabs.map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => handleSideTabChange(tab.id)}
                       className={cn(
-                        "p-2 rounded-lg transition-all relative group",
-                        activeSideTab === tab.id 
-                          ? "bg-primary text-primary-foreground shadow-lg" 
-                          : "text-muted-foreground/40 hover:bg-primary/5"
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all text-[12px] font-semibold",
+                        activeSideTab === tab.id
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "text-muted-foreground/60 hover:bg-primary/5 hover:text-primary"
                       )}
-                      title={tab.label}
                     >
-                      <tab.icon size={16} />
+                      <tab.icon size={14} />
+                      <span>{tab.label.split(' ')[0]}</span>
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => setFolderState("hidden")}
-                    className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground/30 hover:text-red-500 transition-colors"
-                  >
-                    <ChevronRight size={14} className="rotate-180" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => setFolderState("hidden")}
+                  className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-colors"
+                  title="Close panel"
+                >
+                  <PanelLeftClose size={15} />
+                </button>
               </div>
 
 
@@ -565,14 +564,14 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{s.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{s.version}</span>
-                              <span className="text-[9px] font-bold text-muted-foreground/40">{s.cron}</span>
+                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{s.version}</span>
+                              <span className="text-xs font-bold text-muted-foreground/40">{s.cron}</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="text-[9px] font-bold text-muted-foreground/30">Last: {s.lastRun}</span>
-                          <span className={cn("text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border", s.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{s.status}</span>
+                          <span className="text-xs font-bold text-muted-foreground/30">Last: {s.lastRun}</span>
+                          <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", s.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{s.status}</span>
                         </div>
                       </div>
                     ))}
@@ -599,12 +598,12 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{t.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{t.version}</span>
-                              <span className="text-[9px] font-bold text-muted-foreground/40">{t.type} — {t.filter}</span>
+                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{t.version}</span>
+                              <span className="text-xs font-bold text-muted-foreground/40">{t.type} — {t.filter}</span>
                             </div>
                           </div>
                         </div>
-                        <span className={cn("text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border", t.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{t.status}</span>
+                        <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", t.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{t.status}</span>
                       </div>
                     ))}
                   </div>
@@ -631,12 +630,12 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{c.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{c.version}</span>
-                              <span className="text-[9px] font-bold text-muted-foreground/40">{c.type}</span>
+                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{c.version}</span>
+                              <span className="text-xs font-bold text-muted-foreground/40">{c.type}</span>
                             </div>
                           </div>
                         </div>
-                        <span className={cn("text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border", c.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{c.status}</span>
+                        <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", c.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{c.status}</span>
                       </div>
                     ))}
                   </div>
@@ -662,12 +661,12 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{p.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{p.version}</span>
-                              <span className="text-[9px] font-bold text-muted-foreground/40">{p.env} — {p.date}</span>
+                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{p.version}</span>
+                              <span className="text-xs font-bold text-muted-foreground/40">{p.env} — {p.date}</span>
                             </div>
                           </div>
                         </div>
-                        <span className={cn("text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border", p.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{p.status}</span>
+                        <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", p.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{p.status}</span>
                       </div>
                     ))}
                   </div>
@@ -705,29 +704,29 @@ export function StudioLayout({
               )}
             >
               {/* Panel Header */}
-              <div className="h-14 flex items-center justify-between px-3 bg-muted/5 border-b border-border/40 shrink-0">
-                 <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => setRightState("hidden")}
-                    className="p-1.5 rounded-md hover:bg-red-500/10 text-muted-foreground/30 hover:text-red-500 transition-colors"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1 bg-background/50 p-1 rounded-xl border border-border/20">
+              <div className="h-12 flex items-center justify-between px-3 bg-muted/30 border-b border-border/40 shrink-0">
+                <button
+                  onClick={() => setRightState("hidden")}
+                  className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-colors"
+                  title="Close panel"
+                >
+                  <PanelRightClose size={15} />
+                </button>
+                <div className="flex items-center gap-0.5">
                   {rightSideRailTabs.map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveRightSideTab(tab.id as any)}
                       className={cn(
-                        "p-2 rounded-lg transition-all relative group",
-                        activeRightSideTab === tab.id 
-                          ? "bg-primary text-primary-foreground shadow-lg" 
-                          : "text-muted-foreground/40 hover:bg-primary/5"
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all text-[12px] font-semibold",
+                        activeRightSideTab === tab.id
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "text-muted-foreground/60 hover:bg-primary/5 hover:text-primary"
                       )}
                       title={tab.label}
                     >
-                      <tab.icon size={16} />
+                      <tab.icon size={14} />
+                      <span>{tab.label}</span>
                     </button>
                   ))}
                 </div>
@@ -761,43 +760,39 @@ export function StudioLayout({
       {/* ── Bottom Dock ── */}
       {!hideBottomDock && ["studio", "application"].includes(activeTab) && (
         <section
-          style={{ height: bottomSize === "hidden" ? "36px" : `${bottomHeight}px` }}
+          style={{ height: bottomSize === "hidden" ? "40px" : `${bottomHeight}px` }}
           className={cn(
-            "mb-3 md:mb-4 rounded-sm border border-border/60 bg-card/40 backdrop-blur-3xl transition-all relative z-50 shadow-2xl overflow-hidden shrink-0",
-            isResizingBottom ? "transition-none" : "duration-300",
-            bottomSize === "hidden" && "mb-0"
+            "rounded-xl border border-border/50 bg-card backdrop-blur-3xl transition-all relative z-50 shadow-xl overflow-hidden shrink-0",
+            isResizingBottom ? "transition-none" : "duration-300"
           )}
         >
           {/* Resize Handle */}
-          <div 
+          <div
             onMouseDown={startResizingBottom}
-            className="absolute top-0 left-0 w-full h-1 cursor-ns-resize hover:bg-primary/40 z-[60] transition-colors"
+            className="absolute top-0 left-0 w-full h-1.5 cursor-ns-resize hover:bg-primary/30 z-[60] transition-colors"
           />
 
-          <div className="h-14 flex items-center justify-between px-6 bg-primary/5 border-b border-border/40 shrink-0">
+          <div className="h-10 flex items-center justify-between px-5 bg-muted/30 border-b border-border/40 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
-                <LayoutGrid size={12} className="text-primary" />
+              <div className="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <LayoutGrid size={13} className="text-primary" />
               </div>
-              <span className="text-base font-bold text-foreground/90">Resource Dock</span>
+              <span className="text-sm font-bold text-foreground">Resource Dock</span>
+              <span className="text-xs text-muted-foreground/50 font-medium">Variables · Arguments · Logs · Profiler</span>
             </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 rounded-md hover:bg-foreground/5"
-                onClick={() => setBottomSize(prev => prev === "hidden" ? "normal" : "hidden")}
-                title={bottomSize === "hidden" ? "Restore" : "Minimize"}
-              >
-                {bottomSize === "hidden" ? <ChevronUp size={13} className="opacity-40" /> : <ChevronDown size={13} className="opacity-40" />}
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg hover:bg-muted text-muted-foreground/50 hover:text-foreground"
+              onClick={() => setBottomSize(prev => prev === "hidden" ? "normal" : "hidden")}
+              title={bottomSize === "hidden" ? "Restore" : "Minimize"}
+            >
+              {bottomSize === "hidden" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </Button>
           </div>
 
           <div className="flex-1 overflow-hidden">
-             {bottomDock || (
-                <StudioDock />
-             )}
+             {bottomDock || <StudioDock />}
           </div>
         </section>
       )}
