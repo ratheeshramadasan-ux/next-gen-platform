@@ -1158,6 +1158,228 @@ function StudioDependencyNode({ label, type, depth }: any) {
 }
 
 /* ======================================================================
+   GUIDE DATA — rich contextual help for every activity / tool
+   ====================================================================== */
+interface ActivityGuide {
+  when: string;
+  how: string;
+  example?: string;
+  tips?: string[];
+  inputs?: string[];
+  outputs?: string[];
+}
+
+const ACTIVITY_GUIDE: Record<string, ActivityGuide> = {
+  // ── Flow Control ──────────────────────────────────────────────────
+  "Start": {
+    when: "Always — every flow must begin with a Start node.",
+    how: "Marks the entry point of your automation. Execution begins here and follows outgoing connections.",
+    tips: ["You can only have one Start node per workflow.", "Connect it directly to your first action."],
+  },
+  "End": {
+    when: "When you want execution to stop, either at completion or after an early exit.",
+    how: "Terminates the workflow. Any variables set are still accessible in calling processes.",
+    tips: ["Add multiple End nodes for different exit paths (success vs error)."],
+  },
+  "Decision (IF)": {
+    when: "When you need to take different paths depending on a condition.",
+    how: "Evaluates a Boolean expression. If true → Yes branch; if false → No branch.",
+    example: "status == 'Active'  →  Yes: send email  /  No: skip",
+    inputs: ["condition — any Boolean expression"],
+    tips: ["Use {variable} syntax to reference variables in the condition.", "Chain multiple decisions for complex logic."],
+  },
+  "Parallel Execute": {
+    when: "When two or more tasks can run simultaneously to save time.",
+    how: "Splits the flow into concurrent branches. All branches must complete before the flow continues past the join point.",
+    tips: ["Use a second Parallel node to merge branches back together.", "Ideal for independent API calls, file reads, or notifications."],
+  },
+  "For Each": {
+    when: "When you need to process every item in a list or table.",
+    how: "Iterates over a collection. The current item is available as {item} inside the loop body.",
+    example: "For each row in invoiceTable → process row",
+    inputs: ["collection — array, DataTable, or range"],
+    outputs: ["{item} — current element", "{index} — zero-based position"],
+  },
+  "Try Catch": {
+    when: "When an activity might fail and you want to handle the error gracefully.",
+    how: "Wraps a block of activities. If an error occurs the Catch branch runs instead of stopping the workflow.",
+    example: "Try: HTTP Request / Catch: log error and retry",
+    outputs: ["{error} — Exception object", "{errorMessage} — Human-readable text"],
+    tips: ["Always add a finally step to clean up resources."],
+  },
+  "Log Message": {
+    when: "During development or when you need an audit trail.",
+    how: "Writes a message to the execution log at the chosen log level (Info, Warning, Error).",
+    example: "Log 'Processing invoice {invoiceId}'",
+    inputs: ["message — text to log", "logLevel — Info / Warning / Error"],
+  },
+  "Message Box": {
+    when: "When you need human confirmation before continuing (attended automation only).",
+    how: "Displays a popup dialog and waits for the user to click OK or Cancel.",
+    inputs: ["message — question text", "title — dialog title"],
+    outputs: ["{userResponse} — OK or Cancel"],
+  },
+  // ── UI Automation ─────────────────────────────────────────────────
+  "Click": {
+    when: "To interact with any clickable element: buttons, links, menu items.",
+    how: "Simulates a mouse click on the element identified by its CSS selector or recorded coordinates.",
+    inputs: ["selector — CSS, XPath, or recorded element reference"],
+    tips: ["Use 'Record App' to auto-capture selectors.", "Set retryCount > 1 for dynamic pages."],
+  },
+  "Type Into": {
+    when: "To enter text into input fields, search boxes, or form controls.",
+    how: "Focuses the element and types the given text keystroke by keystroke.",
+    example: "Type '{username}' into #loginField",
+    inputs: ["selector — target field", "text — value to type (supports {variable})"],
+    tips: ["Use {ENTER} or {TAB} at the end to submit forms."],
+  },
+  "Get Text": {
+    when: "To read a value displayed on screen — labels, table cells, confirmation messages.",
+    how: "Extracts the visible text content of the matched element.",
+    inputs: ["selector — element to read"],
+    outputs: ["{text} — extracted string"],
+  },
+  "Open Browser": {
+    when: "At the start of any web automation sequence.",
+    how: "Launches Chrome, Edge, or Firefox and navigates to the given URL.",
+    inputs: ["url — starting address", "browser — Chrome / Edge / Firefox"],
+    outputs: ["{browserId} — reference for subsequent actions"],
+  },
+  "Extract Table": {
+    when: "To scrape structured data from an HTML table into a DataTable.",
+    how: "Reads all rows and columns from the matched table element.",
+    inputs: ["selector — CSS selector for the <table>"],
+    outputs: ["{table} — DataTable ready for filtering and processing"],
+  },
+  // ── Data & Spreadsheets ───────────────────────────────────────────
+  "Assign": {
+    when: "Whenever you need to set or update a variable's value.",
+    how: "Evaluates the right-hand expression and stores the result in the named variable.",
+    example: "totalAmount = {price} * {qty}",
+    inputs: ["variable — name to assign to", "value — literal or expression"],
+    tips: ["You can chain math: {a} + {b} * 2"],
+  },
+  "Filter Table": {
+    when: "To narrow a DataTable down to rows that match a condition.",
+    how: "Applies a WHERE-style condition to each row and returns matching rows as a new table.",
+    example: "WHERE Status == 'Open'",
+    inputs: ["table — source DataTable", "condition — filter expression"],
+    outputs: ["{filtered} — new DataTable with matching rows"],
+  },
+  "Build Table": {
+    when: "To create a new empty DataTable with known column names.",
+    how: "Declares the schema (column names and types). Rows are added with Add Data Row.",
+    inputs: ["columns — comma-separated column names"],
+    outputs: ["{table} — empty DataTable"],
+  },
+  "Get Asset": {
+    when: "To retrieve credentials, connection strings, or secrets stored securely in the platform.",
+    how: "Looks up the asset by name from the platform's encrypted vault.",
+    inputs: ["assetName — the registered asset identifier"],
+    outputs: ["{assetValue} — decrypted value"],
+    tips: ["Never hard-code passwords. Store them as assets."],
+  },
+  // ── Email ─────────────────────────────────────────────────────────
+  "Send Email": {
+    when: "To send notifications, reports, or approval requests via email.",
+    how: "Connects via SMTP or Microsoft Graph and delivers the composed message.",
+    example: "Send 'Report ready' to {managerEmail}",
+    inputs: ["to", "subject", "body", "attachments (optional)"],
+    tips: ["Use {variable} tokens in subject and body.", "Test with a sandbox mailbox first."],
+  },
+  "Get Emails": {
+    when: "To process incoming messages — invoices, approvals, alerts.",
+    how: "Reads unread emails from the configured mailbox matching the filter criteria.",
+    outputs: ["{emails} — array of email objects (subject, body, sender, attachments)"],
+    tips: ["Mark emails as read after processing to avoid duplicates."],
+  },
+  // ── API ───────────────────────────────────────────────────────────
+  "HTTP Request": {
+    when: "To call any REST API, webhook, or web service.",
+    how: "Sends a GET / POST / PUT / DELETE / PATCH request and parses the response.",
+    example: "POST https://api.example.com/invoices  Body: {invoiceJson}",
+    inputs: ["url", "method (GET/POST/…)", "headers", "body"],
+    outputs: ["{response} — parsed JSON / text"],
+    tips: ["Use Get Asset to retrieve API keys.", "Set timeout to avoid hanging flows."],
+  },
+};
+
+/* ──────────────────────────────────────────────────────────────────────
+   GuideCard — inline expandable guide shown below an activity row
+   ────────────────────────────────────────────────────────────────── */
+function GuideCard({ guide, name }: { guide: ActivityGuide; name: string }) {
+  return (
+    <div
+      className="mx-2 mb-1 rounded-lg overflow-hidden text-xs"
+      style={{
+        background: "color-mix(in srgb,var(--primary) 5%,var(--card))",
+        border: "1px solid color-mix(in srgb,var(--primary) 20%,transparent)",
+      }}
+    >
+      {/* Header */}
+      <div className="px-3 py-2 flex items-center gap-2" style={{ background: "color-mix(in srgb,var(--primary) 10%,transparent)", borderBottom: "1px solid color-mix(in srgb,var(--primary) 15%,transparent)" }}>
+        <Info size={12} style={{ color: "var(--primary)", flexShrink: 0 }} />
+        <span className="font-semibold" style={{ color: "var(--primary)" }}>{name}</span>
+      </div>
+
+      <div className="px-3 py-2 space-y-2">
+        {/* When to use */}
+        <div>
+          <span className="font-medium text-muted-foreground uppercase tracking-wide" style={{ fontSize: 10 }}>When to use</span>
+          <p className="mt-0.5 text-foreground/80 leading-relaxed">{guide.when}</p>
+        </div>
+
+        {/* How it works */}
+        <div>
+          <span className="font-medium text-muted-foreground uppercase tracking-wide" style={{ fontSize: 10 }}>How it works</span>
+          <p className="mt-0.5 text-foreground/80 leading-relaxed">{guide.how}</p>
+        </div>
+
+        {/* Example */}
+        {guide.example && (
+          <div>
+            <span className="font-medium text-muted-foreground uppercase tracking-wide" style={{ fontSize: 10 }}>Example</span>
+            <code className="mt-0.5 block px-2 py-1 rounded text-primary font-mono" style={{ background: "color-mix(in srgb,var(--primary) 8%,transparent)", fontSize: 11 }}>{guide.example}</code>
+          </div>
+        )}
+
+        {/* Inputs / Outputs inline */}
+        {(guide.inputs || guide.outputs) && (
+          <div className="grid grid-cols-2 gap-2">
+            {guide.inputs && guide.inputs.length > 0 && (
+              <div>
+                <span className="font-medium text-muted-foreground uppercase tracking-wide" style={{ fontSize: 10 }}>Inputs</span>
+                <ul className="mt-0.5 space-y-0.5">
+                  {guide.inputs.map(i => <li key={i} className="text-foreground/70 leading-snug">• {i}</li>)}
+                </ul>
+              </div>
+            )}
+            {guide.outputs && guide.outputs.length > 0 && (
+              <div>
+                <span className="font-medium text-muted-foreground uppercase tracking-wide" style={{ fontSize: 10 }}>Outputs</span>
+                <ul className="mt-0.5 space-y-0.5">
+                  {guide.outputs.map(o => <li key={o} className="text-emerald-600 leading-snug font-mono" style={{ fontSize: 11 }}>• {o}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tips */}
+        {guide.tips && guide.tips.length > 0 && (
+          <div>
+            <span className="font-medium text-muted-foreground uppercase tracking-wide" style={{ fontSize: 10 }}>Pro Tips</span>
+            <ul className="mt-0.5 space-y-0.5">
+              {guide.tips.map(t => <li key={t} className="text-foreground/70 leading-snug">💡 {t}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================================
    LEFT PANEL — Activity Palette + Connectors + Libraries
    ====================================================================== */
 export function StudioToolbox({ 
@@ -1172,6 +1394,9 @@ export function StudioToolbox({
   workflowId?: string;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [openGuideId, setOpenGuideId] = useState<string | null>(null);
+
+  const toggleGuide = (name: string) => setOpenGuideId(prev => prev === name ? null : name);
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     activities: true,
@@ -2064,11 +2289,31 @@ export function StudioToolbox({
                                 </div>
                               )}
                               {!collapsed && (
-                                <div className="shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                  <GripVertical size={14} className="text-muted-foreground/30" />
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {ACTIVITY_GUIDE[item.name] && (
+                                    <button
+                                      onClick={e => { e.stopPropagation(); e.preventDefault(); toggleGuide(item.name); }}
+                                      onMouseDown={e => e.stopPropagation()}
+                                      className={cn(
+                                        "w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-all cursor-pointer",
+                                        openGuideId === item.name
+                                          ? "opacity-100 text-primary"
+                                          : "text-muted-foreground/40 hover:text-primary"
+                                      )}
+                                      style={openGuideId === item.name ? { background: "color-mix(in srgb,var(--primary) 12%,transparent)" } : {}}
+                                      title="Show activity guide"
+                                    >
+                                      <Info size={12} />
+                                    </button>
+                                  )}
+                                  <GripVertical size={13} className="text-muted-foreground/20 opacity-0 group-hover/item:opacity-100 transition-opacity" />
                                 </div>
                               )}
                             </div>
+                            {/* Inline guide card — expands below the row */}
+                            {!collapsed && openGuideId === item.name && ACTIVITY_GUIDE[item.name] && (
+                              <GuideCard guide={ACTIVITY_GUIDE[item.name]!} name={item.name} />
+                            )}
                           );
                         })}
                       </div>
@@ -3986,6 +4231,166 @@ export function FlowFormattingPanel({
           <Sparkles size={15} />
           Auto-Arrange Flow
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================================
+   RIGHT PANEL — Guide Tab
+   ====================================================================== */
+export function GuidePanel() {
+  const [search, setSearch] = useState("");
+  const [section, setSection] = useState<"activities"|"flow"|"properties"|"formatting">("activities");
+  const q = search.toLowerCase();
+
+  const sections = [
+    { id: "activities" as const, label: "Activities" },
+    { id: "flow"       as const, label: "Flow Tools" },
+    { id: "properties" as const, label: "Properties" },
+    { id: "formatting" as const, label: "Formatting" },
+  ];
+
+  const activityEntries = Object.entries(ACTIVITY_GUIDE).filter(
+    ([name, g]) => !q || name.toLowerCase().includes(q) || g.when.toLowerCase().includes(q) || g.how.toLowerCase().includes(q)
+  );
+
+  const flowGuide = [
+    { name: "Start Event",       when: "First node in every workflow.",                     how: "Entry point — execution begins here." },
+    { name: "End Event",         when: "Last node in a branch.",                            how: "Terminates execution on that path." },
+    { name: "Decision Gateway",  when: "Fork based on a condition.",                        how: "Yes = condition true, No = false.", example: "status == 'Active'" },
+    { name: "Parallel Gateway",  when: "Two or more branches run simultaneously.",           how: "Add a second Parallel node downstream to merge branches back.", tip: "All branches must finish before the merge proceeds." },
+    { name: "User Task",         when: "A human must act before the flow continues.",       how: "Pauses the flow and creates a task in the inbox." },
+    { name: "Service Task",      when: "An automated API call, file op, or script.",        how: "Executes without human interaction." },
+    { name: "Script Task",       when: "Custom logic that doesn't fit a built-in activity.",how: "Runs an inline JavaScript or Python snippet." },
+    { name: "Wait Event",        when: "Pause until a timer or message arrives.",           how: "Suspends the flow for a duration or until an external event fires." },
+  ].filter(f => !q || f.name.toLowerCase().includes(q) || f.when.toLowerCase().includes(q));
+
+  const propertiesGuide = [
+    { field: "Display Name",          desc: "Label shown on the canvas node. No effect on execution." },
+    { field: "Timeout (ms)",          desc: "Max milliseconds before a TimeoutException is thrown. Default: 30 000 ms." },
+    { field: "Retry Count",           desc: "Automatic retries on failure. Each retry waits Retry Interval ms." },
+    { field: "Continue on Error",     desc: "Log the failure but keep the flow running instead of stopping." },
+    { field: "Delay Before / After",  desc: "Wait before or after this activity executes (in milliseconds)." },
+    { field: "Log Level",             desc: "Severity written to the execution log: Info, Warning, or Error." },
+    { field: "Screenshot on Error",   desc: "Capture a screenshot automatically when this activity fails." },
+  ].filter(p => !q || p.field.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q));
+
+  const formattingGuide = [
+    { label: "Align Left",                desc: "Snap selected nodes' left edges to the leftmost x position." },
+    { label: "Align Right",               desc: "Snap selected nodes' right edges to the rightmost x position." },
+    { label: "H-Center",                  desc: "Centre nodes horizontally around their average midpoint." },
+    { label: "Align Top",                 desc: "Snap selected nodes' top edges to the highest y position." },
+    { label: "Align Bottom",              desc: "Snap selected nodes' bottom edges to the lowest y position." },
+    { label: "V-Center",                  desc: "Centre nodes vertically around their average midpoint." },
+    { label: "Distribute Horizontally",   desc: "Space nodes evenly on the x axis — equal gap between each." },
+    { label: "Distribute Vertically",     desc: "Space nodes evenly on the y axis — equal gap between each." },
+    { label: "Auto-Arrange Flow",         desc: "Re-layout the entire flow left-to-right using topological sort." },
+  ].filter(f => !q || f.label.toLowerCase().includes(q) || f.desc.toLowerCase().includes(q));
+
+  const noResults = search && activityEntries.length === 0 && flowGuide.length === 0 && propertiesGuide.length === 0 && formattingGuide.length === 0;
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: "var(--studio-surface)" }}>
+      {/* Header */}
+      <div className="panel-header shrink-0 justify-between">
+        <div className="flex items-center gap-2">
+          <BookOpen size={14} className="text-primary shrink-0" />
+          <span className="panel-title">Designer Guide</span>
+        </div>
+        <span className="text-xs text-muted-foreground">{Object.keys(ACTIVITY_GUIDE).length} activities</span>
+      </div>
+
+      {/* Search */}
+      <div className="px-3 py-2 shrink-0" style={{ borderBottom: "1px solid var(--studio-border)" }}>
+        <div className="relative">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            placeholder="Search guide…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg outline-none transition-colors"
+            style={{ background: "var(--studio-surface-sunken)", border: "1.5px solid var(--studio-border)", color: "var(--foreground)" }}
+            onFocus={e => (e.currentTarget.style.borderColor = "var(--primary)")}
+            onBlur={e => (e.currentTarget.style.borderColor = "var(--studio-border)")}
+          />
+        </div>
+      </div>
+
+      {/* Section pills */}
+      {!search && (
+        <div className="flex gap-1 px-3 py-2 flex-wrap shrink-0" style={{ borderBottom: "1px solid var(--studio-border)" }}>
+          {sections.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setSection(s.id)}
+              className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
+              style={{
+                background: section === s.id ? "color-mix(in srgb,var(--primary) 12%,transparent)" : "var(--muted)",
+                color: section === s.id ? "var(--primary)" : "var(--muted-foreground)",
+                border: "1px solid " + (section === s.id ? "color-mix(in srgb,var(--primary) 25%,transparent)" : "transparent"),
+              }}
+            >{s.label}</button>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+        {noResults && (
+          <div className="text-center py-10 text-sm text-muted-foreground">No guide entries match "{search}"</div>
+        )}
+
+        {/* Activities */}
+        {(section === "activities" || search) && activityEntries.map(([name, guide]) => (
+          <details key={name} className="rounded-xl overflow-hidden group/guide" style={{ border: "1px solid var(--studio-border)", background: "var(--card)" }}>
+            <summary className="px-3 py-2.5 flex items-center gap-2 cursor-pointer list-none" style={{ background: "var(--studio-surface-raised)", borderBottom: "1px solid var(--studio-border)" }}>
+              <Zap size={12} className="text-primary shrink-0" />
+              <span className="text-sm font-semibold text-foreground flex-1">{name}</span>
+              <ChevronRight size={13} className="text-muted-foreground/50 transition-transform group-open/guide:rotate-90" />
+            </summary>
+            <div className="px-3 py-2.5 space-y-2">
+              <p className="text-xs text-foreground/80 leading-relaxed"><span className="font-medium text-muted-foreground">When: </span>{guide.when}</p>
+              <p className="text-xs text-foreground/80 leading-relaxed"><span className="font-medium text-muted-foreground">How: </span>{guide.how}</p>
+              {guide.example && <code className="block text-xs font-mono px-2 py-1 rounded" style={{ background: "color-mix(in srgb,var(--primary) 7%,transparent)", color: "var(--primary)" }}>{guide.example}</code>}
+              {guide.outputs && <p className="text-xs font-mono text-emerald-600"><span className="not-italic font-medium text-muted-foreground not-mono">Outputs: </span>{guide.outputs.join(", ")}</p>}
+              {guide.tips && guide.tips.map(t => <p key={t} className="text-xs text-muted-foreground">💡 {t}</p>)}
+            </div>
+          </details>
+        ))}
+
+        {/* Flow Tools */}
+        {(section === "flow" || search) && flowGuide.map(f => (
+          <details key={f.name} className="rounded-xl overflow-hidden group/guide" style={{ border: "1px solid var(--studio-border)", background: "var(--card)" }}>
+            <summary className="px-3 py-2.5 flex items-center gap-2 cursor-pointer list-none" style={{ background: "var(--studio-surface-raised)", borderBottom: "1px solid var(--studio-border)" }}>
+              <GitBranch size={12} className="text-primary shrink-0" />
+              <span className="text-sm font-semibold text-foreground flex-1">{f.name}</span>
+              <ChevronRight size={13} className="text-muted-foreground/50 transition-transform group-open/guide:rotate-90" />
+            </summary>
+            <div className="px-3 py-2.5 space-y-1.5">
+              <p className="text-xs text-foreground/80 leading-relaxed"><span className="font-medium text-muted-foreground">When: </span>{f.when}</p>
+              <p className="text-xs text-foreground/80 leading-relaxed"><span className="font-medium text-muted-foreground">How: </span>{f.how}</p>
+              {f.example && <code className="block text-xs font-mono px-2 py-1 rounded" style={{ background: "color-mix(in srgb,var(--primary) 7%,transparent)", color: "var(--primary)" }}>{f.example}</code>}
+              {f.tip && <p className="text-xs text-muted-foreground">💡 {f.tip}</p>}
+            </div>
+          </details>
+        ))}
+
+        {/* Properties */}
+        {(section === "properties" || search) && propertiesGuide.map(p => (
+          <div key={p.field} className="rounded-lg px-3 py-2.5" style={{ border: "1px solid var(--studio-border)", background: "var(--card)" }}>
+            <p className="text-sm font-semibold text-foreground mb-1">{p.field}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{p.desc}</p>
+          </div>
+        ))}
+
+        {/* Formatting */}
+        {(section === "formatting" || search) && formattingGuide.map(f => (
+          <div key={f.label} className="rounded-lg px-3 py-2.5" style={{ border: "1px solid var(--studio-border)", background: "var(--card)" }}>
+            <p className="text-sm font-semibold text-foreground mb-1">{f.label}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
+          </div>
+        ))}
       </div>
     </div>
   );

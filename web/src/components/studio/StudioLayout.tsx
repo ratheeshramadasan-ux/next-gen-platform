@@ -46,6 +46,7 @@ import {
   History as HistoryIcon,
   Undo2,
   Redo2,
+  BookOpen,
   type LucideIcon
 } from "lucide-react";
 
@@ -60,7 +61,8 @@ import {
   StudioFolderPanel,
   StudioDock,
   FlowToolsPanel,
-  FlowFormattingPanel
+  FlowFormattingPanel,
+  GuidePanel,
 } from "./StudioPanels";
 
 // Lazy-load monitoring and other heavier components
@@ -208,7 +210,7 @@ export function StudioLayout({
     }
   };
 
-  const [activeRightSideTab, setActiveRightSideTab] = useState<"properties" | "flow-tool" | "flow-formatting">("properties");
+  const [activeRightSideTab, setActiveRightSideTab] = useState<"properties" | "flow-tool" | "flow-formatting" | "guide">("properties");
   
   const [bottomHeight, setBottomHeight] = useState(240);
   const [isResizingBottom, setIsResizingBottom] = useState(false);
@@ -280,9 +282,10 @@ export function StudioLayout({
   ].filter(tab => !(hideProjectPanel && tab.id === 'project'));
 
   const rightSideRailTabs = [
-    { id: 'properties', label: 'Properties', icon: Settings },
-    { id: 'flow-tool', label: 'Flow Tools', icon: GitBranch },
-    { id: 'flow-formatting', label: 'Formatting', icon: LayoutGrid },
+    { id: 'properties',     label: 'Properties', icon: Settings },
+    { id: 'flow-tool',      label: 'Flow Tools',  icon: GitBranch },
+    { id: 'flow-formatting',label: 'Formatting',  icon: LayoutGrid },
+    { id: 'guide',          label: 'Guide',        icon: BookOpen },
   ];
 
   return (
@@ -902,11 +905,14 @@ export function StudioLayout({
                   <FlowToolsPanel onEdgeTypeChange={onEdgeTypeChange} />
                 </div>
                 <div className={cn("flex-1 overflow-hidden flex flex-col", activeRightSideTab !== "flow-formatting" && "hidden")}>
-                  <FlowFormattingPanel 
-                    onAlign={onAlign} 
-                    onDistribute={onDistribute} 
-                    onAutoLayout={onAutoLayout} 
+                  <FlowFormattingPanel
+                    onAlign={onAlign}
+                    onDistribute={onDistribute}
+                    onAutoLayout={onAutoLayout}
                   />
+                </div>
+                <div className={cn("flex-1 overflow-hidden flex flex-col", activeRightSideTab !== "guide" && "hidden")}>
+                  <GuidePanel />
                 </div>
               </div>
             </aside>
