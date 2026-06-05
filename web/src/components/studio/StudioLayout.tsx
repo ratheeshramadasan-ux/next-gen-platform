@@ -363,7 +363,7 @@ export function StudioLayout({
             size="sm"
             onClick={onValidate}
             disabled={isBusy}
-            className="h-9 gap-2 border-border/60 bg-background/40 hover:bg-accent text-xs font-black uppercase tracking-widest px-3 rounded-xl shadow-sm"
+            className="h-9 gap-2 border-border/60 bg-background/40 hover:bg-accent text-xs font-semibold uppercase tracking-wide px-3 rounded-xl shadow-sm"
             title="Validate flow"
           >
             <ClipboardCheck size={13} className="text-emerald-500" />
@@ -374,7 +374,7 @@ export function StudioLayout({
             size="sm"
             onClick={onSave}
             disabled={isBusy}
-            className="h-9 gap-2 border-border/60 bg-background/40 hover:bg-accent text-xs font-black uppercase tracking-widest px-3 rounded-xl shadow-sm"
+            className="h-9 gap-2 border-border/60 bg-background/40 hover:bg-accent text-xs font-semibold uppercase tracking-wide px-3 rounded-xl shadow-sm"
             title="Save flow"
           >
             <Save size={13} className={cn(isBusy && "animate-pulse")} />
@@ -384,7 +384,7 @@ export function StudioLayout({
             size="sm"
             onClick={onRun}
             disabled={isBusy}
-            className="h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest px-4 rounded-xl shadow-lg shadow-emerald-600/20"
+            className="h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold uppercase tracking-wide px-4 rounded-xl shadow-lg shadow-emerald-600/20"
             title="Run flow"
           >
             <Play size={13} fill="currentColor" className={cn(isBusy && "animate-pulse")} />
@@ -394,7 +394,7 @@ export function StudioLayout({
             size="sm"
             onClick={onDeploy}
             disabled={isBusy}
-            className="h-9 gap-2 bg-primary text-primary-foreground hover:opacity-90 text-xs font-black uppercase tracking-widest px-4 rounded-xl shadow-lg shadow-primary/20"
+            className="h-9 gap-2 bg-primary text-primary-foreground hover:opacity-90 text-xs font-semibold uppercase tracking-wide px-4 rounded-xl shadow-lg shadow-primary/20"
             title="Deploy to production"
           >
             <Rocket size={13} className={cn(isBusy && "animate-pulse")} />
@@ -421,7 +421,7 @@ export function StudioLayout({
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "px-3 py-1.5 h-10 font-black uppercase tracking-widest transition-all flex items-center gap-1.5 shrink-0 border-b-2 text-xs",
+                "px-3 py-1.5 h-10 font-semibold uppercase tracking-wide transition-all flex items-center gap-1.5 shrink-0 border-b-2 text-xs",
                 activeTab === tab.id
                   ? "text-primary border-primary bg-primary/5"
                   : "text-muted-foreground/50 border-transparent hover:text-primary/70 hover:bg-primary/5"
@@ -443,14 +443,14 @@ export function StudioLayout({
               <div className="h-4 w-px bg-border/20" />
               <button
                 onClick={onExport}
-                className="px-2 py-1 rounded-md text-xs font-black uppercase tracking-widest transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
+                className="px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
                 title="Export"
               >
                 <Download size={11} /> Export
               </button>
               <button
                 onClick={() => document.getElementById('flow-import-input')?.click()}
-                className="px-2 py-1 rounded-md text-xs font-black uppercase tracking-widest transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
+                className="px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
                 title="Import"
               >
                 <Upload size={11} /> Import
@@ -549,7 +549,7 @@ export function StudioLayout({
                     <div className="flex items-center gap-4 mb-8">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Rocket size={24} className="text-primary" /></div>
                       <div>
-                        <h2 className="text-lg font-black uppercase tracking-widest">Schedules</h2>
+                        <h2 className="text-lg font-semibold uppercase tracking-wide">Schedules</h2>
                         <p className="text-xs font-bold text-muted-foreground/40 ">View-only — Scheduled versions and their status</p>
                       </div>
                     </div>
@@ -564,14 +564,14 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{s.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{s.version}</span>
+                              <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-primary/10 text-primary">{s.version}</span>
                               <span className="text-xs font-bold text-muted-foreground/40">{s.cron}</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <span className="text-xs font-bold text-muted-foreground/30">Last: {s.lastRun}</span>
-                          <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", s.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{s.status}</span>
+                          <span className={cn("text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full border", s.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{s.status}</span>
                         </div>
                       </div>
                     ))}
@@ -583,7 +583,7 @@ export function StudioLayout({
                     <div className="flex items-center gap-4 mb-8">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Sparkles size={24} className="text-primary" /></div>
                       <div>
-                        <h2 className="text-lg font-black uppercase tracking-widest">Triggers</h2>
+                        <h2 className="text-lg font-semibold uppercase tracking-wide">Triggers</h2>
                         <p className="text-xs font-bold text-muted-foreground/40 ">View-only — Trigger configurations and scheduled versions</p>
                       </div>
                     </div>
@@ -598,12 +598,12 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{t.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{t.version}</span>
+                              <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-primary/10 text-primary">{t.version}</span>
                               <span className="text-xs font-bold text-muted-foreground/40">{t.type} — {t.filter}</span>
                             </div>
                           </div>
                         </div>
-                        <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", t.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{t.status}</span>
+                        <span className={cn("text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full border", t.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{t.status}</span>
                       </div>
                     ))}
                   </div>
@@ -614,7 +614,7 @@ export function StudioLayout({
                     <div className="flex items-center gap-4 mb-8">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Building2 size={24} className="text-primary" /></div>
                       <div>
-                        <h2 className="text-lg font-black uppercase tracking-widest">Connectors</h2>
+                        <h2 className="text-lg font-semibold uppercase tracking-wide">Connectors</h2>
                         <p className="text-xs font-bold text-muted-foreground/40 ">View-only — Attached connectors and their version status</p>
                       </div>
                     </div>
@@ -630,12 +630,12 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{c.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{c.version}</span>
+                              <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-primary/10 text-primary">{c.version}</span>
                               <span className="text-xs font-bold text-muted-foreground/40">{c.type}</span>
                             </div>
                           </div>
                         </div>
-                        <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", c.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{c.status}</span>
+                        <span className={cn("text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full border", c.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{c.status}</span>
                       </div>
                     ))}
                   </div>
@@ -646,7 +646,7 @@ export function StudioLayout({
                     <div className="flex items-center gap-4 mb-8">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><FolderOpen size={24} className="text-primary" /></div>
                       <div>
-                        <h2 className="text-lg font-black uppercase tracking-widest">Published Versions</h2>
+                        <h2 className="text-lg font-semibold uppercase tracking-wide">Published Versions</h2>
                         <p className="text-xs font-bold text-muted-foreground/40 ">Deployed package versions and folder groups</p>
                       </div>
                     </div>
@@ -661,12 +661,12 @@ export function StudioLayout({
                           <div>
                             <span className="text-sm font-black">{p.name}</span>
                             <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded bg-primary/10 text-primary">{p.version}</span>
+                              <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-primary/10 text-primary">{p.version}</span>
                               <span className="text-xs font-bold text-muted-foreground/40">{p.env} — {p.date}</span>
                             </div>
                           </div>
                         </div>
-                        <span className={cn("text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border", p.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{p.status}</span>
+                        <span className={cn("text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full border", p.status === "Active" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" : "text-muted-foreground/40 bg-muted/10 border-border/20")}>{p.status}</span>
                       </div>
                     ))}
                   </div>

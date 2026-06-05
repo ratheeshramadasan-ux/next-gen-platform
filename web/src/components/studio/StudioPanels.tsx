@@ -454,7 +454,7 @@ export function StudioFolderPanel({
       <div className="p-4 space-y-4 border-b border-border/40 bg-primary/5">
          <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-               <button className="text-xs font-black uppercase tracking-[0.2em] text-primary border-b-2 border-primary pb-1">Project</button>
+               <button className="text-xs font-medium uppercase tracking-wide text-primary border-b-2 border-primary pb-1">Project</button>
             </div>
             <button 
                onClick={() => fetchProcesses()}
@@ -564,7 +564,7 @@ export function StudioFolderPanel({
               <p className="text-xs mb-6">Create your first workflow to begin</p>
               <button 
                 onClick={() => openCreateDialog("WORKFLOW")}
-                className="w-full py-2 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-black uppercase tracking-widest rounded-lg transition-all border border-primary/20"
+                className="w-full py-2 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold uppercase tracking-wide rounded-lg transition-all border border-primary/20"
               >
                 Create Workflow
               </button>
@@ -577,7 +577,7 @@ export function StudioFolderPanel({
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="bg-card border-border/60 max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+            <DialogTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               New {newResourceType === "FOLDER" ? "Folder" : "Workflow Resource"}
             </DialogTitle>
           </DialogHeader>
@@ -604,7 +604,7 @@ export function StudioFolderPanel({
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setCreateDialogOpen(false)} className="text-xs font-bold uppercase tracking-widest h-8 rounded-sm" disabled={creating}>Cancel</Button>
-            <Button onClick={handleCreateResource} className="bg-primary text-white text-xs font-black uppercase tracking-widest h-8 px-6 rounded-sm shadow-lg shadow-primary/20" disabled={creating}>
+            <Button onClick={handleCreateResource} className="bg-primary text-white text-xs font-semibold uppercase tracking-wide h-8 px-6 rounded-sm shadow-lg shadow-primary/20" disabled={creating}>
               {creating ? <Loader2 className="animate-spin" size={14} /> : "Create"}
             </Button>
           </DialogFooter>
@@ -810,7 +810,7 @@ function WorkflowItem({
         </ContextMenuTrigger>
         
         <ContextMenuContent className="w-56 bg-card border-border/60 shadow-2xl backdrop-blur-xl">
-          <div className="px-2 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-foreground/80 border-b border-border/10 mb-1">
+          <div className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-foreground/80 border-b border-border/10 mb-1">
              Manage Resource
           </div>
 
@@ -1885,7 +1885,7 @@ export function StudioToolbox({
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-card overflow-hidden text-card-foreground transition-colors duration-300 font-sans border-r border-border/40">
       <div className="p-4 space-y-3 border-b border-border/40 bg-primary/5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-black uppercase tracking-[0.2em] text-primary border-b-2 border-primary pb-1">
+          <span className="text-xs font-medium uppercase tracking-wide text-primary border-b-2 border-primary pb-1">
             Activity Library
           </span>
           <span className="text-xs font-bold text-muted-foreground/40 uppercase tracking-widest">Drag to canvas</span>
@@ -2019,7 +2019,7 @@ export function StudioToolbox({
                           if (item.isHeader) {
                             return (
                               <div key={i} className="pt-3 pb-1 px-2">
-                                <span className="text-xs font-black uppercase tracking-[0.12em] text-muted-foreground/40 border-b border-border/30 w-full block pb-1">
+                                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground/40 border-b border-border/30 w-full block pb-1">
                                   {item.name}
                                 </span>
                               </div>
@@ -2322,88 +2322,82 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
   ) : null;
 
   const varPickerUI = showVarPicker ? (
-    <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-card border border-border/40 rounded-sm shadow-2xl overflow-hidden flex flex-col max-h-[300px]">
-      {/* Tabs */}
-      <div className="flex border-b border-border/15 shrink-0">
-        <button 
+    <div className="absolute left-0 right-0 top-full mt-1 z-50 panel shadow-xl flex flex-col max-h-[320px]">
+      {/* Tab bar */}
+      <div className="tab-bar">
+        <button
           onClick={() => { setActivePickerTab("variables"); setSelectedFuncCategory(null); }}
-          className={cn("flex-1 px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors", activePickerTab === "variables" ? "text-primary bg-primary/5 border-b-2 border-primary" : "text-muted-foreground/40 hover:bg-muted/10")}
+          className={cn("tab-item", activePickerTab === "variables" && "tab-item-active")}
         >Variables</button>
-        <button 
+        <button
           onClick={() => { setActivePickerTab("functions"); setSelectedFuncCategory(null); }}
-          className={cn("flex-1 px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors", activePickerTab === "functions" ? "text-primary bg-primary/5 border-b-2 border-primary" : "text-muted-foreground/40 hover:bg-muted/10")}
+          className={cn("tab-item", activePickerTab === "functions" && "tab-item-active")}
         >Functions</button>
+        <div className="ml-auto flex items-center pr-2">
+          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">F2</span>
+        </div>
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/15 bg-foreground/[0.01] shrink-0">
-        <Search size={10} className="text-muted-foreground/30" />
-        <input
-          type="text" value={varSearch} onChange={e => setVarSearch(e.target.value)}
-          placeholder={activePickerTab === "variables" ? "Search variables..." : "Search functions..."}
-          className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/20"
-          autoFocus
-          onKeyDown={e => { if (e.key === 'Escape') setShowVarPicker(false); }}
-        />
-        <span className="text-xs font-bold text-muted-foreground/20 bg-muted/20 px-1 rounded">F2</span>
+      <div className="px-2 py-2 border-b border-border shrink-0">
+        <div className="relative">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+          <input
+            type="text" value={varSearch} onChange={e => setVarSearch(e.target.value)}
+            placeholder={activePickerTab === "variables" ? "Search variables…" : "Search functions…"}
+            className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary/50 transition-colors"
+            autoFocus
+            onKeyDown={e => { if (e.key === 'Escape') setShowVarPicker(false); }}
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {activePickerTab === "variables" ? (
           filteredVars.length === 0 ? (
-            <div className="text-xs text-muted-foreground/20 text-center py-3">No matching variables</div>
+            <div className="text-sm text-muted-foreground text-center py-6">No matching variables</div>
           ) : filteredVars.map(cat => (
             <div key={cat.category}>
-              <div className="text-xs font-black uppercase tracking-[0.15em] text-muted-foreground/30 px-3 py-1.5 bg-foreground/[0.02]">{cat.category}</div>
+              <div className="panel-section-label">{cat.category}</div>
               {cat.vars.map(v => (
                 <button key={v} onClick={() => insertToken(v, true)}
-                  className="flex items-center gap-2.5 w-full px-3 py-1.5 text-left hover:bg-primary/5 group transition-colors border-l-2 border-transparent hover:border-primary/40"
+                  className="flex items-center gap-2.5 w-full px-4 py-2 text-left hover:bg-primary/5 group transition-colors border-l-2 border-transparent hover:border-primary/50"
                 >
-                  <Variable size={10} className="text-primary/40 group-hover:text-primary shrink-0" />
-                  <span className="text-xs font-mono text-foreground/60 group-hover:text-foreground">{v}</span>
+                  <Variable size={13} className="text-primary/50 group-hover:text-primary shrink-0" />
+                  <span className="text-sm font-mono text-foreground/70 group-hover:text-foreground">{v}</span>
                 </button>
               ))}
             </div>
           ))
         ) : (
-          /* Functions List */
           <div className="flex flex-col">
             {!selectedFuncCategory ? (
-              /* Categories */
               filteredFunctions.map(cat => (
-                <button 
-                  key={cat.category}
-                  onClick={() => setSelectedFuncCategory(cat.category)}
-                  className="flex items-center justify-between w-full px-3 py-2 text-left hover:bg-primary/5 group transition-colors border-b border-border/5"
+                <button key={cat.category} onClick={() => setSelectedFuncCategory(cat.category)}
+                  className="flex items-center justify-between w-full px-4 py-2.5 text-left hover:bg-primary/5 group transition-colors border-b border-border/30"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="text-sm">{cat.icon}</span>
-                    <span className="text-xs font-semibold text-foreground/70 group-hover:text-foreground">{cat.category}</span>
+                    <span className="text-sm leading-none">{cat.icon}</span>
+                    <span className="text-sm text-foreground/70 group-hover:text-foreground">{cat.category}</span>
                   </div>
-                  <ChevronRight size={10} className="text-muted-foreground/30 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+                  <ChevronRight size={13} className="text-muted-foreground/40 group-hover:text-primary" />
                 </button>
               ))
             ) : (
-              /* Items in Category */
               <div className="flex flex-col">
-                <button 
-                  onClick={() => setSelectedFuncCategory(null)}
-                  className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-bold text-primary/60 hover:text-primary hover:bg-primary/5 uppercase tracking-widest border-b border-border/10 sticky top-0 bg-card z-10"
+                <button onClick={() => setSelectedFuncCategory(null)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-primary hover:bg-primary/5 border-b border-border sticky top-0 bg-card z-10"
                 >
-                  <ChevronRight size={10} className="rotate-180" /> Back to Categories
+                  <ChevronRight size={13} className="rotate-180" /> Back
                 </button>
                 {FUNCTION_LIBRARY.find(c => c.category === selectedFuncCategory)?.items
                   .filter(i => i.name.toLowerCase().includes(varSearch.toLowerCase()) || i.desc.toLowerCase().includes(varSearch.toLowerCase()))
                   .map(item => (
-                    <button 
-                      key={item.name}
-                      onClick={() => insertToken(item.snippet, false)}
-                      className="flex flex-col w-full px-4 py-2 text-left hover:bg-primary/5 group transition-colors border-b border-border/5"
+                    <button key={item.name} onClick={() => insertToken(item.snippet, false)}
+                      className="flex flex-col w-full px-4 py-2.5 text-left hover:bg-primary/5 group transition-colors border-b border-border/30"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono font-bold text-primary/70 group-hover:text-primary">{item.name}</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground/50 group-hover:text-muted-foreground/80 mt-0.5 leading-tight">{item.desc}</span>
+                      <span className="text-sm font-mono text-primary group-hover:text-primary/80">{item.name}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5 leading-tight">{item.desc}</span>
                     </button>
                   ))
                 }
@@ -2560,135 +2554,159 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
       </div>
       {varPickerUI}
 
-      {/* Zoomed Expression Editor Modal */}
+      {/* Expression Builder Modal */}
       <Dialog open={showZoom} onOpenChange={setShowZoom}>
-        <DialogContent className="max-w-[95vw] w-full bg-card/95 backdrop-blur-2xl border-border/40 shadow-2xl p-0 overflow-hidden">
-          <div className="flex flex-col h-[85vh]">
-            {/* Header */}
-            <div className="h-14 px-6 border-b border-border/10 flex items-center justify-between bg-primary/5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
-                  <Sparkles size={16} className="text-primary" />
+        <DialogContent className="max-w-3xl w-full bg-card border border-border shadow-2xl p-0 overflow-hidden rounded-xl">
+          <div className="flex flex-col h-[560px]">
+
+            {/* ── Header ── */}
+            <div className="panel-header border-b border-border justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                  <Sparkles size={14} className="text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-foreground/80">Expression Editor</h3>
-                  <p className="text-xs text-muted-foreground/50 font-bold uppercase tracking-tight">{label}</p>
+                  <span className="panel-title">Expression Builder</span>
+                  <span className="text-xs text-muted-foreground ml-2">— {label}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                 <span className="text-xs font-bold text-muted-foreground/30 bg-muted/10 px-2 py-1 rounded">F2 to browse Variables</span>
-                 <Button variant="ghost" size="sm" onClick={() => setShowZoom(false)} className="h-8 w-8 p-0">
-                    <X size={16} />
-                 </Button>
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">F2 — insert variable</span>
+                <button onClick={() => setShowZoom(false)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                  <X size={15} />
+                </button>
               </div>
             </div>
 
-            {/* Editor Area */}
-            <div className="flex-1 flex overflow-hidden">
-               {/* Left: Variables & Functions Sidebar (Integrated) */}
-               <div className="w-72 border-r border-border/10 flex flex-col bg-foreground/[0.01]">
-                  <div className="p-4 border-b border-border/10 space-y-3">
-                     <div className="flex items-center gap-1 p-1 bg-muted/20 rounded-md">
-                        <button 
-                          onClick={() => setActivePickerTab("variables")}
-                          className={cn("flex-1 py-1.5 text-xs font-black uppercase tracking-widest rounded transition-all", activePickerTab === "variables" ? "bg-card text-primary shadow-sm" : "text-muted-foreground/40 hover:text-foreground")}
-                        >Variables</button>
-                        <button 
-                          onClick={() => setActivePickerTab("functions")}
-                          className={cn("flex-1 py-1.5 text-xs font-black uppercase tracking-widest rounded transition-all", activePickerTab === "functions" ? "bg-card text-primary shadow-sm" : "text-muted-foreground/40 hover:text-foreground")}
-                        >Functions</button>
-                     </div>
-                     <div className="relative">
-                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/30" />
-                        <Input 
-                          placeholder="Search..." 
-                          value={varSearch}
-                          onChange={(e) => setVarSearch(e.target.value)}
-                          className="pl-8 h-8 text-xs bg-card/40 border-border/20 focus:ring-primary/20"
-                        />
-                     </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto custom-scrollbar">
-                     {activePickerTab === "variables" ? (
-                        filteredVars.map(cat => (
-                          <div key={cat.category}>
-                            <div className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground/30 px-4 py-2 bg-foreground/[0.02]">{cat.category}</div>
-                            {cat.vars.map(v => (
-                              <button key={v} onClick={() => insertToken(v, true)}
-                                className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-primary/5 group transition-colors"
-                              >
-                                <Variable size={12} className="text-primary/40 group-hover:text-primary shrink-0" />
-                                <span className="text-xs font-mono text-foreground/60 group-hover:text-foreground truncate">{v}</span>
-                              </button>
-                            ))}
-                          </div>
-                        ))
-                     ) : (
-                        <div className="flex flex-col">
-                           {selectedFuncCategory ? (
-                              <div className="flex flex-col">
-                                 <button 
-                                   onClick={() => setSelectedFuncCategory(null)}
-                                   className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-primary/60 hover:text-primary hover:bg-primary/5 uppercase tracking-widest border-b border-border/10"
-                                 >
-                                   <ChevronRight size={12} className="rotate-180" /> Categories
-                                 </button>
-                                 {FUNCTION_LIBRARY.find(c => c.category === selectedFuncCategory)?.items
-                                   .filter(i => i.name.toLowerCase().includes(varSearch.toLowerCase()))
-                                   .map(item => (
-                                     <button key={item.name} onClick={() => insertToken(item.snippet, false)} className="px-4 py-3 text-left hover:bg-primary/5 border-b border-border/5 group">
-                                       <div className="text-xs font-mono font-bold text-primary/70 group-hover:text-primary mb-1">{item.name}</div>
-                                       <div className="text-xs text-muted-foreground/40 leading-tight">{item.desc}</div>
-                                     </button>
-                                   ))
-                                 }
-                              </div>
-                           ) : (
-                              filteredFunctions.map(cat => (
-                                <button key={cat.category} onClick={() => setSelectedFuncCategory(cat.category)} className="flex items-center justify-between w-full px-4 py-3 hover:bg-primary/5 border-b border-border/5 group">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-base">{cat.icon}</span>
-                                    <span className="text-xs font-bold text-foreground/70 group-hover:text-foreground">{cat.category}</span>
-                                  </div>
-                                  <ChevronRight size={12} className="text-muted-foreground/20 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
-                                </button>
-                              ))
-                           )}
-                        </div>
-                     )}
-                  </div>
-               </div>
+            {/* ── Body ── */}
+            <div className="flex flex-1 overflow-hidden">
 
-               {/* Right: Large Editor */}
-               <div className="flex-1 flex flex-col p-6 bg-card/20 relative">
-                  <div className="absolute top-2 right-6">
-                     <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/20">Power Editor Mode</span>
+              {/* Left — Variable / Function browser */}
+              <div className="w-64 border-r border-border flex flex-col bg-muted/10 shrink-0">
+
+                {/* Tab bar */}
+                <div className="tab-bar">
+                  <button
+                    onClick={() => { setActivePickerTab("variables"); setSelectedFuncCategory(null); }}
+                    className={cn("tab-item", activePickerTab === "variables" && "tab-item-active")}
+                  >Variables</button>
+                  <button
+                    onClick={() => { setActivePickerTab("functions"); setSelectedFuncCategory(null); }}
+                    className={cn("tab-item", activePickerTab === "functions" && "tab-item-active")}
+                  >Functions</button>
+                </div>
+
+                {/* Search */}
+                <div className="px-3 py-2 border-b border-border bg-card">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                    <input
+                      placeholder={activePickerTab === "variables" ? "Search variables…" : "Search functions…"}
+                      value={varSearch}
+                      onChange={e => setVarSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-lg outline-none focus:border-primary/50 transition-colors"
+                      autoFocus
+                      onKeyDown={e => e.key === 'Escape' && setShowVarPicker(false)}
+                    />
                   </div>
+                </div>
+
+                {/* List */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  {activePickerTab === "variables" ? (
+                    filteredVars.length === 0 ? (
+                      <div className="text-sm text-muted-foreground text-center py-8">No variables found</div>
+                    ) : filteredVars.map(cat => (
+                      <div key={cat.category}>
+                        <div className="panel-section-label">{cat.category}</div>
+                        {cat.vars.map(v => (
+                          <button key={v} onClick={() => insertToken(v, true)}
+                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-left hover:bg-primary/5 group transition-colors border-l-2 border-transparent hover:border-primary/50"
+                          >
+                            <Variable size={13} className="text-primary/50 group-hover:text-primary shrink-0" />
+                            <span className="text-sm font-mono text-foreground/70 group-hover:text-foreground">{v}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex flex-col">
+                      {!selectedFuncCategory ? (
+                        filteredFunctions.map(cat => (
+                          <button key={cat.category} onClick={() => setSelectedFuncCategory(cat.category)}
+                            className="flex items-center justify-between w-full px-4 py-3 hover:bg-primary/5 border-b border-border/30 group transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-base leading-none">{cat.icon}</span>
+                              <span className="text-sm text-foreground/70 group-hover:text-foreground">{cat.category}</span>
+                            </div>
+                            <ChevronRight size={13} className="text-muted-foreground/40 group-hover:text-primary transition-transform group-hover:translate-x-0.5" />
+                          </button>
+                        ))
+                      ) : (
+                        <div className="flex flex-col">
+                          <button onClick={() => setSelectedFuncCategory(null)}
+                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-primary hover:bg-primary/5 border-b border-border sticky top-0 bg-card z-10 transition-colors"
+                          >
+                            <ChevronRight size={13} className="rotate-180" /> Back
+                          </button>
+                          {FUNCTION_LIBRARY.find(c => c.category === selectedFuncCategory)?.items
+                            .filter(i => i.name.toLowerCase().includes(varSearch.toLowerCase()) || i.desc.toLowerCase().includes(varSearch.toLowerCase()))
+                            .map(item => (
+                              <button key={item.name} onClick={() => insertToken(item.snippet, false)}
+                                className="px-4 py-3 text-left hover:bg-primary/5 border-b border-border/30 group transition-colors"
+                              >
+                                <div className="text-sm font-mono text-primary group-hover:text-primary/80 mb-0.5">{item.name}</div>
+                                <div className="text-xs text-muted-foreground group-hover:text-foreground/70 leading-tight">{item.desc}</div>
+                              </button>
+                            ))
+                          }
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right — Expression input */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+
+                {/* Expression area label */}
+                <div className="panel-header">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Expression</span>
+                  <span className="ml-auto text-xs text-muted-foreground">{String(value || "").length} chars</span>
+                </div>
+
+                {/* Textarea */}
+                <div className="flex-1 p-4 bg-background overflow-hidden">
                   <textarea
                     ref={inputRef as React.RefObject<HTMLTextAreaElement>}
                     value={String(value || "")}
                     onChange={e => onChange(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Enter expression here... e.g. Sum({{var1}}, 10) * 2"
-                    className="flex-1 bg-transparent text-xl font-mono text-primary/90 outline-none resize-none placeholder:text-muted-foreground/10 leading-relaxed scroll-smooth"
+                    placeholder={`Enter expression…  e.g.  Sum({revenue}, 10) * 1.2`}
+                    className="w-full h-full bg-transparent text-[15px] font-mono text-foreground outline-none resize-none placeholder:text-muted-foreground/30 leading-relaxed"
                     autoFocus
                   />
-                  <div className="h-14 flex items-center justify-between mt-4 border-t border-border/10 pt-4 shrink-0">
-                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1.5">
-                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                           <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/40">Syntax OK</span>
-                        </div>
-                        <div className="text-xs font-bold text-muted-foreground/30 uppercase tracking-tight">
-                           Characters: <span className="text-foreground/40">{String(value || "").length}</span>
-                        </div>
-                     </div>
-                     <div className="flex gap-3">
-                        <Button variant="ghost" onClick={() => setShowZoom(false)} className="text-xs font-black uppercase tracking-widest h-9 px-6 border border-border bg-muted/50 hover:bg-muted rounded-sm">Close Editor</Button>
-                        <Button onClick={() => setShowZoom(false)} className="bg-primary text-white text-xs font-black uppercase tracking-widest h-9 px-8 rounded-sm shadow-lg shadow-primary/20">Apply Changes</Button>
-                     </div>
+                </div>
+
+                {/* Status bar */}
+                <div className="menu-bar justify-between border-t border-border bg-muted/20">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm text-muted-foreground">Syntax OK</span>
                   </div>
-               </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowZoom(false)}
+                      className="menu-item border border-border text-sm"
+                    >Cancel</button>
+                    <button onClick={() => setShowZoom(false)}
+                      className="px-4 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+                    >Apply</button>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -2818,7 +2836,7 @@ export function StudioInspector({
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "flex-1 py-3 text-xs font-black uppercase tracking-widest transition-all relative",
+              "flex-1 py-3 text-xs font-semibold uppercase tracking-wide transition-all relative",
               activeTab === tab.id ? "text-primary" : "text-muted-foreground/40 hover:text-foreground/60"
             )}
           >
@@ -2836,7 +2854,7 @@ export function StudioInspector({
           <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
             {/* Display Label */}
             <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/40">Activity Name</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/40">Activity Name</label>
               <input
                 type="text"
                 value={localLabel}
@@ -2849,7 +2867,7 @@ export function StudioInspector({
             <div className="space-y-3">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-primary/40" />
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Input Arguments</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Input Arguments</span>
               </div>
               <div className="space-y-4">
                 {Object.entries(selectedNode.data.inputs || {}).map(([key, val]) => {
@@ -2892,7 +2910,7 @@ export function StudioInspector({
 
             {/* Description */}
             <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/40">Description</label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/40">Description</label>
               <textarea
                 value={selectedNode.data.description || ""}
                 onChange={e => handleUpdate({ description: e.target.value })}
@@ -2910,7 +2928,7 @@ export function StudioInspector({
              <div className="space-y-3">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500/40" />
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Result Outputs</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Result Outputs</span>
               </div>
               <div className="space-y-4">
                 {Object.entries(selectedNode.data.outputs || {}).map(([key, val]) => (
@@ -2978,7 +2996,7 @@ export function StudioInspector({
 
                 <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Risk Exposure Level</label>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5">Risk Exposure Level</label>
                       <div className="grid grid-cols-3 gap-2">
                         {['LOW', 'MEDIUM', 'HIGH'].map((level) => (
                           <button
@@ -3000,7 +3018,7 @@ export function StudioInspector({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Risk Category</label>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5">Risk Category</label>
                       <select 
                         value={selectedNode.data.risk?.category || 'Operational'}
                         onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, category: e.target.value as any } })}
@@ -3015,7 +3033,7 @@ export function StudioInspector({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground/60 ml-0.5">Mitigation Description</label>
+                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5">Mitigation Description</label>
                       <textarea 
                         value={selectedNode.data.risk?.why || ""}
                         onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, why: e.target.value } })}
@@ -3054,7 +3072,7 @@ export function StudioInspector({
                   variant="outline" 
                   size="sm" 
                   onClick={() => handleUpdate({ risk: { ...selectedNode.data.risk, disabled: false } })}
-                  className="mt-6 h-8 text-xs font-black uppercase tracking-widest border-primary/20 text-primary/60 hover:bg-primary/5"
+                  className="mt-6 h-8 text-xs font-semibold uppercase tracking-wide border-primary/20 text-primary/60 hover:bg-primary/5"
                 >
                   Restore Risk Tracking
                 </Button>
@@ -3062,7 +3080,7 @@ export function StudioInspector({
             )}
 
             <div className="space-y-4">
-              <h4 className="text-xs font-black uppercase tracking-widest text-foreground/40 flex items-center gap-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/40 flex items-center gap-2">
                 <History size={14} /> Audit Trail
               </h4>
               <div className="bg-muted/10 border border-dashed border-border/40 rounded-2xl p-6 text-center space-y-2">
@@ -3079,7 +3097,7 @@ export function StudioInspector({
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-amber-500/40" />
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Retry Policy</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Retry Policy</span>
               </div>
               <div className="space-y-4 pl-1">
                 <PropertyField 
@@ -3104,7 +3122,7 @@ export function StudioInspector({
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500/40" />
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Timing & Performance</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Timing & Performance</span>
               </div>
               <div className="space-y-4 pl-1">
                 <PropertyField 
@@ -3128,7 +3146,7 @@ export function StudioInspector({
             <div className="space-y-4">
               <div className="flex items-center gap-2 border-b border-border/10 pb-2">
                 <div className="w-2 h-2 rounded-full bg-purple-500/40" />
-                <span className="text-xs font-black uppercase tracking-[0.2em] text-foreground/60">Governance & Logs</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Governance & Logs</span>
               </div>
               <div className="space-y-4 pl-1">
                 <PropertyField 
