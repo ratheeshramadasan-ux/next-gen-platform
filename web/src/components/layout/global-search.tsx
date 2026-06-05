@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, Command, X, Briefcase, Activity, ScrollText, Bot, Shield, Zap, Building2, Bell } from "lucide-react";
+import { Search, Command, X, Briefcase, Activity, ScrollText, Bot, Shield, Zap, Building2, Bell, BookOpen } from "lucide-react";
+import { KbToggleButton } from "@/components/layout/knowledge-base-panel";
 import { useUIStore } from "@/lib/ui-store";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -56,9 +57,8 @@ export const GlobalSearch = () => {
         )}
       >
         {/* Product Logo */}
-        <div className="flex items-center gap-2 pr-3 border-r border-border/50 h-8 flex-shrink-0">
-          <Logo size={28} />
-          <span className="text-xs font-black tracking-tight text-foreground hidden lg:block">Next Gen</span>
+        <div className="pr-3 border-r border-border/50 flex-shrink-0">
+          <Logo size={28} showText />
         </div>
 
         <div className="flex items-center gap-3 border-r border-border/50 pr-3 h-8">
@@ -93,6 +93,9 @@ export const GlobalSearch = () => {
               ))}
             </select>
           </div>
+
+          {/* Knowledge Base Guide */}
+          <KbToggleButton />
 
           {/* Notification placeholder */}
           <div className="w-8 h-8 rounded-full bg-muted/40 flex items-center justify-center border border-border/50 hover:bg-primary/10 hover:border-primary/30 transition-colors cursor-pointer">

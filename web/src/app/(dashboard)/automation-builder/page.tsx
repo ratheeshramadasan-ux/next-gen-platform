@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Plus, Workflow, Box, Layers, Play, History, GitBranch, Zap } from "lucide-react";
 import { getWorkflowDefinitions, triggerWorkflow } from "@/app/actions/executionActions";
 import { useAppContext } from "@/lib/context";

@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Monitor, Activity, ShieldCheck, HeartPulse, HardDrive, Cpu, Percent } from "lucide-react";
 import { getExecutionMetrics } from "@/app/actions/executionActions";
 import { getGovernanceMetrics } from "@/app/actions/governanceActions";

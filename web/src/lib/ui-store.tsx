@@ -17,6 +17,12 @@ interface UIStoreContextType {
   openContextPanel: (type: ContextPanelType, data?: any) => void;
   closeContextPanel: () => void;
 
+  // Knowledge Base Panel
+  isKbOpen: boolean;
+  toggleKb: () => void;
+  openKb: () => void;
+  closeKb: () => void;
+
   // Sidebar
   isSidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -30,6 +36,7 @@ export const UIProvider = ({ children }: { children: React.ReactNode }) => {
   const [contextPanelType, setContextPanelType] = useState<ContextPanelType>(null);
   const [contextPanelData, setContextPanelData] = useState<any>(null);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isKbOpen, setIsKbOpen] = useState(false);
 
   const openContextPanel = useCallback((type: ContextPanelType, data?: any) => {
     setContextPanelType(type);
@@ -41,6 +48,10 @@ export const UIProvider = ({ children }: { children: React.ReactNode }) => {
     setContextPanelData(null);
   }, []);
 
+  const toggleKb = useCallback(() => setIsKbOpen(v => !v), []);
+  const openKb = useCallback(() => setIsKbOpen(true), []);
+  const closeKb = useCallback(() => setIsKbOpen(false), []);
+
   return (
     <UIStoreContext.Provider value={{
       isSearchOpen,
@@ -51,6 +62,10 @@ export const UIProvider = ({ children }: { children: React.ReactNode }) => {
       contextPanelData,
       openContextPanel,
       closeContextPanel,
+      isKbOpen,
+      toggleKb,
+      openKb,
+      closeKb,
       isSidebarCollapsed,
       setSidebarCollapsed
     }}>

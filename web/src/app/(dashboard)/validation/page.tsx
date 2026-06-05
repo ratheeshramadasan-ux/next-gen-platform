@@ -3,7 +3,7 @@
 import React from "react";
 import { getEvolutionLogs, getProofRules } from "@/app/actions/validationActions";
 import { useAppContext } from "@/lib/context";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Fingerprint, ShieldCheck, Eye, Database, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 

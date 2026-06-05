@@ -6,7 +6,7 @@ import { prisma, baseDb } from "@/lib/prisma";
 
 export async function getPlatformLookups(activeOnly: boolean = true) {
   const lookups: any = {
-    industries: [], regions: [], classifications: [], priorities: [],
+    industries: [], regions: [], classifications: [],
     currencies: [], timezones: [], customerTypes: [], engagementTiers: []
   };
 
@@ -37,14 +37,6 @@ export async function getPlatformLookups(activeOnly: boolean = true) {
         id: item.id, label: item.label, isActive: item.isActive, category: item.category, description: item.description
       }));
     } catch(e) { console.error("Classification lookup failed", e); }
-
-    console.log(`[MASTER_DATA] Querying Priority...`);
-    try {
-      const prioData = await prisma.lookupPriority.findMany({ where });
-      lookups.priorities = prioData.map((item: any) => ({
-        id: item.id, label: item.label, isActive: item.isActive, description: item.description
-      }));
-    } catch(e) { console.error("Priority lookup failed", e); }
 
     console.log(`[MASTER_DATA] Querying Currency...`);
     try {
@@ -125,7 +117,7 @@ export async function getPlatformLookups(activeOnly: boolean = true) {
   }
 }
 
-export type LookupType = "INDUSTRY" | "REGION" | "CLASSIFICATION" | "PRIORITY" | "CURRENCY" | "TIMEZONE" | "CUSTOMER_TYPE" | "ENGAGEMENT_TIER";
+export type LookupType = "INDUSTRY" | "REGION" | "CLASSIFICATION" | "CURRENCY" | "TIMEZONE" | "CUSTOMER_TYPE" | "ENGAGEMENT_TIER";
 
 // --- ICON INTELLIGENCE HUB ---
 function getIndustryIcon(label: string): string {
@@ -168,7 +160,7 @@ export async function addLookupItem(
       if (t === "INDUSTRY") return { ...base, value: d.value, icon: d.icon };
       if (t === "REGION") return { ...base, value: d.value, icon: d.icon, category: d.category };
       if (t === "CURRENCY") return { ...base, code: d.code, symbol: d.symbol, icon: d.icon };
-      if (["CUSTOMER_TYPE", "PRIORITY", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(t)) {
+      if (["CUSTOMER_TYPE", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(t)) {
         return { ...base, description: d.description, category: d.category };
       }
       return base;
@@ -190,7 +182,6 @@ export async function addLookupItem(
       case "INDUSTRY": res = await prisma.lookupIndustry.create({ data: { label, icon: finalIcon } }); break;
       case "REGION": res = await prisma.lookupRegion.create({ data: { label, icon, category } }); break;
       case "CLASSIFICATION": res = await prisma.lookupClassification.create({ data: { label, category, description } }); break;
-      case "PRIORITY": res = await prisma.lookupPriority.create({ data: { label, description } }); break;
       case "CURRENCY": res = await prisma.lookupCurrency.create({ data: { label, code, symbol, icon } }); break;
       case "TIMEZONE": res = await prisma.lookupTimezone.create({ data: { label, category } }); break;
       case "CUSTOMER_TYPE": res = await prisma.lookupCustomerType.create({ data: { label, description } }); break;
@@ -234,7 +225,7 @@ export async function updateLookupItem(
       if (t === "INDUSTRY") return { ...base, value: d.value, icon: d.icon };
       if (t === "REGION") return { ...base, value: d.value, icon: d.icon, category: d.category };
       if (t === "CURRENCY") return { ...base, code: d.code, symbol: d.symbol, icon: d.icon };
-      if (["CUSTOMER_TYPE", "PRIORITY", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(t)) {
+      if (["CUSTOMER_TYPE", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(t)) {
         return { ...base, description: d.description, category: d.category };
       }
       return base;
@@ -247,7 +238,6 @@ export async function updateLookupItem(
       case "INDUSTRY": await prisma.lookupIndustry.update({ where: { id }, data }); break;
       case "REGION": await prisma.lookupRegion.update({ where: { id }, data }); break;
       case "CLASSIFICATION": await prisma.lookupClassification.update({ where: { id }, data }); break;
-      case "PRIORITY": await prisma.lookupPriority.update({ where: { id }, data }); break;
       case "CURRENCY": await prisma.lookupCurrency.update({ where: { id }, data }); break;
       case "TIMEZONE": await prisma.lookupTimezone.update({ where: { id }, data }); break;
       case "CUSTOMER_TYPE": await prisma.lookupCustomerType.update({ where: { id }, data }); break;
@@ -295,7 +285,6 @@ export async function removeLookupItem(type: LookupType, id: string, label: stri
       case "INDUSTRY": await prisma.lookupIndustry.delete({ where: { id } }); break;
       case "REGION": await prisma.lookupRegion.delete({ where: { id } }); break;
       case "CLASSIFICATION": await prisma.lookupClassification.delete({ where: { id } }); break;
-      case "PRIORITY": await prisma.lookupPriority.delete({ where: { id } }); break;
       case "CURRENCY": await prisma.lookupCurrency.delete({ where: { id } }); break;
       case "TIMEZONE": await prisma.lookupTimezone.delete({ where: { id } }); break;
       case "CUSTOMER_TYPE": await prisma.lookupCustomerType.delete({ where: { id } }); break;
@@ -318,8 +307,7 @@ export async function purgeDisabledLookups(role: string) {
       prisma.lookupIndustry.deleteMany({ where }),
       prisma.lookupRegion.deleteMany({ where }),
       prisma.lookupClassification.deleteMany({ where }),
-      prisma.lookupPriority.deleteMany({ where }),
-      prisma.lookupCurrency.deleteMany({ where }),
+            prisma.lookupCurrency.deleteMany({ where }),
       prisma.lookupTimezone.deleteMany({ where }),
       prisma.lookupCustomerType.deleteMany({ where }),
       prisma.lookupEngagementTier.deleteMany({ where })
@@ -343,7 +331,7 @@ export async function addLookupItemsBulk(type: LookupType, rawData: string, role
       const parts = line.split(",").map(p => p.trim()).filter(p => p.length > 0);
       if (parts.length === 0) continue;
 
-      if (["INDUSTRY", "TIMEZONE", "CUSTOMER_TYPE", "PRIORITY", "ENGAGEMENT_TIER"].includes(type)) {
+      if (["INDUSTRY", "TIMEZONE", "CUSTOMER_TYPE", "ENGAGEMENT_TIER"].includes(type)) {
         for (const part of parts) {
           let item: any = { label: part };
           if (type === "INDUSTRY") {
@@ -378,7 +366,7 @@ export async function addLookupItemsBulk(type: LookupType, rawData: string, role
           if (t === "INDUSTRY") return { ...base, value: d.value, icon: d.icon };
           if (t === "REGION") return { ...base, value: d.value, icon: d.icon, category: d.category };
           if (t === "CURRENCY") return { ...base, code: d.code, symbol: d.symbol, icon: d.icon };
-          if (["CUSTOMER_TYPE", "PRIORITY", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(t)) {
+          if (["CUSTOMER_TYPE", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(t)) {
             return { ...base, description: d.description, category: d.category };
           }
           return base;
@@ -420,18 +408,6 @@ export async function addLookupItemsBulk(type: LookupType, rawData: string, role
             existing = await prisma.lookupCustomerType.findFirst({ where });
             if (!existing) await prisma.lookupCustomerType.create({ data });
             break;
-          case "PRIORITY":
-            existing = await prisma.lookupPriority.findFirst({ where });
-            if (!existing) await prisma.lookupPriority.create({ data });
-            break;
-          case "CLASSIFICATION":
-            existing = await prisma.lookupClassification.findFirst({ where });
-            if (!existing) await prisma.lookupClassification.create({ data });
-            break;
-          case "ENGAGEMENT_TIER":
-            existing = await prisma.lookupEngagementTier.findFirst({ where });
-            if (!existing) await prisma.lookupEngagementTier.create({ data });
-            break;
         }
         
         if (type !== "INDUSTRY") {
@@ -447,5 +423,31 @@ export async function addLookupItemsBulk(type: LookupType, rawData: string, role
     return { success: true, addedCount, skippedCount };
   } catch (e) {
     return { success: false, error: "Bulk sync failure." };
+  }
+}
+
+// ── Lightweight individual lookup fetchers ────────────────────────────────────
+
+export async function getTimezoneLookups() {
+  try {
+    const rows = await prisma.lookupTimezone.findMany({
+      where: { isActive: true },
+      orderBy: [{ category: "asc" }, { label: "asc" }],
+    });
+    return rows.map(r => ({ id: r.id, label: r.label, category: r.category }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getCurrencyLookups() {
+  try {
+    const rows = await prisma.lookupCurrency.findMany({
+      where: { isActive: true },
+      orderBy: { label: "asc" },
+    });
+    return rows.map(r => ({ id: r.id, label: r.label, code: (r as any).code, symbol: (r as any).symbol }));
+  } catch {
+    return [];
   }
 }

@@ -3,7 +3,7 @@
 import React from "react";
 import { getActivePolicies, getGovernanceMetrics } from "@/app/actions/governanceActions";
 import { useAppContext } from "@/lib/context";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Lock, ShieldCheck, Binary, Scale } from "lucide-react";
 
 export default function RulesPage() {

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { CreditCard, TrendingUp, History, ListFilter, Download, AlertCircle, FileText, Zap, Wallet, Activity, ArrowUpRight, Shield } from "lucide-react";
  Broadway: 100
 import { getBillingSummary } from "@/app/actions/billingActions";

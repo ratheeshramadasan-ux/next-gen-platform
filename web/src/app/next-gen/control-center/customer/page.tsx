@@ -63,7 +63,6 @@ export default function CustomersPage() {
   const [lookupIndustries, setLookupIndustries] = useState<any[]>([]);
   const [lookupRegions, setLookupRegions] = useState<any[]>([]);
   const [lookupClassifications, setLookupClassifications] = useState<any[]>([]);
-  const [lookupPriorities, setLookupPriorities] = useState<any[]>([]);
   const [lookupCurrencies, setLookupCurrencies] = useState<any[]>([]);
   const [lookupTimezones, setLookupTimezones] = useState<any[]>([]);
   const [lookupCustomerTypes, setLookupCustomerTypes] = useState<any[]>([]);
@@ -177,7 +176,6 @@ export default function CustomersPage() {
           setLookupIndustries(lookups.industries);
           setLookupRegions(lookups.regions);
           setLookupClassifications(lookups.classifications);
-          setLookupPriorities(lookups.priorities);
           setLookupCurrencies(lookups.currencies);
           setLookupTimezones(lookups.timezones);
           setLookupCustomerTypes(lookups.customerTypes);
@@ -892,6 +890,11 @@ export default function CustomersPage() {
                           <p className="text-xs text-muted-foreground truncate">
                             {customer.industry || "—"}
                           </p>
+                          {customer.slug && (
+                            <p className="text-[10px] font-mono text-muted-foreground/60 truncate mt-0.5">
+                              /{customer.slug}/login
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className={cn(
@@ -1018,7 +1021,7 @@ export default function CustomersPage() {
                     {/* Configuration */}
                     <div className="space-y-4">
                       <h3 className="text-base font-semibold text-foreground">Configuration</h3>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-2">
                           <label className="text-sm font-medium text-foreground">Engagement Tier</label>
                           <select
@@ -1040,18 +1043,6 @@ export default function CustomersPage() {
                           >
                             {lookupClassifications.map(c => (
                               <option key={c.id} value={c.label}>{c.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="text-sm font-medium text-foreground">Priority</label>
-                          <select
-                            value={companyData.priority}
-                            onChange={e => setCompanyData({...companyData, priority: e.target.value})}
-                            className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-                          >
-                            {lookupPriorities.map(p => (
-                              <option key={p.id} value={p.label}>{p.label}</option>
                             ))}
                           </select>
                         </div>
@@ -1386,7 +1377,6 @@ export default function CustomersPage() {
 
                              <div className="flex flex-col gap-1.5"><label className="text-sm font-bold text-foreground/80 font-black uppercase tracking-widest">Industry</label><select required value={fullDetail.industry || ""} onChange={e => setFullDetail({...fullDetail, industry: e.target.value})} className="px-4 py-2.5 bg-background border rounded-sm text-sm focus:ring-4 focus:ring-primary/10 transition-all font-bold">{lookupIndustries.map(i => <option key={i.id} value={i.label}>{i.label}</option>)}</select></div>
                              <div className="flex flex-col gap-1.5"><label className="text-sm font-bold text-foreground/80 font-black uppercase tracking-widest">Region</label><select required value={fullDetail.location || ""} onChange={e => setFullDetail({...fullDetail, location: e.target.value})} className="px-4 py-2.5 bg-background border rounded-sm text-sm focus:ring-4 focus:ring-primary/10 transition-all font-bold">{lookupRegions.map(r => <option key={r.id} value={r.label}>{r.label}</option>)}</select></div>
-                             <div className="flex flex-col gap-1.5"><label className="text-sm font-bold text-foreground/80 font-black uppercase tracking-widest">Priority</label><select required value={fullDetail.priority || ""} onChange={e => setFullDetail({...fullDetail, priority: e.target.value})} className="px-4 py-2.5 bg-background border rounded-sm text-sm focus:ring-4 focus:ring-primary/10 transition-all font-bold">{lookupPriorities.map(p => <option key={p.id} value={p.label}>{p.label}</option>)}</select></div>
                              <div className="flex flex-col gap-1.5"><label className="text-sm font-bold text-foreground/80 font-black uppercase tracking-widest">Type</label><select required value={fullDetail.customerType || ""} onChange={e => setFullDetail({...fullDetail, customerType: e.target.value})} className="px-4 py-2.5 bg-background border rounded-sm text-sm focus:ring-4 focus:ring-primary/10 transition-all font-bold">
                                <option value="">Select Type...</option>
                                {lookupCustomerTypes.map(t => <option key={t.id} value={t.label}>{t.label}</option>)}
@@ -1461,6 +1451,46 @@ export default function CustomersPage() {
                              </div>
                           </div>
                         </section>
+
+                        {/* Dedicated Portal URL */}
+                        {fullDetail.slug && (
+                          <section>
+                            <h4 className="text-sm font-black text-primary uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                              <IconWrapper icon={Globe} size={14}/> Customer Login Portal
+                            </h4>
+                            <div className="flex items-center gap-3 p-4 rounded-sm border border-primary/20 bg-primary/5">
+                              <div className="w-9 h-9 rounded-sm bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <Globe size={16} className="text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Dedicated Portal URL</p>
+                                <p className="text-sm font-mono font-semibold text-foreground truncate">
+                                  {typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000'}/{fullDetail.slug}/login
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <button
+                                  onClick={() => {
+                                    const url = `${window.location.origin}/${fullDetail.slug}/login`;
+                                    navigator.clipboard.writeText(url).then(() => toast.success("Portal URL copied"));
+                                  }}
+                                  className="px-3 py-1.5 text-xs font-bold bg-primary/10 border border-primary/20 text-primary rounded-sm hover:bg-primary/20 transition-colors"
+                                >
+                                  Copy URL
+                                </button>
+                                <a
+                                  href={`/${fullDetail.slug}/login`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 text-muted-foreground hover:text-primary transition-colors"
+                                  title="Open portal"
+                                >
+                                  <ExternalLink size={14} />
+                                </a>
+                              </div>
+                            </div>
+                          </section>
+                        )}
 
                         {/* Administrators Grid */}
                         <section>
@@ -1827,6 +1857,11 @@ export default function CustomersPage() {
                   </div>
                 </div>
               </motion.div>
+            ) : loadingDetail ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 gap-3">
+                <div className="w-8 h-8 rounded-full border-2 border-muted-foreground/20 border-t-foreground/50 animate-spin" />
+                <p className="text-sm font-medium">Loading organization...</p>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
                 <Building2 size={48} className="opacity-10 mb-4"/>

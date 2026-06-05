@@ -52,39 +52,39 @@ export default function ControlCenterPage() {
 
   const modules = [
     { 
-      title: "Resource Discovery", 
-      desc: "Global searchable asset inventory. Every entity, one registry.", 
-      icon: Search, 
-      href: "/next-gen/control-center/discovery", 
-      color: "text-indigo-500",
-      bg: "bg-indigo-500/10",
+      title: "Resource Discovery",
+      desc: "Global searchable asset inventory. Every entity, one registry.",
+      icon: Search,
+      href: "/next-gen/control-center/discovery",
+      color: "text-primary",
+      bg: "bg-primary/10",
       stats: `${stats?.total || 0} Assets Registered`
     },
-    { 
-      title: "Audit Chronicle", 
-      desc: "High-fidelity security event trail. SIEM-ready compliance log.", 
-      icon: Shield, 
-      href: "/next-gen/control-center/audit", 
-      color: "text-rose-500",
-      bg: "bg-rose-500/10",
+    {
+      title: "Audit Chronicle",
+      desc: "High-fidelity security event trail. SIEM-ready compliance log.",
+      icon: Shield,
+      href: "/next-gen/control-center/audit",
+      color: "text-foreground",
+      bg: "bg-muted/60",
       stats: "Live Sync Active"
     },
-    { 
-      title: "Tenant Governance", 
-      desc: "Multi-pod organization provisioning & environment lifecycles.", 
-      icon: Building2, 
-      href: "/next-gen/admin/organization/tenants", 
-      color: "text-blue-500",
-      bg: "bg-blue-500/10",
+    {
+      title: "Tenant Governance",
+      desc: "Multi-pod organization provisioning & environment lifecycles.",
+      icon: Building2,
+      href: "/next-gen/admin/organization/tenants",
+      color: "text-foreground",
+      bg: "bg-muted/60",
       stats: `${stats?.tenants || 0} Organizations`
     },
-    { 
-      title: "Licensing & Capacity", 
-      desc: "Sovereign quota enforcement & resource discipline board.", 
-      icon: CreditCard, 
-      href: "/next-gen/control-center/licensing", 
-      color: "text-emerald-500",
-      bg: "bg-emerald-500/10",
+    {
+      title: "Licensing & Capacity",
+      desc: "Sovereign quota enforcement & resource discipline board.",
+      icon: CreditCard,
+      href: "/next-gen/control-center/licensing",
+      color: "text-foreground",
+      bg: "bg-muted/60",
       stats: activeCustomer?.planType ? `${activeCustomer.planType} Tier` : "Standard Tier"
     },
     {
@@ -92,8 +92,8 @@ export default function ControlCenterPage() {
       desc: "Live service inventory, health telemetry, tenant isolation, and runtime controls.",
       icon: HeartPulse,
       href: "/next-gen/control-center/services",
-      color: "text-amber-500",
-      bg: "bg-amber-500/10",
+      color: "text-foreground",
+      bg: "bg-muted/60",
       stats: `${stats?.tenants || 0} Tenant Surfaces`
     },
   ];
@@ -184,7 +184,7 @@ export default function ControlCenterPage() {
                  </h4>
                  <p className="text-[10px] font-medium text-muted-foreground uppercase">Real-time health of global execution pods</p>
               </div>
-              <span className="text-[10px] font-black text-emerald-500 px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full uppercase tracking-widest">Awaiting Command</span>
+              <span className="text-[10px] font-black text-primary px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full uppercase tracking-widest">Awaiting Command</span>
            </div>
            
            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
@@ -206,7 +206,7 @@ export default function ControlCenterPage() {
                  value="Normal" 
                  sub="Threat Response: Active" 
                  icon={Lock} 
-                 color="text-emerald-500" 
+                 color="text-primary"
               />
            </div>
 
@@ -241,7 +241,7 @@ export default function ControlCenterPage() {
                     <div key={m.type} className="space-y-2">
                        <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest">
                           <span className="text-muted-foreground">{m.label}</span>
-                          <span className={cn(m.percentage > 80 ? "text-rose-500" : "text-foreground")}>{m.count} / {m.limit}</span>
+                          <span className={cn(m.percentage > 80 ? "text-destructive" : "text-foreground")}>{m.count} / {m.limit}</span>
                        </div>
                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                           <motion.div 
@@ -249,7 +249,7 @@ export default function ControlCenterPage() {
                             animate={{ width: `${m.percentage}%` }}
                             className={cn(
                               "h-full transition-all duration-1000",
-                              m.percentage > 80 ? "bg-rose-500" : "bg-primary"
+                              m.percentage > 80 ? "bg-destructive" : "bg-primary"
                             )}
                           />
                        </div>
@@ -292,7 +292,7 @@ function StatCard({ label, value, sub, icon: Icon, trend, color = "text-foregrou
           </div>
           <div className="flex flex-col">
              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em]">{label}</span>
-             {trend && <span className="text-[8px] font-bold text-emerald-500 uppercase">{trend}</span>}
+             {trend && <span className="text-[8px] font-bold text-primary uppercase">{trend}</span>}
           </div>
        </div>
        <div className="space-y-1">

@@ -7,7 +7,7 @@ import {
   ExternalLink, Layers, Key, ShieldCheck, Mail, Globe, Cloud,
   Activity, ArrowRightLeft, Lock, Trash2, Edit, ArrowRight,
   CheckSquare, Square, AlertTriangle, FolderOpen, RefreshCcw, CheckCircle2, MoreVertical, AlertCircle,
-  User, Building2, X, RefreshCw, Check
+  User, Building2, X, RefreshCw, Check, Briefcase, ChevronDown, ChevronRight, Info
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -19,13 +19,14 @@ import {
   getIdentityUsers, getIdentityRoles, getIdentityGroups,
   getIdentityProviders, getGroupMappings, seedIdentityData, createGroupAction,
   createRoleAction, updateRoleAction, deleteRoleAction, getTenantsForCustomer, getFoldersForCustomer,
-  getPendingUserRegistrations, approveUserRegistration
+  getPendingUserRegistrations, approveUserRegistration,
+  createGroupMappingAction, deleteGroupMappingAction
 } from "@/app/actions/accessActions";
 import { getSmtpConfig, saveSmtpConfig, testSmtpConnection, restorePlatformSmtpDefault } from "@/app/actions/smtpActions";
 import { getGlobalAuditLogs } from "@/app/actions/tenantActions";
 import { useAppContext } from "@/lib/context";
 
-type TabType = "users" | "roles" | "groups" | "security" | "approvals";
+type TabType = "users" | "groups" | "security" | "approvals";
 
 function AccessManagementContent() {
   const { currentUser } = useAppContext();
@@ -51,11 +52,10 @@ function AccessManagementContent() {
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
 
   const tabs: { id: TabType; label: string; icon: any }[] = [
-    { id: "users", label: "Users & Teams", icon: Users },
+    { id: "users", label: "User Directory", icon: Users },
     { id: "groups", label: "Access Groups", icon: Network },
-    { id: "roles", label: "Custom Roles", icon: Shield },
-    { id: "security", label: "Security & Integration", icon: Settings },
-    { id: "approvals", label: "User Approvals", icon: ShieldCheck },
+    { id: "approvals", label: "Pending Approvals", icon: ShieldCheck },
+    { id: "security", label: "Identity Providers", icon: Settings },
   ];
 
   // Load All Data
@@ -145,15 +145,6 @@ function AccessManagementContent() {
             </Button>
           )}
 
-          {activeTab === "roles" && (
-            <Button 
-              onClick={() => setIsRoleModalOpen(true)}
-              className="flex items-center gap-3 px-8 py-2.5 rounded-sm bg-primary shadow-xl shadow-primary/20 text-primary-foreground font-black text-sm uppercase tracking-widest hover:scale-105 active:scale-95 transition-all"
-            >
-              <Plus size={18} />
-              Create Custom Role
-            </Button>
-          )}
 
         </div>
       </div>
@@ -267,13 +258,6 @@ function AccessManagementContent() {
               className="h-full flex flex-col"
             >
               {activeTab === "users" && <UsersTabView users={users} searchQuery={userSearch} onSearchChange={setUserSearch} />}
-              {activeTab === "roles" && (
-                <RolesTabView 
-                  roles={roles} 
-                  onOpenCreate={() => { setEditingRole(null); setIsRoleModalOpen(true); }} 
-                  onEdit={(role) => { setEditingRole(role); setIsRoleModalOpen(true); }} 
-                />
-              )}
               {activeTab === "groups" && <GroupsTabView groups={groups} searchQuery={groupSearch} onSearchChange={setGroupSearch} />}
               {activeTab === "security" && <SecurityTabView providers={providers} mappings={mappings} roles={roles} groups={groups} />}
               {activeTab === "approvals" && (
@@ -569,83 +553,199 @@ function RolesTabView({ roles, onOpenCreate, onEdit }: { roles: any[], onOpenCre
   );
 }
 
-function GroupsTabView({ groups, searchQuery, onSearchChange }: { groups: any[], searchQuery: string, onSearchChange: (val: string) => void }) {
-  const filteredGroups = groups.filter(g => 
-    g.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    g.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+// ─── Category styles — theme-aware, no hardcoded colors ──────────────────────
+const CATEGORY_STYLE: Record<string, { bg: string; text: string; border: string; icon: React.ElementType }> = {
+  Administration: { bg: "bg-primary/8",  text: "text-primary",            border: "border-primary/20",  icon: Building2 },
+  Security:       { bg: "bg-primary/8",  text: "text-primary",            border: "border-primary/20",  icon: ShieldCheck },
+  Governance:     { bg: "bg-primary/8",  text: "text-primary",            border: "border-primary/20",  icon: Layers },
+  Development:    { bg: "bg-muted/40",   text: "text-foreground",         border: "border-border",      icon: User },
+  Business:       { bg: "bg-muted/40",   text: "text-foreground",         border: "border-border",      icon: Briefcase },
+  Analytics:      { bg: "bg-muted/40",   text: "text-muted-foreground",   border: "border-border",      icon: Activity },
+  Custom:         { bg: "bg-muted/30",   text: "text-muted-foreground",   border: "border-border",      icon: Network },
+};
+
+function GroupCard({ group, onEdit, onDelete }: { group: any; onEdit: () => void; onDelete: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const style = CATEGORY_STYLE[group.category] || CATEGORY_STYLE.Custom;
+  const Icon = style.icon;
 
   return (
-    <div className="p-10 flex flex-col h-full gap-10">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-2xl font-black tracking-tight flex items-center gap-3">
-            Access Groups & Teams
-            <span className="text-xs bg-muted/50 border border-border px-3 py-1 rounded-full font-bold text-muted-foreground uppercase opacity-60">{filteredGroups.length} Groups</span>
-          </h2>
-          <p className="text-xs text-muted-foreground font-medium">Logical containers for users to facilitate bulk role assignment and resource partitioning.</p>
+    <div className={cn(
+      "flex flex-col border rounded-lg overflow-hidden transition-all hover:shadow-md",
+      group.isPrebuilt ? `${style.border} bg-card` : "border-border bg-card/60"
+    )}>
+      {/* Card Header */}
+      <div className={cn("px-5 py-4 flex items-start justify-between gap-3", group.isPrebuilt ? style.bg : "bg-muted/20")}>
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0", style.bg, "border", style.border)}>
+            <Icon size={16} className={style.text} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-foreground leading-tight">{group.name}</h3>
+              {group.isPrebuilt && (
+                <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider flex-shrink-0", style.bg, style.text, style.border)}>
+                  Pre-built
+                </span>
+              )}
+            </div>
+            <span className={cn("text-[10px] font-semibold mt-0.5 block", style.text)}>{group.category}</span>
+          </div>
         </div>
-        <div className="relative group min-w-[300px]">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-          <input
-            type="text"
-            placeholder="Filter groups..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-background/50 border border-border rounded-sm py-3 pl-12 pr-4 text-xs font-bold outline-none group-hover:border-primary/50 focus:border-primary transition-all shadow-sm"
-          />
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {!group.isPrebuilt && (
+            <>
+              <button onClick={onEdit} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Edit size={12} /></button>
+              <button onClick={onDelete} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 size={12} /></button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6 overflow-y-auto custom-scrollbar pr-2 pb-10">
-        {filteredGroups.length === 0 ? (
-          <div className="col-span-3 flex flex-col items-center justify-center p-20 text-center opacity-40">
-            <Network className="w-16 h-16 mb-4" />
-            <h3 className="text-xl font-black">{searchQuery ? "No matching groups found." : "No access groups defined."}</h3>
-            <p className="max-w-xs text-sm font-medium mt-2">{searchQuery ? "Try a different search term." : "Groups allow you to organize users and apply security policies at scale."}</p>
+      {/* Description */}
+      <div className="px-5 py-3 flex-1 space-y-3">
+        <p className="text-[11px] text-muted-foreground leading-relaxed">{group.displayDescription || group.description || "Access group"}</p>
+
+        {/* Default Roles */}
+        {group.defaultRoles?.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {group.defaultRoles.map((roleName: string) => (
+              <span key={roleName} className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border", style.bg, style.text, style.border)}>
+                {roleName}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Rationale — expandable */}
+        {group.rationale && (
+          <div>
+            <button onClick={() => setExpanded(v => !v)}
+              className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors">
+              <AlertCircle size={10} className="text-amber-500" />
+              Why this group exists
+              {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            </button>
+            {expanded && (
+              <div className="mt-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/15">
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">{group.rationale}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-border/60 flex items-center justify-between bg-muted/10">
+        <div className="flex items-center gap-1.5">
+          <Users size={11} className="text-muted-foreground" />
+          <span className="text-[10px] font-semibold text-muted-foreground">{group._count?.users || 0} members</span>
+        </div>
+        <button className={cn("flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-all hover:gap-2", style.text)}>
+          Manage <ArrowRight size={10} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GroupsTabView({ groups, searchQuery, onSearchChange }: { groups: any[], searchQuery: string, onSearchChange: (val: string) => void }) {
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const categories = ["all", ...Array.from(new Set(groups.map((g: any) => g.category || "Custom"))).sort()];
+
+  const filtered = groups.filter(g => {
+    const matchSearch = !searchQuery ||
+      g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (g.displayDescription || g.description || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (g.rationale || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (g.defaultRoles || []).some((r: string) => r.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchCat = categoryFilter === "all" || (g.category || "Custom") === categoryFilter;
+    return matchSearch && matchCat;
+  });
+
+  const prebuiltCount = groups.filter(g => g.isPrebuilt).length;
+  const customCount   = groups.filter(g => !g.isPrebuilt).length;
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-5 border-b border-border flex-shrink-0 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Access Groups & Teams</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Pre-built groups implement the IAM framework. Add users to groups instead of assigning roles individually.
+              <span className="ml-2 font-semibold text-primary">{prebuiltCount} pre-built · {customCount} custom</span>
+            </p>
+          </div>
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input type="text" placeholder="Search groups, roles, rationale..." value={searchQuery}
+              onChange={e => onSearchChange(e.target.value)}
+              className="w-72 pl-8 pr-4 py-2 text-sm bg-muted/40 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
+          </div>
+        </div>
+
+        {/* Category filters */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {categories.map(cat => {
+            const style = CATEGORY_STYLE[cat] || CATEGORY_STYLE.Custom;
+            const count = cat === "all" ? groups.length : groups.filter(g => (g.category || "Custom") === cat).length;
+            return (
+              <button key={cat} onClick={() => setCategoryFilter(cat)}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all capitalize",
+                  categoryFilter === cat
+                    ? cat === "all" ? "bg-primary/10 text-primary border-primary/30" : cn(style.bg, style.text, style.border)
+                    : "bg-muted/30 text-muted-foreground border-border hover:border-border/80")}>
+                {cat === "all" ? <Network size={10} /> : <style.icon size={10} />}
+                {cat} <span className="opacity-60">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Network size={32} className="opacity-20 mb-3" />
+            <p className="text-sm font-semibold">{searchQuery ? `No groups match "${searchQuery}"` : "No groups found"}</p>
           </div>
         ) : (
-          filteredGroups.map((group) => (
-            <div key={group.id} className="group bg-card/40 border border-border rounded-sm p-6 flex flex-col gap-5 hover:border-primary transition-all shadow-sm">
-              <div className="flex justify-between items-start">
-                <div className="p-3 bg-primary/10 rounded-sm text-primary">
-                  <Network size={20} />
+          <>
+            {/* Pre-built groups */}
+            {filtered.some(g => g.isPrebuilt) && (
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pre-built Groups</h3>
+                  <div className="flex-1 h-px bg-border/60" />
+                  <span className="text-[10px] text-muted-foreground">Seeded from the IAM Framework — edit members, not the group itself</span>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="icon-sm" className="bg-muted/50 hover:bg-primary/10 hover:text-primary rounded-sm">
-                    <Edit size={14} />
-                  </Button>
-                  <Button variant="ghost" size="icon-sm" className="bg-muted/50 hover:bg-rose-500/10 hover:text-rose-500 rounded-sm">
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <h3 className="text-sm font-black tracking-tight uppercase group-hover:text-primary transition-colors">{group.name}</h3>
-                <p className="text-[11px] text-muted-foreground font-medium line-clamp-2 leading-relaxed h-8 mb-2">
-                  {group.description || "Enterprise Access Group"}
-                </p>
-                <div className="flex flex-wrap gap-1 mt-2 min-h-[20px]">
-                  {group.mappings?.map((m: any) => m.internalRole && (
-                    <span key={m.id} className="text-[8px] font-black px-2 py-0.5 bg-primary/5 border border-primary/10 text-primary rounded-full uppercase tracking-tighter">
-                      {m.internalRole.name}
-                    </span>
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filtered.filter(g => g.isPrebuilt).map(g => (
+                    <GroupCard key={g.id} group={g} onEdit={() => {}} onDelete={() => {}} />
                   ))}
                 </div>
               </div>
+            )}
 
-              <div className="pt-5 border-t border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users size={12} className="text-muted-foreground" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-foreground">{group._count?.users || 0} Members</span>
+            {/* Custom groups */}
+            {filtered.some(g => !g.isPrebuilt) && (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Custom Groups</h3>
+                  <div className="flex-1 h-px bg-border/60" />
                 </div>
-                <Button variant="ghost" className="h-auto p-0 text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
-                  Manage <ArrowRight size={10} />
-                </Button>
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filtered.filter(g => !g.isPrebuilt).map(g => (
+                    <GroupCard key={g.id} group={g} onEdit={() => {}} onDelete={() => {}} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
+            )}
+          </>
         )}
       </div>
     </div>
@@ -1056,11 +1156,27 @@ function CreateRoleModal({ isOpen, onClose, onRefresh, editRole }: {
   );
 }
 
+// Scope label config
+const SCOPE_STYLE: Record<string, { label: string; className: string }> = {
+  platform: { label: "Platform", className: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+  customer: { label: "Customer", className: "bg-orange-500/10 text-orange-500 border-orange-500/20" },
+  tenant:   { label: "Tenant",   className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+};
+
 function CreateGroupModal({ isOpen, onClose, onRefresh, roles }: { isOpen: boolean, onClose: () => void, onRefresh: () => void, roles: any[] }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [roleSearch, setRoleSearch] = useState("");
+
+  const filteredRoles = roles.filter(r =>
+    !roleSearch || r.name.toLowerCase().includes(roleSearch.toLowerCase()) ||
+    (r.description || "").toLowerCase().includes(roleSearch.toLowerCase())
+  );
+
+  const toggleRole = (id: string) =>
+    setSelectedRoleIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1068,87 +1184,402 @@ function CreateGroupModal({ isOpen, onClose, onRefresh, roles }: { isOpen: boole
     setIsSaving(true);
     const result = await createGroupAction({ name, description, roleIds: selectedRoleIds });
     if (result.success) {
-      setName("");
-      setDescription("");
-      setSelectedRoleIds([]);
-      onRefresh();
-      onClose();
+      setName(""); setDescription(""); setSelectedRoleIds([]); setRoleSearch("");
+      onRefresh(); onClose();
     }
     setIsSaving(false);
   };
 
+  const reset = () => { setName(""); setDescription(""); setSelectedRoleIds([]); setRoleSearch(""); onClose(); };
+
   if (!isOpen) return null;
 
+  // Group roles by scope for cleaner display
+  const byScope: Record<string, any[]> = {};
+  filteredRoles.forEach(r => {
+    const s = r.scope || "tenant";
+    (byScope[s] = byScope[s] || []).push(r);
+  });
+  const scopeOrder = ["platform", "customer", "tenant"];
+
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 animate-in fade-in duration-300">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-md bg-card border border-border rounded-sm shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl bg-card border border-border rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
-        <div className="p-6 border-b border-border bg-muted/30">
-          <h2 className="text-lg font-black uppercase tracking-tight">Create Access Group</h2>
-          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mt-1">Define a new logical container for users</p>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-border bg-muted/30 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-foreground">Create Access Group</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Group users with shared access needs and assign roles to define what they can do</p>
+          </div>
+          <button onClick={reset} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+            <X size={16} />
+          </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-8 flex flex-col gap-6">
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Group Name</label>
-            <input 
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Finance Operations"
-              className="w-full bg-background border border-border p-3 text-xs font-bold focus:border-primary outline-none transition-all rounded-sm"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Description</label>
-            <textarea 
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Primary group for finance team members..."
-              className="w-full h-20 bg-background border border-border p-3 text-xs font-bold focus:border-primary outline-none transition-all rounded-sm resize-none"
-            />
-          </div>
-          <div className="flex flex-col gap-3">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Assign Enterprise Roles</label>
-            <div className="flex flex-col gap-2 max-h-40 overflow-y-auto custom-scrollbar pr-2 border border-border/40 rounded-sm p-3 bg-muted/10">
-              {roles.map(r => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setSelectedRoleIds(prev => prev.includes(r.id) ? prev.filter(id => id !== r.id) : [...prev, r.id])}
-                  className={cn(
-                    "flex items-center gap-3 p-2 rounded-sm border transition-all text-left",
-                    selectedRoleIds.includes(r.id) ? "bg-primary/10 border-primary" : "bg-muted/20 border-border/40"
-                  )}
-                >
-                  <div className={cn("w-2 h-2 rounded-full", selectedRoleIds.includes(r.id) ? "bg-primary" : "bg-muted-foreground/30")} />
-                  <span className="text-[10px] font-bold uppercase">{r.name}</span>
-                </button>
-              ))}
+
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden flex-1 min-h-0">
+          <div className="flex flex-1 overflow-hidden min-h-0">
+            {/* Left: Group details */}
+            <div className="w-64 shrink-0 border-r border-border p-5 space-y-4 overflow-y-auto">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Group Name *</label>
+                <input
+                  autoFocus value={name} onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Finance Operations"
+                  className="w-full bg-muted/40 border border-border rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Description</label>
+                <textarea
+                  value={description} onChange={e => setDescription(e.target.value)}
+                  placeholder="What is this group for?"
+                  rows={4}
+                  className="w-full bg-muted/40 border border-border rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none"
+                />
+              </div>
+              {selectedRoleIds.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Selected Roles</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedRoleIds.map(id => {
+                      const r = roles.find(x => x.id === id);
+                      if (!r) return null;
+                      return (
+                        <span key={id} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                          style={{ backgroundColor: (r.color || "#6366f1") + "18", borderColor: (r.color || "#6366f1") + "40", color: r.color || "#6366f1" }}>
+                          {r.name}
+                          <button type="button" onClick={() => toggleRole(id)} className="hover:opacity-70">
+                            <X size={9} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right: Role picker */}
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="px-4 py-3 border-b border-border flex-shrink-0">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-foreground">Assign Roles</span>
+                  <span className="text-[10px] text-muted-foreground">{selectedRoleIds.length} selected</span>
+                </div>
+                <div className="relative">
+                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input value={roleSearch} onChange={e => setRoleSearch(e.target.value)}
+                    placeholder="Search roles..."
+                    className="w-full pl-7 pr-3 py-1.5 text-xs bg-muted/40 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+                {scopeOrder.map(scope => {
+                  const scopeRoles = byScope[scope];
+                  if (!scopeRoles?.length) return null;
+                  const style = SCOPE_STYLE[scope] || SCOPE_STYLE.tenant;
+                  return (
+                    <div key={scope}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider", style.className)}>
+                          {style.label}
+                        </span>
+                        <div className="flex-1 h-px bg-border/50" />
+                      </div>
+                      <div className="space-y-1.5">
+                        {scopeRoles.map((r: any) => {
+                          const selected = selectedRoleIds.includes(r.id);
+                          // First sentence of description as the responsibility summary
+                          const summary = (r.description || "").split(". ").slice(1, 3).join(". ");
+                          return (
+                            <button
+                              key={r.id} type="button"
+                              onClick={() => toggleRole(r.id)}
+                              className={cn(
+                                "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
+                                selected
+                                  ? "border-primary/50 bg-primary/5"
+                                  : "border-border/60 bg-muted/10 hover:bg-muted/30 hover:border-border"
+                              )}
+                            >
+                              {/* Color dot / check */}
+                              <div className={cn(
+                                "w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 transition-all",
+                                selected ? "bg-primary" : "border border-border bg-muted/40"
+                              )}
+                                style={!selected ? { borderColor: (r.color || "#6366f1") + "60" } : {}}>
+                                {selected
+                                  ? <Check size={11} className="text-white" />
+                                  : <div className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color || "#6366f1" }} />
+                                }
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs font-semibold text-foreground">{r.name}</span>
+                                  {r.isSystem && (
+                                    <span className="text-[9px] font-bold px-1 py-0.5 bg-muted border border-border rounded text-muted-foreground uppercase">System</span>
+                                  )}
+                                </div>
+                                {summary && (
+                                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">{summary}</p>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1 flex-shrink-0 self-center">
+                                <span className="text-[10px] text-muted-foreground">{r._count?.users ?? 0} users</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {filteredRoles.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Shield size={24} className="opacity-20 mx-auto mb-2" />
+                    <p className="text-xs">No roles match "{roleSearch}"</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <div className="flex gap-3 mt-4">
-            <Button 
-              type="button"
-              onClick={onClose}
-              variant="outline"
-              className="flex-1 rounded-sm text-xs font-black uppercase tracking-widest"
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit"
-              disabled={isSaving || !name}
-              className="flex-1 rounded-sm bg-primary text-primary-foreground text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20"
-            >
-              {isSaving ? "Provisioning..." : "Create Group"}
-            </Button>
+
+          {/* Footer */}
+          <div className="px-5 py-3.5 border-t border-border flex items-center justify-between gap-3 flex-shrink-0 bg-muted/20">
+            <p className="text-xs text-muted-foreground">
+              {selectedRoleIds.length === 0
+                ? "Select at least one role to define group permissions"
+                : `${selectedRoleIds.length} role${selectedRoleIds.length > 1 ? "s" : ""} will be assigned to all group members`}
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" onClick={reset} variant="outline" size="sm">Cancel</Button>
+              <Button type="submit" disabled={isSaving || !name} size="sm"
+                className="bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                {isSaving ? "Creating..." : "Create Group"}
+              </Button>
+            </div>
           </div>
         </form>
       </motion.div>
     </div>
+  );
+}
+
+// ─── Group Mapping Section ────────────────────────────────────────────────────
+function GroupMappingSection({
+  mappings, providers, roles, groups, onRefresh
+}: { mappings: any[]; providers: any[]; roles: any[]; groups: any[]; onRefresh: () => void }) {
+  const [showForm, setShowForm] = useState(false);
+  const [providerId, setProviderId] = useState("");
+  const [externalGroup, setExternalGroup] = useState("");
+  const [targetType, setTargetType] = useState<"role" | "group">("role");
+  const [targetId, setTargetId] = useState("");
+  const [priority, setPriority] = useState("1");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!providerId || !externalGroup || !targetId) return;
+    setSaving(true);
+    const res = await createGroupMappingAction({
+      providerId,
+      externalGroupName: externalGroup,
+      internalRoleId:  targetType === "role"  ? targetId : undefined,
+      internalGroupId: targetType === "group" ? targetId : undefined,
+      priority: Number(priority),
+    });
+    if (res.success) {
+      setShowForm(false);
+      setExternalGroup(""); setTargetId(""); setPriority("1");
+      onRefresh();
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteGroupMappingAction(id);
+    onRefresh();
+  };
+
+  return (
+    <section className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ArrowRightLeft size={14} className="text-primary" />
+          <h3 className="text-sm font-bold text-foreground">Group Mapping</h3>
+          <span className="text-[10px] text-muted-foreground bg-muted/40 border border-border px-2 py-0.5 rounded-full">{mappings.length} rules</span>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setShowForm(v => !v)}>
+          <Plus size={13} /> Add Mapping
+        </Button>
+      </div>
+
+      {/* Explainer */}
+      <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border">
+        <Info size={14} className="text-primary flex-shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-foreground">How Group Mapping Works</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            When a user signs in via SSO, their Identity Provider sends a list of groups they belong to (as a claim in the SAML assertion or OIDC token).
+            These rules automatically map those <strong>IdP group names</strong> to platform <strong>Roles</strong> or <strong>Access Groups</strong> — so users get the right access on their first login without any manual setup.
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Example: IdP group <span className="font-mono bg-muted px-1 rounded">CN=Automation-Devs,OU=Groups,DC=acme,DC=com</span> → Platform Role <span className="font-semibold text-primary">Developer</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Add Mapping Form */}
+      {showForm && (
+        <form onSubmit={submit} className="p-4 rounded-lg border border-border bg-card space-y-4">
+          <p className="text-xs font-bold text-foreground">New Mapping Rule</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">Identity Provider</label>
+              <select value={providerId} onChange={e => setProviderId(e.target.value)} required
+                className="w-full px-3 py-2.5 bg-muted/40 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">Select provider...</option>
+                {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                IdP Group Name <span className="normal-case font-normal">(exact match from your IdP)</span>
+              </label>
+              <input value={externalGroup} onChange={e => setExternalGroup(e.target.value)} required
+                placeholder="e.g. CN=Automation-Devs,OU=Groups,DC=acme,DC=com"
+                className="w-full px-3 py-2.5 bg-muted/40 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">Map To</label>
+              <div className="flex gap-2">
+                {(["role", "group"] as const).map(t => (
+                  <label key={t} className={cn(
+                    "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md border text-xs font-semibold cursor-pointer transition-all capitalize",
+                    targetType === t ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
+                  )}>
+                    <input type="radio" className="sr-only" checked={targetType === t} onChange={() => { setTargetType(t); setTargetId(""); }} />
+                    <div className={cn("w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-all",
+                      targetType === t ? "border-primary" : "border-muted-foreground/40")}>
+                      {targetType === t && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                    </div>
+                    {t === "role" ? "Role" : "Group"}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                {targetType === "role" ? "Platform Role" : "Access Group"}
+              </label>
+              <select value={targetId} onChange={e => setTargetId(e.target.value)} required
+                className="w-full px-3 py-2.5 bg-muted/40 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="">Select {targetType}...</option>
+                {targetType === "role"
+                  ? roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)
+                  : groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)
+                }
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                Priority <span className="normal-case font-normal">(lower = higher priority)</span>
+              </label>
+              <input type="number" min="1" value={priority} onChange={e => setPriority(e.target.value)}
+                className="w-full px-3 py-2.5 bg-muted/40 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? "Saving..." : "Save Mapping"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+          </div>
+        </form>
+      )}
+
+      {/* Mapping list */}
+      {mappings.length === 0 && !showForm ? (
+        <div className="text-center py-8 border border-dashed border-border rounded-lg text-muted-foreground">
+          <ArrowRightLeft size={24} className="opacity-20 mx-auto mb-2" />
+          <p className="text-xs">No group mappings configured. Add a rule to automatically assign roles on SSO login.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {/* Column headers */}
+          {mappings.length > 0 && (
+            <div className="grid grid-cols-[1fr_auto_1fr_auto_auto] gap-3 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <span>IdP Group (External)</span>
+              <span />
+              <span>Platform Role / Group</span>
+              <span className="text-center">Priority</span>
+              <span />
+            </div>
+          )}
+          {mappings.map(map => (
+            <div key={map.id} className="grid grid-cols-[1fr_auto_1fr_auto_auto] gap-3 items-center p-3 rounded-lg border border-border bg-card hover:bg-muted/10 transition-colors">
+              {/* IdP Group */}
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-md bg-muted/60 flex items-center justify-center flex-shrink-0">
+                  <Globe size={12} className="text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-foreground font-mono truncate">{map.externalGroupName}</p>
+                  {map.provider && <p className="text-[10px] text-muted-foreground">{map.provider.name} · {map.provider.type}</p>}
+                </div>
+              </div>
+
+              {/* Arrow */}
+              <ArrowRightLeft size={13} className="text-muted-foreground/40 flex-shrink-0" />
+
+              {/* Platform target */}
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  {map.internalRole ? <Shield size={12} className="text-primary" /> : <Network size={12} className="text-primary" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-foreground truncate">
+                    {map.internalRole?.name || map.internalGroup?.name || "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{map.internalRole ? "Role" : "Group"}</p>
+                </div>
+              </div>
+
+              {/* Priority */}
+              <div className="w-8 h-8 rounded-full bg-muted/40 border border-border flex items-center justify-center text-[11px] font-bold text-muted-foreground flex-shrink-0">
+                {map.priority}
+              </div>
+
+              {/* Delete */}
+              <button onClick={() => handleDelete(map.id)}
+                className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors flex-shrink-0">
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Prerequisites tip */}
+      <div className="flex items-start gap-2.5 p-3 rounded-lg bg-muted/20 border border-border/60 text-xs text-muted-foreground">
+        <Info size={12} className="flex-shrink-0 mt-0.5 text-primary" />
+        <span>
+          <strong className="text-foreground">Prerequisite:</strong> Your IdP must be configured to include group membership in the SAML assertion or OIDC token.
+          See the <strong className="text-primary">Guide panel</strong> → How To Use → "Configure group claims in your IdP" for provider-specific steps.
+        </span>
+      </div>
+    </section>
   );
 }
 
@@ -1166,11 +1597,23 @@ function SecurityTabView({
   const [governanceMode, setGovernanceMode] = useState("Hybrid");
 
   return (
-    <div className="p-10 flex flex-col h-full gap-10 overflow-y-auto custom-scrollbar">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-2xl font-black tracking-tight">Federated Security Hub</h2>
-          <p className="text-xs text-muted-foreground font-medium">Configure corporate IdP integrations, SCIM provisioning, and automated group mapping transformations.</p>
+    <div className="p-8 flex flex-col h-full gap-8 overflow-y-auto">
+      {/* Scope clarification banner */}
+      <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/40 border border-border">
+        <Info size={16} className="text-primary flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-foreground">Customer-Level Identity Integration</p>
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+            This section configures SSO and directory federation <strong>for your organization's users</strong> — the people who use automations and applications.
+            It does <em>not</em> affect Platform Administrator login, which is configured separately under
+            <span className="font-semibold text-primary"> Global Control Center → Security Control</span>.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Identity Providers</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Configure SAML, OIDC, or LDAP federation for your organization's end users.</p>
         </div>
       </div>
 
@@ -1204,7 +1647,7 @@ function SecurityTabView({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500"><CheckCircle2 size={14} /></div>
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary"><CheckCircle2 size={14} /></div>
                     <Button variant="ghost" size="icon-sm" className="p-2 rounded-sm border border-border hover:border-primary transition-all"><Settings size={14} /></Button>
 
                   </div>
@@ -1215,67 +1658,43 @@ function SecurityTabView({
           </section>
 
           {/* Group Mapping Engine */}
-          <section className="flex flex-col gap-8">
-            <h3 className="text-sm font-black text-primary uppercase tracking-[0.3em] flex items-center gap-3">
-              <ArrowRightLeft size={16} /> Intelligent Group Mapping Engine
-            </h3>
+          <GroupMappingSection mappings={mappings} providers={providers} roles={roles} groups={groups} onRefresh={() => {}} />
 
-            <div className="bg-card/40 rounded-sm border border-border overflow-hidden">
-              <div className="p-6 bg-muted/20 border-b border-border flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Mapping Configuration Matrix</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-primary">Provisioning Active</span>
-                  <RefreshCcw size={14} className="text-primary" />
-                </div>
-              </div>
-              <div className="p-8 flex flex-col gap-6">
-                {mappings.map((map, i) => (
-                  <div key={map.id} className="flex items-center gap-4 bg-background/50 p-4 rounded-sm border border-border">
-                    <div className="flex-1 px-4 py-2 rounded-sm bg-card border border-border text-xs font-black tracking-tight flex items-center gap-2">
-                      <Globe size={14} className="text-muted-foreground" /> {map.externalGroupName}
-                    </div>
-                    <IconWrapper icon={ArrowRightLeft} size={16} className="text-primary opacity-50" />
-                    <div className="flex-1 px-4 py-2 rounded-sm bg-primary/10 border border-primary/20 text-xs font-black tracking-tight text-primary flex items-center gap-2">
-                      <Shield size={14} /> {map.internalRole?.name || map.internalGroup?.name}
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-muted/50 flex items-center justify-center text-foreground font-black text-[10px]">{map.priority}</div>
-                    <Button variant="secondary" size="icon-sm" className="p-2 text-rose-500 hover:bg-rose-500/10 rounded-sm transition-all"><Trash2 size={16} /></Button>
-
-                  </div>
-                ))}
-                <Button variant="outline" className="w-full h-auto py-4 border-2 border-dashed border-border rounded-sm text-xs font-black text-muted-foreground uppercase tracking-widest hover:border-primary hover:text-primary transition-all bg-transparent">Create New Transformation Rule</Button>
-
-              </div>
+          {/* Enrollment Governance */}
+          <section className="flex flex-col gap-4 p-6 bg-muted/20 rounded-lg border border-border">
+            <div className="flex items-center gap-2">
+              <Lock size={14} className="text-primary" />
+              <h3 className="text-sm font-bold text-foreground">User Enrollment Mode</h3>
             </div>
-          </section>
-
-          {/* Customer Governance */}
-          <section className="flex flex-col gap-6 p-8 bg-primary/5 rounded-sm border border-primary/10">
-            <h3 className="text-sm font-black text-primary uppercase tracking-[0.3em] flex items-center gap-3">
-              <Lock size={16} /> Global Enrollment Governance
-            </h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col gap-2">
               {[
-                { id: "Hybrid", label: "Integration + Registration", desc: "Allow both SSO and Local platform users." },
-                { id: "SAMLOnly", label: "Integration Only", desc: "Strictly enforce Corporate SSO for all access." },
-                { id: "LocalOnly", label: "Local Registry Only", desc: "Disable external federation; manual invites only." },
+                { id: "Hybrid",    label: "SSO + Local Registration", desc: "Allow both federated SSO and manually-invited local users." },
+                { id: "SAMLOnly",  label: "SSO Only (Federation)", desc: "All users must authenticate via corporate SSO — no local accounts." },
+                { id: "LocalOnly", label: "Manual Invite Only", desc: "Disable external federation — admins create accounts by invitation only." },
               ].map((mode) => (
-                <Button
-                  key={mode.id}
-                  onClick={() => setGovernanceMode(mode.id)}
-                  variant={governanceMode === mode.id ? "default" : "outline"}
+                <label key={mode.id}
                   className={cn(
-                    "h-auto p-6 rounded-sm border text-left flex flex-col items-start gap-2 transition-all",
+                    "flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all",
                     governanceMode === mode.id
-                      ? "bg-primary text-primary-foreground border-primary shadow-xl shadow-primary/20"
-                      : "bg-card/40 border-border hover:border-primary/50"
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-card hover:border-border/80"
                   )}
+                  onClick={() => setGovernanceMode(mode.id)}
                 >
-                  <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Governance Tier</span>
-                  <span className="text-sm font-black tracking-tight leading-none">{mode.label}</span>
-                  <p className={cn("text-[10px] font-medium leading-tight mt-2", governanceMode === mode.id ? "text-primary-foreground/70" : "text-muted-foreground")}>{mode.desc}</p>
-                </Button>
-
+                  {/* Custom radio indicator — fully inside the card */}
+                  <div className={cn(
+                    "w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all",
+                    governanceMode === mode.id ? "border-primary" : "border-border"
+                  )}>
+                    {governanceMode === mode.id && (
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground leading-none">{mode.label}</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{mode.desc}</p>
+                  </div>
+                </label>
               ))}
             </div>
           </section>
@@ -1372,7 +1791,7 @@ function UserApprovalsTabView({ pendingUsers, roles, isLoading, onRefresh }: {
                     >
                       <option value="">Select Role</option>
                       {roles.map(r => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
+                        <option key={r.id} value={r.id}>{r.name}{r.scope !== 'platform' ? ` — ${(r.description || '').split('.')[0]}` : ''}</option>
                       ))}
                     </select>
                   </div>

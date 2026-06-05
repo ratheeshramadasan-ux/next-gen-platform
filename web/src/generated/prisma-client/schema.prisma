@@ -7,32 +7,35 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["platform", "public", "studio"]
+  schemas  = ["platform", "public", "studio", "discovery", "security"]
 }
 
 model Resource {
-  id               String          @id @default(dbgenerated("gen_random_uuid()")) @map("resource_id") @db.Uuid
-  tenantId         String?         @map("tenant_id") @db.Uuid
-  parentResourceId String?         @map("parent_resource_id") @db.Uuid
-  resourceType     ResourceType    @map("resource_type")
-  name             String
-  ownerType        String?         @map("owner_type")
-  ownerId          String?         @map("owner_id") @db.Uuid
-  status           String          @default("ACTIVE")
-  metadata         String          @default("{}")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at")
-  deletedAt        DateTime?       @map("deleted_at")
-  isLocked         Boolean         @default(false) @map("is_locked")
-  customer         Customer?
-  folder           Folder?
-  appGroup         AppGroup?
-  project          Project?
-  appRole          AppRole?
-  studioWorkflow   StudioWorkflow?
-  tenant           Tenant?
-  workspace        Workspace?
-  application      Application?
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @map("resource_id") @db.Uuid
+  tenantId            String?              @map("tenant_id") @db.Uuid
+  parentResourceId    String?              @map("parent_resource_id") @db.Uuid
+  resourceType        ResourceType         @map("resource_type")
+  name                String
+  ownerType           String?              @map("owner_type")
+  ownerId             String?              @map("owner_id") @db.Uuid
+  status              String               @default("ACTIVE")
+  metadata            String               @default("{}")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at")
+  deletedAt           DateTime?            @map("deleted_at")
+  isLocked            Boolean              @default(false) @map("is_locked")
+  customer            Customer?
+  folder              Folder?
+  appGroup            AppGroup?
+  project             Project?
+  appRole             AppRole?
+  studioWorkflow      StudioWorkflow?
+  tenant              Tenant?
+  workspace           Workspace?
+  application         Application?
+  discoveryAssessment DiscoveryAssessment?
+  discoveryAsset      DiscoveryAsset?
+  discoveryConnector  DiscoveryConnector?
 
   @@map("resources")
   @@schema("platform")
@@ -95,9 +98,17 @@ model Customer {
   resourceQuotas         ResourceQuota[]
   smtpConfig             SmtpConfig?
   tenantAdmins           TenantAdmin[]
+  discoveryAssessments   DiscoveryAssessment[]
+  discoveryAssets        DiscoveryAsset[]
+  businessUnits          BusinessUnit[]
   tenants                Tenant[]
   users                  AppUser[]
   workspaces             Workspace[]
+  intakeConnectors       IntakeConnector[]
+  roles                  AppRole[]
+  groups                 AppGroup[]
+  mfaPolicy              MfaPolicy?
+  sessionPolicy          SessionPolicy?
 
   @@map("customers")
   @@schema("platform")
@@ -117,6 +128,7 @@ model Tenant {
   resourceId          String?              @unique @map("resource_id") @db.Uuid
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
+  deletedAt           DateTime?            @map("deleted_at")
   automationWorkflows AutomationWorkflow[]
   botHosts            BotHost[]
   deployments         Deployment[]
@@ -127,11 +139,17 @@ model Tenant {
   resource            Resource?            @relation(fields: [resourceId], references: [id])
   users               AppUser[]
   sovereignWorkflows  Workflow[]
+  studioQueues        StudioQueue[]
+  workspaces          Workspace[]
+  discoveryAssets     DiscoveryAsset[]
+  applications        Application[]
+  intakeConnectors    IntakeConnector[]
+  groups              AppGroup[]
+  roleTenantScopes    RoleTenantScope[]
+  mfaPolicy           MfaPolicy?
+  sessionPolicy       SessionPolicy?
 
-  studioQueues StudioQueue[]
-  workspaces   Workspace[]
-  applications Application[]
-
+  @@index([customerId])
   @@map("tenants")
   @@schema("platform")
 }
@@ -231,39 +249,64 @@ model SecurityCredential {
 }
 
 model AppUser {
-  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email              String     @unique
-  fullName           String?
-  externalId         String?
-  authMethod         String     @default("local")
-  status             String     @default("active")
-  isEmailVerified    Boolean    @default(false)
-  verificationToken  String?
-  lastLogin          DateTime?
-  isGovernanceLocked Boolean    @default(false)
-  customerId         String?    @db.Uuid
-  tenantId           String?    @db.Uuid
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-  customer           Customer?  @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenant             Tenant?    @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  groups             AppGroup[] @relation("AppGroupToAppUser")
-  roles              AppRole[]  @relation("AppRoleToAppUser")
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email               String                   @unique
+  fullName            String?
+  externalId          String?
+  authMethod          String                   @default("local")
+  status              String                   @default("active")
+  isEmailVerified     Boolean                  @default(false)
+  verificationToken   String?
+  lastLogin           DateTime?
+  isGovernanceLocked  Boolean                  @default(false)
+  mfaEnabled          Boolean                  @default(false) @map("mfa_enabled")
+  mfaMethod           String?                  @map("mfa_method")
+  jobTitle            String?                  @map("job_title")
+  department          String?
+  avatarUrl           String?                  @map("avatar_url")
+  customerId          String?                  @db.Uuid
+  tenantId            String?                  @db.Uuid
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  customer            Customer?                @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant              Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  groups              AppGroup[]               @relation("AppGroupToAppUser")
+  roles               AppRole[]                @relation("AppRoleToAppUser")
+  permissionOverrides UserPermissionOverride[]
+  accessRequestsFrom  AccessRequest[]          @relation("AccessRequestRequester")
+  accessRequestsFor   AccessRequest[]          @relation("AccessRequestTarget")
 
   @@map("users")
   @@schema("platform")
 }
 
 model AppRole {
-  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String         @unique
-  description String?
-  isSystem    Boolean        @default(false)
-  permissions String?
-  resourceId  String?        @unique @map("resource_id") @db.Uuid
-  mappings    GroupMapping[]
-  resource    Resource?      @relation(fields: [resourceId], references: [id])
-  users       AppUser[]      @relation("AppRoleToAppUser")
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String   @unique
+  description  String?
+  isSystem     Boolean  @default(false)
+  isCustom     Boolean  @default(false) @map("is_custom")
+  permissions  String?
+  scope        String   @default("tenant") // platform | customer | tenant
+  color        String? // UI badge color
+  icon         String? // icon key
+  parentRoleId String?  @map("parent_role_id") @db.Uuid
+  customerId   String?  @map("customer_id") @db.Uuid
+  createdBy    String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  resourceId   String?  @unique @map("resource_id") @db.Uuid
+
+  mappings        GroupMapping[]
+  resource        Resource?         @relation(fields: [resourceId], references: [id])
+  users           AppUser[]         @relation("AppRoleToAppUser")
+  parentRole      AppRole?          @relation("RoleHierarchy", fields: [parentRoleId], references: [id])
+  childRoles      AppRole[]         @relation("RoleHierarchy")
+  customer        Customer?         @relation(fields: [customerId], references: [id])
+  rolePermissions RolePermission[]
+  tenantScopes    RoleTenantScope[]
+  sodRulesA       SodRule[]         @relation("SodRoleA")
+  sodRulesB       SodRule[]         @relation("SodRoleB")
 
   @@map("roles")
   @@schema("platform")
@@ -273,12 +316,168 @@ model AppGroup {
   id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name        String         @unique
   description String?
+  customerId  String?        @map("customer_id") @db.Uuid
+  tenantId    String?        @map("tenant_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at")
   resourceId  String?        @unique @map("resource_id") @db.Uuid
   mappings    GroupMapping[]
   resource    Resource?      @relation(fields: [resourceId], references: [id])
   users       AppUser[]      @relation("AppGroupToAppUser")
+  customer    Customer?      @relation(fields: [customerId], references: [id])
+  tenant      Tenant?        @relation(fields: [tenantId], references: [id])
 
   @@map("groups")
+  @@schema("platform")
+}
+
+// ─── Fine-grained permission catalog ────────────────────────────────────────
+
+model PermissionDefinition {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resource    String // automation, ai_model, application, document …
+  action      String // view, create, modify, execute, publish, delete …
+  displayName String  @map("display_name")
+  description String?
+  category    String // Automation, AI, Security, Admin …
+  isSystem    Boolean @default(true) @map("is_system")
+
+  rolePermissions RolePermission[]
+  userOverrides   UserPermissionOverride[]
+
+  @@unique([resource, action])
+  @@map("permission_definitions")
+  @@schema("platform")
+}
+
+model RolePermission {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+  effect       String @default("ALLOW") // ALLOW | DENY
+  conditions   Json? // optional ABAC conditions
+
+  role       AppRole              @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission PermissionDefinition @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+  @@schema("platform")
+}
+
+// Per-user permission overrides (direct grants / denies)
+model UserPermissionOverride {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  permissionId String    @map("permission_id") @db.Uuid
+  effect       String    @default("ALLOW") // ALLOW | DENY
+  grantedBy    String    @map("granted_by")
+  reason       String?
+  expiresAt    DateTime? @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user       AppUser              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission PermissionDefinition @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@map("user_permission_overrides")
+  @@schema("platform")
+}
+
+// Attach a role to specific tenants (replication)
+model RoleTenantScope {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  role   AppRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, tenantId])
+  @@map("role_tenant_scopes")
+  @@schema("platform")
+}
+
+// ─── Segregation of Duties ───────────────────────────────────────────────────
+
+model SodRule {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleAId     String   @map("role_a_id") @db.Uuid
+  roleBId     String   @map("role_b_id") @db.Uuid
+  severity    String   @default("HIGH") // HIGH | MEDIUM | LOW
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roleA AppRole @relation("SodRoleA", fields: [roleAId], references: [id], onDelete: Cascade)
+  roleB AppRole @relation("SodRoleB", fields: [roleBId], references: [id], onDelete: Cascade)
+
+  @@unique([roleAId, roleBId])
+  @@map("sod_rules")
+  @@schema("platform")
+}
+
+// ─── MFA & Session Policies ──────────────────────────────────────────────────
+
+model MfaPolicy {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId      String?  @unique @map("customer_id") @db.Uuid
+  tenantId        String?  @unique @map("tenant_id") @db.Uuid
+  isEnforced      Boolean  @default(true) @map("is_enforced")
+  allowedMethods  Json     @default("[\"totp\",\"email_otp\"]") @map("allowed_methods")
+  gracePeriodDays Int      @default(7) @map("grace_period_days")
+  bypassRoles     Json     @default("[]") @map("bypass_roles") // role IDs exempt from MFA
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_policies")
+  @@schema("platform")
+}
+
+model SessionPolicy {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId            String?  @unique @map("customer_id") @db.Uuid
+  tenantId              String?  @unique @map("tenant_id") @db.Uuid
+  sessionTimeoutMinutes Int      @default(60) @map("session_timeout_minutes")
+  idleTimeoutMinutes    Int      @default(30) @map("idle_timeout_minutes")
+  maxConcurrentSessions Int      @default(3) @map("max_concurrent_sessions")
+  requireDeviceTrust    Boolean  @default(false) @map("require_device_trust")
+  allowedIpRanges       Json     @default("[]") @map("allowed_ip_ranges")
+  geoRestrictions       Json     @default("[]") @map("geo_restrictions")
+  riskBasedAuthEnabled  Boolean  @default(false) @map("risk_based_auth_enabled")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("session_policies")
+  @@schema("platform")
+}
+
+// ─── Access Request & Certification ──────────────────────────────────────────
+
+model AccessRequest {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requesterId   String    @map("requester_id") @db.Uuid
+  targetUserId  String?   @map("target_user_id") @db.Uuid
+  roleId        String?   @map("role_id") @db.Uuid
+  permissionId  String?   @map("permission_id") @db.Uuid
+  customerId    String?   @map("customer_id") @db.Uuid
+  tenantId      String?   @map("tenant_id") @db.Uuid
+  justification String?
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED | EXPIRED
+  reviewedBy    String?   @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  expiresAt     DateTime? @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  requester  AppUser  @relation("AccessRequestRequester", fields: [requesterId], references: [id])
+  targetUser AppUser? @relation("AccessRequestTarget", fields: [targetUserId], references: [id])
+
+  @@map("access_requests")
   @@schema("platform")
 }
 
@@ -362,38 +561,17 @@ model LookupIndustry {
 }
 
 model LookupRegion {
-  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  label              String  @unique
-  value              String?
-  icon               String?
-  category           String?
-  isActive           Boolean @default(true)
-  isGovernanceLocked Boolean @default(false)
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label                String                @unique
+  value                String?
+  icon                 String?
+  category             String?
+  isActive             Boolean               @default(true)
+  isGovernanceLocked   Boolean               @default(false)
+  discoveryAssets      DiscoveryAsset[]
+  discoveryAssessments DiscoveryAssessment[]
 
   @@map("lookup_regions")
-  @@schema("platform")
-}
-
-model LookupClassification {
-  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  label              String  @unique
-  isActive           Boolean @default(true)
-  isGovernanceLocked Boolean @default(false)
-  category           String?
-  description        String?
-
-  @@map("lookup_classifications")
-  @@schema("platform")
-}
-
-model LookupPriority {
-  id                 String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  label              String  @unique
-  isActive           Boolean @default(true)
-  isGovernanceLocked Boolean @default(false)
-  description        String?
-
-  @@map("lookup_priorities")
   @@schema("platform")
 }
 
@@ -1185,17 +1363,36 @@ model WorkflowEdge {
 }
 
 model ExecutionRun {
-  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workflowId String         @db.Uuid
-  status     String
-  inputData  Json?
-  outputData Json?
-  startedAt  DateTime       @default(now())
-  finishedAt DateTime?
-  logs       ExecutionLog[]
-  workflow   Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId   String           @db.Uuid
+  status       String
+  inputData    Json?
+  outputData   Json?
+  startedAt    DateTime         @default(now())
+  finishedAt   DateTime?
+  generationId String           @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  logs         ExecutionLog[]
+  events       ExecutionEvent[]
+  workflow     Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@map("execution_runs")
+  @@schema("platform")
+}
+
+model ExecutionEvent {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  executionId     String       @db.Uuid
+  eventType       String
+  payload         Json?
+  correlationId   String?      @db.Uuid
+  causationId     String?      @db.Uuid
+  rootExecutionId String?      @db.Uuid
+  timestamp       DateTime     @default(now())
+  execution       ExecutionRun @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([correlationId])
+  @@map("execution_events")
   @@schema("platform")
 }
 
@@ -1263,6 +1460,8 @@ enum ResourceType {
   IAM_ROLE
   IAM_GROUP
   APPLICATION
+  DISCOVERY_ASSESSMENT
+  DISCOVERY_CONNECTOR
 
   @@schema("platform")
 }
@@ -1526,4 +1725,639 @@ model StudioExecutionNodeLog {
   @@index([jobId])
   @@map("studio_execution_node_logs")
   @@schema("platform")
+}
+
+// --- DISCOVERY & ASSESSMENT MODELS ---
+
+model BusinessUnit {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  customer       Customer              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessments    DiscoveryAssessment[]
+
+  @@map("business_units")
+  @@schema("discovery")
+}
+
+model DiscoveryAssessment {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String           @map("assessment_name")
+  organizationId  String           @map("organization_id") @db.Uuid
+  businessUnitId  String           @map("business_unit_id") @db.Uuid
+  environmentType EnvironmentType  @map("environment_type")
+  regionId        String?          @map("region_id") @db.Uuid
+  status          AssessmentStatus @default(DRAFT)
+  createdBy       String           @map("created_by")
+  resourceId      String?          @unique @map("resource_id") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  customer     Customer         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  businessUnit BusinessUnit     @relation(fields: [businessUnitId], references: [id], onDelete: Cascade)
+  region       LookupRegion?    @relation(fields: [regionId], references: [id])
+  resource     Resource?        @relation(fields: [resourceId], references: [id])
+  assets       DiscoveryAsset[]
+  jobs         DiscoveryJob[]
+
+  @@map("discovery_assessments")
+  @@schema("discovery")
+}
+
+model DiscoveryAsset {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentId   String    @map("assessment_id") @db.Uuid
+  hostname       String
+  ipAddress      String?   @map("ip_address")
+  assetType      AssetType @map("asset_type")
+  osType         String?   @map("os_type")
+  osVersion      String?   @map("os_version")
+  criticality    String?   @default("MEDIUM")
+  environmentId  String?   @map("environment_id") @db.Uuid // Links to Tenant
+  regionId       String?   @map("region_id") @db.Uuid
+  owner          String?
+  internetFacing Boolean   @default(false) @map("internet_facing")
+  discoveredDate DateTime  @default(now()) @map("discovered_date")
+  metadata       Json?     @default("{}")
+  resourceId     String?   @unique @map("resource_id") @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+
+  resource Resource? @relation(fields: [resourceId], references: [id])
+  customer Customer? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  assessment      DiscoveryAssessment       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  tenant          Tenant?                   @relation(fields: [environmentId], references: [id])
+  region          LookupRegion?             @relation(fields: [regionId], references: [id])
+  accounts        DiscoveryAccount[]
+  compliance      AssetComplianceMapping[]
+  risks           RiskFinding[]
+  readiness       PamReadiness?
+  recommendations DiscoveryRecommendation[]
+
+  @@map("discovery_assets")
+  @@schema("discovery")
+}
+
+model DiscoveryAccount {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId         String      @map("asset_id") @db.Uuid
+  username        String
+  accountType     AccountType @map("account_type")
+  privilegedLevel String?     @map("privileged_level")
+  sharedAccount   Boolean     @default(false) @map("shared_account")
+  orphaned        Boolean     @default(false)
+  mfaEnabled      Boolean     @default(false) @map("mfa_enabled")
+  lastUsed        DateTime?   @map("last_used")
+
+  asset DiscoveryAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("discovery_accounts")
+  @@schema("discovery")
+}
+
+model DiscoveryConnector {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connectorType String   @map("connector_type") // AD, Azure, AWS, GCP, etc.
+  name          String   @map("connector_name")
+  status        String   @default("ACTIVE")
+  config        Json     @map("config_json")
+  resourceId    String?  @unique @map("resource_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  resource Resource?      @relation(fields: [resourceId], references: [id])
+  jobs     DiscoveryJob[]
+
+  @@map("discovery_connectors")
+  @@schema("discovery")
+}
+
+model DiscoveryJob {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentId String             @map("assessment_id") @db.Uuid
+  connectorId  String             @map("connector_id") @db.Uuid
+  status       DiscoveryJobStatus @default(PENDING)
+  startedAt    DateTime?          @map("started_at")
+  completedAt  DateTime?          @map("completed_at")
+  results      Json?              @map("job_results")
+
+  assessment DiscoveryAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  connector  DiscoveryConnector  @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@map("discovery_jobs")
+  @@schema("discovery")
+}
+
+model ComplianceFramework {
+  id       String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name     String              @map("framework_name")
+  version  String
+  controls ComplianceControl[]
+
+  @@map("compliance_frameworks")
+  @@schema("discovery")
+}
+
+model ComplianceControl {
+  id          String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  frameworkId String                   @map("framework_id") @db.Uuid
+  name        String                   @map("control_name")
+  severity    RiskSeverity             @default(MEDIUM)
+  description String?
+  framework   ComplianceFramework      @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  mappings    AssetComplianceMapping[]
+
+  @@map("compliance_controls")
+  @@schema("discovery")
+}
+
+model AssetComplianceMapping {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId   String           @map("asset_id") @db.Uuid
+  controlId String           @map("control_id") @db.Uuid
+  status    ComplianceStatus @default(NOT_APPLICABLE)
+
+  asset   DiscoveryAsset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  control ComplianceControl @relation(fields: [controlId], references: [id], onDelete: Cascade)
+
+  @@map("asset_compliance_mapping")
+  @@schema("discovery")
+}
+
+model RiskFinding {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId     String       @map("asset_id") @db.Uuid
+  riskType    String       @map("risk_type")
+  severity    RiskSeverity
+  description String?
+  remediation String?
+
+  asset DiscoveryAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("risk_findings")
+  @@schema("discovery")
+}
+
+model PamPlatform {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String         @map("platform_name")
+  deploymentModel String         @map("deployment_model")
+  version         String?
+  readiness       PamReadiness[]
+
+  @@map("pam_platforms")
+  @@schema("discovery")
+}
+
+model PamReadiness {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId          String           @unique @map("asset_id") @db.Uuid
+  platformId       String?          @map("platform_id") @db.Uuid
+  cpmReady         Boolean          @default(false) @map("cpm_ready")
+  psmReady         Boolean          @default(false) @map("psm_ready")
+  onboardingStatus OnboardingStatus @default(NOT_READY) @map("onboarding_status")
+
+  asset    DiscoveryAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  platform PamPlatform?   @relation(fields: [platformId], references: [id])
+
+  @@map("pam_readiness")
+  @@schema("discovery")
+}
+
+model DiscoveryRecommendation {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId            String   @map("asset_id") @db.Uuid
+  recommendationType String   @map("recommendation_type")
+  recommendationText String   @map("recommendation_text")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  asset DiscoveryAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("discovery_recommendations")
+  @@schema("discovery")
+}
+
+enum EnvironmentType {
+  ON_PREM
+  CLOUD
+  HYBRID
+  MULTI_CLOUD
+  AIR_GAPPED
+
+  @@schema("discovery")
+}
+
+enum AssetType {
+  WINDOWS
+  LINUX
+  DATABASE
+  KUBERNETES
+  CONTAINER
+  VMWARE
+  NETWORK
+  SAAS
+  CLOUD
+  MAINFRAME
+  API
+  CERTIFICATE
+
+  @@schema("discovery")
+}
+
+enum AssessmentStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+
+  @@schema("discovery")
+}
+
+enum DiscoveryJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+
+  @@schema("discovery")
+}
+
+enum AccountType {
+  USER
+  SERVICE_ACCOUNT
+  PRIVILEGED_GROUP
+  LOCAL_ADMIN
+  SSH_KEY
+  API_TOKEN
+  BREAK_GLASS
+  SHARED
+
+  @@schema("discovery")
+}
+
+enum RiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@schema("discovery")
+}
+
+enum ComplianceStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  EXEMPT
+  NOT_APPLICABLE
+
+  @@schema("discovery")
+}
+
+enum OnboardingStatus {
+  READY
+  NOT_READY
+  IN_PROGRESS
+  ONBOARDED
+
+  @@schema("discovery")
+}
+
+// --- DISCOVERY MASTER DATA (MDM) ---
+
+model MasterCategory {
+  id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name     String        @unique @map("category_name")
+  label    String?       @map("display_label")
+  isSystem Boolean       @default(false) @map("is_system")
+  values   MasterValue[]
+
+  @@map("master_categories")
+  @@schema("discovery")
+}
+
+model MasterValue {
+  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId    String  @map("category_id") @db.Uuid
+  name          String  @map("value_name")
+  code          String? @map("value_code")
+  description   String?
+  parentValueId String? @map("parent_value_id") @db.Uuid
+  isActive      Boolean @default(true) @map("is_active")
+  sortOrder     Int     @default(0) @map("sort_order")
+  metadata      Json?   @default("{}")
+
+  category    MasterCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  parentValue MasterValue?   @relation("ValueHierarchy", fields: [parentValueId], references: [id])
+  childValues MasterValue[]  @relation("ValueHierarchy")
+
+  @@map("master_values")
+  @@schema("discovery")
+}
+
+model IntakeConnector {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId String  @map("customer_id") @db.Uuid
+  tenantId   String  @map("tenant_id") @db.Uuid
+  folderId   String? @map("folder_id") @db.Uuid
+
+  name            String
+  type            ConnectorType
+  status          ConnectorStatus @default(DRAFT)
+  enabled         Boolean         @default(true)
+  pollingInterval Int?            @map("polling_interval") // seconds
+  configuration   Json
+
+  lastHeartbeat DateTime? @map("last_heartbeat")
+  lastSync      DateTime? @map("last_sync")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdBy     String    @map("created_by")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  runs      IntakeRun[]
+  documents IntakeDocument[]
+
+  @@index([customerId, tenantId])
+  @@map("intake_connectors")
+  @@schema("studio")
+}
+
+model IntakeRun {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connectorId    String          @map("connector_id") @db.Uuid
+  startedAt      DateTime        @default(now()) @map("started_at")
+  completedAt    DateTime?       @map("completed_at")
+  status         IntakeRunStatus
+  filesProcessed Int             @default(0) @map("files_processed")
+  errorMessage   String?         @map("error_message")
+  logs           Json?
+
+  connector IntakeConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@map("intake_runs")
+  @@schema("studio")
+}
+
+model IntakeDocument {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connectorId String   @map("connector_id") @db.Uuid
+  fileName    String   @map("file_name")
+  storagePath String   @map("storage_path")
+  status      String   @default("PENDING_CLASSIFICATION")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  connector IntakeConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@map("intake_documents")
+  @@schema("studio")
+}
+
+enum ConnectorType {
+  EMAIL
+  S3
+  AZURE_BLOB
+  SFTP
+
+  @@schema("studio")
+}
+
+enum ConnectorStatus {
+  DRAFT
+  INITIALIZING
+  ACTIVE
+  ERROR
+  DISABLED
+
+  @@schema("studio")
+}
+
+enum IntakeRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+
+  @@schema("studio")
+}
+
+model UserPersonalization {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                  String   @map("user_id") @db.Uuid
+  navigationMode          String   @default("hybrid") @map("navigation_mode")
+  themeKey                String   @default("midnight-ai") @map("theme_key")
+  animationLevel          String   @default("standard") @map("animation_level")
+  leftNavCollapsed        Boolean  @default(false) @map("left_nav_collapsed")
+  immersiveEffectsEnabled Boolean  @default(true) @map("immersive_effects_enabled")
+  aiCommandBarEnabled     Boolean  @default(true) @map("ai_command_bar_enabled")
+  densityMode             String   @default("comfortable") @map("density_mode")
+  fontScale               String   @default("normal") @map("font_scale")
+  soundEffectsEnabled     Boolean  @default(false) @map("sound_effects_enabled")
+  defaultLandingService   String?  @map("default_landing_service") @db.Uuid
+  dashboardLayout         Json?    @map("dashboard_layout")
+  customSettings          Json?    @map("custom_settings")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("user_personalization")
+  @@schema("security")
+}
+
+model PlatformService {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceKey    String   @unique @map("service_key")
+  displayName   String   @map("display_name")
+  description   String?
+  route         String?
+  iconType      String?  @map("icon_type")
+  iconConfig    Json?    @map("icon_config")
+  accentColor   String?  @map("accent_color")
+  animationType String?  @map("animation_type")
+  category      String?
+  enabled       Boolean  @default(true)
+  displayOrder  Int      @default(0) @map("display_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("platform_services")
+  @@schema("platform")
+}
+
+model RoleServiceAccess {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  serviceId    String   @map("service_id") @db.Uuid
+  canAccess    Boolean  @default(true) @map("can_access")
+  canCustomize Boolean  @default(false) @map("can_customize")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("role_service_access")
+  @@schema("security")
+}
+
+model UserFavoriteService {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  serviceId    String   @map("service_id") @db.Uuid
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("user_favorite_services")
+  @@schema("security")
+}
+
+model UserRecentService {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  serviceId      String   @map("service_id") @db.Uuid
+  lastAccessedAt DateTime @default(now()) @map("last_accessed_at")
+  accessCount    Int      @default(1) @map("access_count")
+
+  @@map("user_recent_services")
+  @@schema("security")
+}
+
+model PlatformTheme {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  themeKey    String   @unique @map("theme_key")
+  displayName String?  @map("display_name")
+  themeConfig Json?    @map("theme_config")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("platform_themes")
+  @@schema("platform")
+}
+
+model AiModelRegistry {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modelKey           String   @unique @map("model_key")
+  modelName          String   @map("model_name")
+  category           String?
+  modelType          String?  @map("model_type")
+  version            String?
+  framework          String?
+  runtime            String?
+  inferenceType      String?  @map("inference_type")
+  supportsGpu        Boolean  @default(false) @map("supports_gpu")
+  supportsCpu        Boolean  @default(true) @map("supports_cpu")
+  requiresGpu        Boolean  @default(false) @map("requires_gpu")
+  supportedRegions   Json?    @map("supported_regions")
+  supportedLanguages Json?    @map("supported_languages")
+  confidenceScore    Decimal? @map("confidence_score") @db.Decimal(5, 2)
+  deploymentStatus   String?  @map("deployment_status")
+  packagePath        String?  @map("package_path")
+  dockerImage        String?  @map("docker_image")
+  checksumSha256     String?  @map("checksum_sha256")
+  uploadedBy         String?  @map("uploaded_by") @db.Uuid
+  uploadedAt         DateTime @default(now()) @map("uploaded_at")
+  isPrebuilt         Boolean  @default(false) @map("is_prebuilt")
+  isActive           Boolean  @default(true) @map("is_active")
+  metadata           Json?
+  benchmarkResults   Json?    @map("benchmark_results")
+  schemaDefinition   Json?    @map("schema_definition")
+
+  versions        AiModelVersion[]
+  runtimeMappings AiModelRuntimeMapping[]
+
+  @@map("ai_model_registry")
+  @@schema("studio")
+}
+
+model AiModelVersion {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modelId           String   @map("model_id") @db.Uuid
+  version           String?
+  packagePath       String?  @map("package_path")
+  changelog         String?
+  releasedBy        String?  @map("released_by") @db.Uuid
+  releasedAt        DateTime @default(now()) @map("released_at")
+  rollbackSupported Boolean  @default(true) @map("rollback_supported")
+  validationStatus  String?  @map("validation_status")
+  benchmarkScore    Decimal? @map("benchmark_score") @db.Decimal(5, 2)
+  isCurrent         Boolean  @default(false) @map("is_current")
+
+  model AiModelRegistry @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@map("ai_model_versions")
+  @@schema("studio")
+}
+
+model AiModelRuntimeMapping {
+  id                  String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modelId             String  @map("model_id") @db.Uuid
+  runtimeEngine       String? @map("runtime_engine")
+  executionMode       String? @map("execution_mode")
+  dockerImage         String? @map("docker_image")
+  cpuRequired         Int?    @map("cpu_required")
+  gpuRequired         Int?    @map("gpu_required")
+  ramRequiredGb       Int?    @map("ram_required_gb")
+  inferenceTimeoutSec Int?    @map("inference_timeout_sec")
+  scalingPolicy       Json?   @map("scaling_policy")
+
+  model AiModelRegistry @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@map("ai_model_runtime_mapping")
+  @@schema("studio")
+}
+
+model ExtractionField {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modelId             String?            @map("model_id") @db.Uuid
+  fieldName           String             @map("field_name") @db.VarChar(255)
+  fieldType           String             @map("field_type") @db.VarChar(100)
+  extractionMode      String             @map("extraction_mode") @db.VarChar(100)
+  confidenceThreshold Decimal            @map("confidence_threshold") @db.Decimal(5, 2)
+  pageStrategy        String             @map("page_strategy") @db.VarChar(50)
+  aiEnabled           Boolean            @map("ai_enabled")
+  validationEnabled   Boolean            @map("validation_enabled")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  anchors             ExtractionAnchor[]
+
+  @@map("extraction_field")
+  @@schema("studio")
+}
+
+model ExtractionAnchor {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fieldId          String?          @map("field_id") @db.Uuid
+  anchorType       String           @map("anchor_type") @db.VarChar(50)
+  anchorValue      String           @map("anchor_value") @db.Text
+  relativePosition String?          @map("relative_position") @db.VarChar(50)
+  confidence       Decimal          @map("confidence") @db.Decimal(5, 2)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  field            ExtractionField? @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@map("extraction_anchor")
+  @@schema("studio")
+}
+
+model ExtractionRepeatRegion {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modelId             String?  @map("model_id") @db.Uuid
+  regionName          String   @map("region_name") @db.VarChar(255)
+  detectionMode       String   @map("detection_mode") @db.VarChar(50)
+  dynamicHeight       Boolean  @map("dynamic_height")
+  extractionDirection String   @map("extraction_direction") @db.VarChar(50)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@map("extraction_repeat_region")
+  @@schema("studio")
+}
+
+model ExtractionTable {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  modelId               String?  @map("model_id") @db.Uuid
+  tableName             String   @map("table_name") @db.VarChar(255)
+  multiPage             Boolean  @map("multi_page")
+  continuationDetection Boolean  @map("continuation_detection")
+  nestedRows            Boolean  @map("nested_rows")
+  aiRepair              Boolean  @map("ai_repair")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("extraction_table")
+  @@schema("studio")
 }

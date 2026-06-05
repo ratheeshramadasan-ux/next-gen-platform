@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { ShieldAlert, RefreshCcw, Home, Terminal } from "lucide-react";
 import Link from "next/link";
 

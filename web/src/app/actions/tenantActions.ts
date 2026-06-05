@@ -926,6 +926,73 @@ export async function updateCustomerAction(payload: any) {
   }
 }
 
+// ── Customer Locale & Defaults ─────────────────────────────────────────────────
+// These 5 fields override the platform-level defaults for this specific customer only.
+
+export async function getCustomerLocaleSettings(customerId: string) {
+  try {
+    // Use raw SQL — new fields not yet in Prisma generated client
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT id, language, timezone, currency, support_email AS "supportEmail"
+      FROM platform.customers WHERE id = ${customerId}::uuid LIMIT 1
+    `;
+    const c = rows[0] || null;
+    const sessionPolicy = await prisma.sessionPolicy.findUnique({
+      where: { customerId },
+      select: { sessionTimeoutMinutes: true },
+    });
+    return JSON.parse(JSON.stringify({
+      ...c,
+      sessionTimeoutMinutes: sessionPolicy?.sessionTimeoutMinutes ?? null,
+    }));
+  } catch (e) {
+    console.error("getCustomerLocaleSettings:", e);
+    return null;
+  }
+}
+
+export async function updateCustomerLocaleSettings(payload: {
+  customerId: string;
+  language: string;
+  timezone: string;
+  currency: string;
+  supportEmail: string;
+  sessionTimeoutMinutes: number;
+}) {
+  try {
+    // Update core locale fields on the customer
+    await prisma.$queryRawUnsafe(
+      `UPDATE platform.customers
+       SET language = $1, timezone = $2, currency = $3, support_email = $4, updated_at = now()
+       WHERE id = $5::uuid`,
+      payload.language,
+      payload.timezone,
+      payload.currency,
+      payload.supportEmail || null,
+      payload.customerId
+    );
+
+    // Upsert the session policy for this customer
+    await prisma.sessionPolicy.upsert({
+      where: { customerId: payload.customerId },
+      create: {
+        customerId: payload.customerId,
+        sessionTimeoutMinutes: payload.sessionTimeoutMinutes,
+      },
+      update: {
+        sessionTimeoutMinutes: payload.sessionTimeoutMinutes,
+      },
+    });
+
+    revalidatePath("/next-gen/admin/organization/settings");
+    revalidatePath("/next-gen/admin/organization/general");
+    return { success: true };
+  } catch (e: any) {
+    console.error("updateCustomerLocaleSettings:", e);
+    return { success: false, error: e.message };
+  }
+}
+
 // --- Next Gen Studio Actions ---
 
 export async function createStudioProject(payload: {

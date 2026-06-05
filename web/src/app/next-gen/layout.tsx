@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { GlobalSearch } from "@/components/layout/global-search";
 import { ContextPanel } from "@/components/layout/context-panel";
+import { KnowledgeBasePanel } from "@/components/layout/knowledge-base-panel";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { activeBackground } = useAppContext();
@@ -38,7 +39,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           isDesigner ? "overflow-hidden" : ""
         )}>
           <GlobalSearch />
-          
+
+          <div className="flex flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 relative h-full min-h-0 overflow-hidden">
               <div className="w-full h-full p-3 md:p-4 transition-all duration-300 overflow-hidden">
                 <div className={cn(
@@ -50,8 +52,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             </div>
+
+            {/* Knowledge Base Panel — slides in from right */}
+            {!isDesigner && <KnowledgeBasePanel />}
+          </div>
         </main>
-        
+
         {!isDesigner && <ContextPanel />}
       </div>
     </div>

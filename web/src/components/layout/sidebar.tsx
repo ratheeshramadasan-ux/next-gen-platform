@@ -44,7 +44,11 @@ import {
   Download,
   Search,
   MessageSquare,
-  Rocket
+  Rocket,
+  Layers,
+  Network,
+  Lock,
+  FolderOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -111,131 +115,238 @@ export const Sidebar = ({ defaultCollapsed = false }: { defaultCollapsed?: boole
     setOpenGroups((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
-  const ALL_ROLES: Role[] = ["Platform Admin", "Tenant Admin", "Admin User"];
-  const TENANT_UP: Role[] = ["Platform Admin", "Tenant Admin"];
-  const PLATFORM_ONLY: Role[] = ["Platform Admin"];
+  // ─── Role arrays with correct scope ─────────────────────────────────────────
+  const ALL_ROLES:      Role[] = ["Platform Admin", "Tenant Admin", "Admin User"];
+  const PLATFORM_ONLY:  Role[] = ["Platform Admin"];
+  const CUSTOMER_UP:    Role[] = ["Platform Admin", "Admin User"];          // Customer Admin and above
+  const TENANT_UP:      Role[] = ["Platform Admin", "Admin User", "Tenant Admin"]; // All admin types
 
   const menuConfig: MenuCategory[] = [
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 1 — PLATFORM  (Platform Admin only)
+    // Scope: Everything that governs the entire platform — affects ALL customers
+    // ══════════════════════════════════════════════════════════════════════════
     {
-      title: "SYSTEM CONTROL",
+      title: "PLATFORM",
       items: [
         {
-          name: "Global Control Center",
-          icon: Shield,
+          name: "Configuration",
+          icon: Settings,
+          href: "/next-gen/control-center/system-control",
+          allowedRoles: PLATFORM_ONLY,
+          subItems: [
+            { name: "Global Settings",        href: "/next-gen/control-center/system-control" },
+            { name: "Feature Flags",          href: "/next-gen/control-center/system-control" },
+            { name: "Platform Branding",      href: "/next-gen/control-center/system-control" },
+            { name: "AI & Model Registry",    href: "/next-gen/control-center/system-control" },
+            { name: "Infrastructure",         href: "/next-gen/control-center/system-control" },
+            { name: "Service Catalog",        href: "/next-gen/control-center/system-control" },
+            { name: "SMTP Settings",          href: "/next-gen/control-center/config" },
+          ]
+        },
+        {
+          // Platform-level security = how Platform Admins authenticate
+          name: "Security",
+          icon: Lock,
+          href: "/next-gen/control-center/system-control",
+          allowedRoles: PLATFORM_ONLY,
+          subItems: [
+            { name: "Platform SSO / IdP",     href: "/next-gen/control-center/system-control" },
+            { name: "Governance & Policies",  href: "/next-gen/control-center/system-control" },
+            { name: "Data Residency",         href: "/next-gen/control-center/system-control" },
+            { name: "Audit Policies",         href: "/next-gen/control-center/system-control" },
+            { name: "Retention Rules",        href: "/next-gen/control-center/system-control" },
+          ]
+        },
+        {
+          name: "Customers",
+          icon: Building2,
+          href: "/next-gen/control-center/customer",
+          allowedRoles: PLATFORM_ONLY,
+          subItems: [
+            { name: "Manage Customers",       href: "/next-gen/control-center/customer" },
+            { name: "Pending Approvals",      href: "/next-gen/control-center/approvals" },
+            { name: "Licensing & Quotas",     href: "/next-gen/control-center/licensing" },
+            { name: "Master Data",            href: "/next-gen/control-center/masters" },
+          ]
+        },
+        {
+          name: "Operations",
+          icon: Activity,
           href: "/next-gen/control-center",
           allowedRoles: PLATFORM_ONLY,
           subItems: [
-            { name: "Customers", href: "/next-gen/control-center/customer" },
-            { name: "Approval Hub", href: "/next-gen/control-center/approvals" },
-            { name: "Licensing & Entitlements", href: "/next-gen/control-center/licensing" },
-            { name: "System Settings", href: "/next-gen/control-center/config" },
-            { name: "Master Data", href: "/next-gen/control-center/masters" },
-            { name: "Service Health", href: "/next-gen/control-center/services" },
-            { name: "Billing & Plans", href: "/next-gen/control-center/billing" },
+            { name: "Platform Overview",      href: "/next-gen/control-center" },
+            { name: "Service Health",         href: "/next-gen/control-center/services" },
+            { name: "Audit Chronicle",        href: "/next-gen/control-center/audit" },
+            { name: "Billing & Plans",        href: "/next-gen/control-center/billing" },
           ]
-        }
+        },
       ]
     },
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 2 — CUSTOMER  (Customer Admin / Admin User)
+    // Scope: Governs one customer organization — affects all tenants within it
+    // ══════════════════════════════════════════════════════════════════════════
     {
-      title: "MANAGEMENT CONSOLE",
+      title: "CUSTOMER",
       items: [
         {
-          name: "Workspace Settings",
+          name: "Profile & Branding",
           icon: Building2,
-          href: "/next-gen/admin/organization",
-          allowedRoles: TENANT_UP,
+          href: "/next-gen/admin/organization/general",
+          allowedRoles: CUSTOMER_UP,
           subItems: [
-            { name: "Tenants", href: "/next-gen/admin/organization/tenants" },
-            { name: "Folders", href: "/next-gen/admin/organization/folders" },
-            { name: "Applications", href: "/next-gen/admin/organization/apps" },
-            { name: "General Settings", href: "/next-gen/admin/organization/general" },
+            { name: "Organization Settings",  href: "/next-gen/admin/organization/general" },
+            { name: "Branding & Logo",        href: "/next-gen/admin/organization/general" },
+            { name: "Login Portal URL",       href: "/next-gen/admin/organization/general" },
           ]
         },
         {
-          name: "Users & Teams",
+          // Customer-level security = how the customer's users authenticate + their global policy
+          name: "Security & Policy",
+          icon: ShieldCheck,
+          href: "/next-gen/admin/organization/settings",
+          allowedRoles: CUSTOMER_UP,
+          subItems: [
+            { name: "Auth & Allowed Domains", href: "/next-gen/admin/organization/settings" },
+            { name: "MFA Enforcement",        href: "/next-gen/admin/iam?tab=mfa" },
+            { name: "Session Policy",         href: "/next-gen/admin/iam?tab=mfa" },
+            { name: "Compliance Mode",        href: "/next-gen/admin/organization/settings" },
+          ]
+        },
+        {
+          name: "Tenants",
+          icon: Layers,
+          href: "/next-gen/admin/organization/tenants",
+          allowedRoles: CUSTOMER_UP,
+          subItems: [
+            { name: "Manage Environments",    href: "/next-gen/admin/organization/tenants" },
+            { name: "Provision New Tenant",   href: "/next-gen/admin/organization/tenants" },
+          ]
+        },
+        {
+          name: "Licensing",
+          icon: CreditCard,
+          href: "/next-gen/control-center/licensing",
+          allowedRoles: CUSTOMER_UP,
+          subItems: [
+            { name: "Current Plan & Quotas",  href: "/next-gen/control-center/licensing" },
+          ]
+        },
+      ]
+    },
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 3 — TENANT  (Tenant Admin and above, scoped to active tenant)
+    // Scope: Governs one tenant environment — in guided setup order
+    // ══════════════════════════════════════════════════════════════════════════
+    {
+      title: "TENANT",
+      items: [
+        {
+          // 1: Structure — set up the workspace hierarchy first
+          name: "1. Workspace",
+          icon: FolderOpen,
+          href: "/next-gen/admin/organization/folders",
+          allowedRoles: TENANT_UP,
+          subItems: [
+            { name: "Workspaces & Folders",   href: "/next-gen/admin/organization/folders" },
+            { name: "Applications",           href: "/next-gen/admin/organization/apps" },
+            { name: "General Settings",       href: "/next-gen/admin/organization/general" },
+          ]
+        },
+        {
+          // 2: Roles — define what each role is allowed to do
+          name: "2. Roles & Permissions",
+          icon: Shield,
+          href: "/next-gen/admin/iam?tab=roles",
+          allowedRoles: TENANT_UP,
+          subItems: [
+            { name: "Role Catalog",           href: "/next-gen/admin/iam?tab=roles" },
+            { name: "Build Custom Role",      href: "/next-gen/admin/iam?tab=builder" },
+            { name: "Permission Matrix",      href: "/next-gen/admin/iam?tab=matrix" },
+            { name: "Segregation of Duties",  href: "/next-gen/admin/iam?tab=sod" },
+          ]
+        },
+        {
+          // 3: Groups — create groups and attach the roles defined in step 2
+          name: "3. Groups & Teams",
+          icon: Network,
+          href: "/next-gen/admin/access?tab=groups",
+          allowedRoles: TENANT_UP,
+          subItems: [
+            { name: "Access Groups",          href: "/next-gen/admin/access?tab=groups" },
+          ]
+        },
+        {
+          // 4: SSO + Group Mapping — users land in the right group automatically on login
+          name: "4. SSO & Group Mapping",
+          icon: KeyRound,
+          href: "/next-gen/admin/access?tab=security",
+          allowedRoles: TENANT_UP,
+          subItems: [
+            { name: "Identity Providers",     href: "/next-gen/admin/access?tab=security" },
+            { name: "→ Map IdP Groups",       href: "/next-gen/admin/access?tab=security" },
+          ]
+        },
+        {
+          // 5: Users — now that setup is done, add people
+          name: "5. Users",
           icon: Users,
-          href: "/next-gen/admin/access",
+          href: "/next-gen/admin/access?tab=users",
           allowedRoles: TENANT_UP,
           subItems: [
-            { name: "User Directory", href: "/next-gen/admin/access?tab=users" },
-            { name: "Access Groups", href: "/next-gen/admin/access?tab=groups" },
-            { name: "Custom Roles", href: "/next-gen/admin/access?tab=roles" },
+            { name: "User Directory",         href: "/next-gen/admin/access?tab=users" },
+            { name: "Pending Approvals",      href: "/next-gen/admin/access?tab=approvals" },
           ]
         },
         {
-          name: "Automation Settings",
-          icon: Bot,
-          href: "/next-gen/admin/automation",
-          allowedRoles: TENANT_UP,
-          subItems: [
-            { name: "Machines & Robots", href: "/next-gen/admin/automation/machines" },
-            { name: "Robot Templates", href: "/next-gen/admin/automation/templates" },
-            { name: "Global Run Settings", href: "/next-gen/admin/automation/settings" },
-          ]
-        },
-        {
-          name: "App Connections",
+          // 6: Integrations — connect machines and external systems last
+          name: "6. Integrations",
           icon: Globe,
           href: "/next-gen/admin/integrations",
           allowedRoles: TENANT_UP,
           subItems: [
-            { name: "Code Repositories", href: "/next-gen/admin/integrations/repos" },
-            { name: "Connected Systems", href: "/next-gen/admin/integrations/systems" },
-            { name: "API & Webhooks", href: "/next-gen/admin/integrations/webhooks" },
+            { name: "Bot Agents",             href: "/next-gen/bot-agents" },
+            { name: "Connected Systems",      href: "/next-gen/admin/integrations/systems" },
+            { name: "Code Repositories",      href: "/next-gen/admin/integrations/repos" },
+            { name: "API & Webhooks",         href: "/next-gen/admin/integrations/webhooks" },
           ]
         },
       ]
     },
+    // ── Layer 3: Automation Hub (build → test → deploy → run → monitor) ─────────
     {
       title: "AUTOMATION HUB",
       items: [
         {
-          name: "Home",
+          name: "Overview",
           icon: Home,
           href: "/next-gen/home",
           allowedRoles: ALL_ROLES,
           subItems: [
-            { name: "My Dashboard", href: "/next-gen/home/work" },
+            { name: "My Dashboard", href: "/next-gen/home" },
             { name: "Live Jobs", href: "/next-gen/home/jobs" },
             { name: "Notifications", href: "/next-gen/home/notifications" },
-            { name: "My Activity", href: "/next-gen/home/activity" },
           ]
         },
         {
-          name: "Automation Lifecycle",
+          name: "Plan",
           icon: RotateCw,
           href: "/next-gen/lifecycle",
           allowedRoles: ALL_ROLES,
           subItems: [
-            { name: "New Project Assessment", href: "/next-gen/lifecycle/assessment" },
+            { name: "New Process Assessment", href: "/next-gen/lifecycle/assessment" },
             { name: "ROI Calculator", href: "/next-gen/lifecycle/roi" },
             { name: "Prioritization", href: "/next-gen/lifecycle/priority" },
             { name: "Requirement Gathering", href: "/next-gen/lifecycle/requirements" },
-            { name: "Review & Approval", href: "/next-gen/lifecycle/review" },
           ]
         },
         {
-          name: "Tenant Hub",
-          icon: Briefcase,
-          href: "/next-gen/workspace",
-          allowedRoles: ALL_ROLES,
-          subItems: [
-            { name: "Projects", href: "/next-gen/workspace/projects" },
-            { name: "Processes", href: "/next-gen/workspace/processes" },
-            { name: "Jobs / Runs", href: "/next-gen/workspace/jobs" },
-            { name: "Queues", href: "/next-gen/workspace/queues" },
-            { name: "Schedules", href: "/next-gen/workspace/schedules" },
-            { name: "Logs", href: "/next-gen/workspace/logs" },
-            { name: "Assets", href: "/next-gen/workspace/assets" },
-          ]
-        },
-      ]
-    },
-    {
-      title: "BUILDER STUDIO",
-      items: [
-        {
-          name: "Design",
+          name: "Build",
           icon: Flame,
           href: "/next-gen/studio",
           allowedRoles: ALL_ROLES,
@@ -244,83 +355,62 @@ export const Sidebar = ({ defaultCollapsed = false }: { defaultCollapsed?: boole
             { name: "App Studio", href: "/next-gen/studio/ui-builder" },
             { name: "Document Studio", href: "/next-gen/studio/document-reader" },
             { name: "Mail Studio", href: "/next-gen/studio/mail-studio" },
-            { name: "Recon Studio", href: "/next-gen/studio/recon-studio" },
-            { name: "Risk Studio", href: "/next-gen/studio/risk-studio" },
-            { name: "Investigation Studio", href: "/next-gen/studio/investigation-studio" },
-          ]
-        },
-        {
-          name: "Automation & AI",
-          icon: Zap,
-          href: "/next-gen/studio/ai-builder",
-          allowedRoles: ALL_ROLES,
-          subItems: [
-            { name: "Agent Builder", href: "/next-gen/studio/ai-builder" },
-            { name: "Bot Library", href: "/next-gen/studio/bot-library" },
-          ]
-        },
-        {
-          name: "Data",
-          icon: Database,
-          href: "/next-gen/studio/designer?tab=global-data",
-          allowedRoles: TENANT_UP,
-          subItems: [
+            { name: "AI Agent Builder", href: "/next-gen/studio/ai-builder" },
             { name: "Data Hub", href: "/next-gen/studio/designer?tab=global-data" },
-            { name: "Asset Library", href: "/next-gen/studio/assets" },
+            { name: "Assets & Credentials", href: "/next-gen/studio/assets" },
           ]
         },
         {
-          name: "Quality",
+          name: "Test",
           icon: ClipboardCheck,
           href: "/next-gen/studio/debug",
           allowedRoles: ALL_ROLES,
           subItems: [
             { name: "Test Studio", href: "/next-gen/studio/debug" },
+            { name: "Review & Approval", href: "/next-gen/lifecycle/review" },
           ]
         },
         {
-          name: "Release",
+          name: "Deploy",
           icon: Rocket,
           href: "/next-gen/studio/deploy",
           allowedRoles: ALL_ROLES,
           subItems: [
-            { name: "Deployment", href: "/next-gen/studio/deploy" },
+            { name: "Release Manager", href: "/next-gen/studio/deploy" },
+            { name: "Bot Library", href: "/next-gen/studio/bot-library" },
           ]
-        }
-      ]
-    },
-    {
-      title: "SHARED SERVICES",
-      items: [
+        },
         {
-          name: "Robot Monitoring",
-          icon: Activity,
+          name: "Run & Operate",
+          icon: Zap,
+          href: "/next-gen/workspace",
+          allowedRoles: ALL_ROLES,
+          subItems: [
+            { name: "Projects", href: "/next-gen/workspace/projects" },
+            { name: "Queues", href: "/next-gen/workspace/queues" },
+            { name: "Jobs / Runs", href: "/next-gen/workspace/jobs" },
+            { name: "Schedules", href: "/next-gen/workspace/schedules" },
+            { name: "Bot Agents", href: "/next-gen/bot-agents" },
+          ]
+        },
+        {
+          name: "Monitor & Analyse",
+          icon: BarChart3,
           href: "/next-gen/bot-monitoring",
           allowedRoles: ALL_ROLES,
-        },
-        {
-          name: "Robot Agents",
-          icon: UserCog,
-          href: "/next-gen/bot-agents",
-          allowedRoles: ALL_ROLES,
           subItems: [
-            { name: "Agent Overview", href: "/next-gen/bot-agents" },
-            { name: "Run Schedules", href: "/next-gen/bot-agents/schedules" },
-            { name: "AI Agent Chat", href: "/next-gen/bot-agents/chat" },
-            { name: "Setup New Agent", href: "/next-gen/bot-agents/activation", allowedRoles: ["Platform Admin", "Admin User"] },
-          ]
-        },
-        {
-          name: "Reports",
-          icon: BarChart3,
-          href: "/next-gen/reports",
-          allowedRoles: ALL_ROLES,
-          subItems: [
+            { name: "Live Monitoring", href: "/next-gen/bot-monitoring" },
+            { name: "Execution Logs", href: "/next-gen/workspace/logs" },
             { name: "Queue Analytics", href: "/next-gen/queues" },
-            { name: "Execution Insights", href: "/next-gen/reports/execution" },
             { name: "ROI Analytics", href: "/next-gen/reports/roi" },
           ]
         },
+      ]
+    },
+    // ── Utilities ──────────────────────────────────────────────────────────────
+    {
+      title: "UTILITIES",
+      items: [
         {
           name: "Downloads",
           icon: Download,

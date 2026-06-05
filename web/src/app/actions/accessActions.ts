@@ -65,47 +65,40 @@ export async function createAppUser(data: { email: string; fullName: string; rol
 
 // --- Roles ---
 
+// Role elevation order — higher = more privileged (controls sort order in UI)
+const ROLE_ELEVATION: Record<string, number> = {
+  "Platform Admin": 100,
+  "Customer Admin": 90,
+  "Tenant Admin": 80,
+  "Security Admin": 70,
+  "Solution Architect": 60,
+  "Business Approver": 50,
+  "Developer": 45,
+  "Analyst": 40,
+  "Tester": 35,
+  "Business User": 30,
+  "Dashboard User": 25,
+  "Auditor": 20,
+  "User": 10,
+};
+
 export async function getIdentityRoles(userRole?: string) {
   try {
     const whereClause: any = {};
-    
-    // Hide Platform Admin role from everyone except Platform Admins
+    // Platform Admin role only visible to Platform Admins
     if (userRole !== "Platform Admin") {
       whereClause.name = { not: "Platform Admin" };
     }
 
     const roles = await prisma.appRole.findMany({
       where: whereClause,
-      include: {
-        _count: {
-          select: { users: true }
-        }
-      }
+      include: { _count: { select: { users: true } } },
+      orderBy: [{ isSystem: "desc" }, { scope: "asc" }, { name: "asc" }],
     });
 
-    // Elevation-based weight map
-    const weightMap: Record<string, number> = {
-      "Platform Admin": 100,
-      "Admin User": 90,
-      "Tenant Admin": 80,
-      "Executive / CXO": 70,
-      "Business Unit Head": 65,
-      "RPA CoE Lead / Automation Director": 60,
-      "Solution Architect (RPA + AI)": 55,
-      "Security & Compliance Officer": 50,
-      "Technical Architect": 45,
-      "RPA Developer (Senior / Junior)": 40,
-      "AI/ML Engineer": 35,
-      "QA / Test Engineer": 30,
-      "Bot Controller / Operator": 25,
-      "Support Engineer (L2/L3)": 20,
-      "Infrastructure Admin": 15,
-      "Business SME (Subject Matter Expert)": 10,
-      "Process Owner": 5,
-      "Business User (End User / Citizen User)": 1
-    };
-
-    return roles.sort((a, b) => (weightMap[b.name] || 0) - (weightMap[a.name] || 0));
+    return JSON.parse(JSON.stringify(
+      roles.sort((a, b) => (ROLE_ELEVATION[b.name] || 0) - (ROLE_ELEVATION[a.name] || 0))
+    ));
   } catch (error) {
     console.error("Error fetching identity roles:", error);
     return [];
@@ -116,18 +109,27 @@ export async function getIdentityRoles(userRole?: string) {
 
 export async function getIdentityGroups() {
   try {
-    return await prisma.appGroup.findMany({
+    const groups = await prisma.appGroup.findMany({
       include: {
-        _count: {
-          select: { users: true }
-        },
-        mappings: {
-          include: {
-            internalRole: true
-          }
-        }
-      }
+        _count: { select: { users: true } },
+        mappings: { include: { internalRole: true } },
+      },
+      orderBy: { name: "asc" },
     });
+
+    // Parse structured description JSON (pre-built groups store metadata as JSON)
+    return JSON.parse(JSON.stringify(groups.map(g => {
+      let meta: any = {};
+      try { if (g.description?.startsWith("{")) meta = JSON.parse(g.description); } catch {}
+      return {
+        ...g,
+        displayDescription: meta.description || g.description || "",
+        rationale: meta.rationale || "",
+        category: meta.category || "Custom",
+        isPrebuilt: meta.isPrebuilt || false,
+        defaultRoles: meta.defaultRoles || [],
+      };
+    })));
   } catch (error) {
     console.error("Error fetching identity groups:", error);
     return [];
@@ -137,151 +139,180 @@ export async function getIdentityGroups() {
 // --- Integration & Security ---
 
 export async function getIdentityProviders() {
-  return [];
+  try {
+    const providers = await prisma.identityProvider.findMany({ orderBy: { createdAt: "desc" } });
+    return JSON.parse(JSON.stringify(providers));
+  } catch { return []; }
 }
 
 export async function getGroupMappings() {
-  return [];
+  try {
+    const mappings = await prisma.groupMapping.findMany({
+      include: {
+        provider: { select: { id: true, name: true, type: true } },
+        internalRole:  { select: { id: true, name: true } },
+        internalGroup: { select: { id: true, name: true } },
+      },
+      orderBy: { priority: "asc" },
+    });
+    return JSON.parse(JSON.stringify(mappings));
+  } catch { return []; }
+}
+
+export async function createGroupMappingAction(payload: {
+  providerId: string;
+  externalGroupName: string;
+  internalRoleId?: string;
+  internalGroupId?: string;
+  priority?: number;
+}) {
+  try {
+    const mapping = await prisma.groupMapping.create({
+      data: {
+        providerId: payload.providerId,
+        externalGroupName: payload.externalGroupName,
+        internalRoleId: payload.internalRoleId || null,
+        internalGroupId: payload.internalGroupId || null,
+        priority: payload.priority || 1,
+      },
+      include: {
+        provider: { select: { id: true, name: true } },
+        internalRole:  { select: { id: true, name: true } },
+        internalGroup: { select: { id: true, name: true } },
+      },
+    });
+    revalidatePath("/next-gen/admin/access");
+    return { success: true, mapping: JSON.parse(JSON.stringify(mapping)) };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteGroupMappingAction(id: string) {
+  try {
+    await prisma.groupMapping.delete({ where: { id } });
+    revalidatePath("/next-gen/admin/access");
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
 }
 
 // --- Seeding (Internal Utility) ---
+
+// Authoritative 13-role framework — single source of truth
+const FRAMEWORK_ROLES = [
+  {
+    name: "Platform Admin",
+    description: "Platform Super Administrator. Owns the entire platform. Responsible for platform governance, global configuration, customer onboarding, infrastructure management, and license control.",
+    scope: "platform", color: "#ef4444", icon: "crown", isSystem: true,
+  },
+  {
+    name: "Customer Admin",
+    description: "Customer Organization Administrator. Represents the customer organization and is responsible for customer governance, tenant management, and customer-level security controls.",
+    scope: "customer", color: "#f97316", icon: "building2", isSystem: true,
+  },
+  {
+    name: "Tenant Admin",
+    description: "Tenant Administrator. Owns a specific tenant environment. Responsible for user management, group management, tenant configuration, and workspace management within their tenant.",
+    scope: "tenant", color: "#eab308", icon: "layers", isSystem: true,
+  },
+  {
+    name: "Security Admin",
+    description: "Security Administrator. Responsible for platform security policies, MFA enforcement, SSO configuration, audit reviews, and risk management across the organization.",
+    scope: "tenant", color: "#22c55e", icon: "shield-check", isSystem: true,
+  },
+  {
+    name: "Solution Architect",
+    description: "Solution Architect. Responsible for solution design, platform standards, governance frameworks, and design approvals. Reviews and approves architectural decisions.",
+    scope: "tenant", color: "#06b6d4", icon: "compass", isSystem: true,
+  },
+  {
+    name: "Business User",
+    description: "Business User. Business process owner responsible for process ownership, requirement definition, and automation requests. Executes authorized automated processes.",
+    scope: "tenant", color: "#8b5cf6", icon: "briefcase", isSystem: true,
+  },
+  {
+    name: "Business Approver",
+    description: "Business Approver. Responsible for approving workflows, automation releases, production deployments, and AI model activations on behalf of the business.",
+    scope: "tenant", color: "#6366f1", icon: "check-circle", isSystem: true,
+  },
+  {
+    name: "Dashboard User",
+    description: "Dashboard User. Read-only analytics consumer. Responsible for monitoring KPIs, reviewing operational reports, and tracking performance metrics.",
+    scope: "tenant", color: "#14b8a6", icon: "bar-chart", isSystem: true,
+  },
+  {
+    name: "Developer",
+    description: "Developer. Responsible for building automation solutions, AI workflows, application integrations, and APIs. Works within the Automation Studio and AI builder.",
+    scope: "tenant", color: "#3b82f6", icon: "code", isSystem: true,
+  },
+  {
+    name: "Analyst",
+    description: "Analyst. Responsible for business analysis, data analysis, process documentation, and requirement gathering. Bridges business and technical teams.",
+    scope: "tenant", color: "#84cc16", icon: "search", isSystem: true,
+  },
+  {
+    name: "Tester",
+    description: "Tester. Responsible for quality assurance, test planning, functional testing, and UAT support. Validates automations and applications before production release.",
+    scope: "tenant", color: "#f59e0b", icon: "flask", isSystem: true,
+  },
+  {
+    name: "Auditor",
+    description: "Auditor. Responsible for compliance reviews, security audits, and access certifications. Has read-only access to all audit trails, logs, and access records.",
+    scope: "tenant", color: "#64748b", icon: "scroll", isSystem: true,
+  },
+  {
+    name: "User",
+    description: "Standard User. Basic operational user who consumes platform services. Accesses assigned applications, executes authorized functions, and submits requests.",
+    scope: "tenant", color: "#94a3b8", icon: "user", isSystem: true,
+  },
+] as const;
 
 export async function seedIdentityData() {
   try {
     const existingRoles = await prisma.appRole.findMany({ select: { name: true } });
     const existingNames = new Set(existingRoles.map(r => r.name));
 
-    console.log("Synchronizing Enterprise IAM Hierarchy...");
+    console.log("[IAM] Synchronizing framework roles...");
 
     await prisma.$transaction(async (tx) => {
-      // Helper to create role with resource if missing
-      const ensureRole = async (name: string, description: string, permissions: any[], isSystem: boolean = false) => {
-        if (existingNames.has(name)) return;
-        
-        const resource = await tx.resource.create({
-          data: {
-            resourceType: "IAM_ROLE",
-            name,
-            status: "ACTIVE"
-          }
-        });
-        return await tx.appRole.create({
-          data: {
-            name,
-            description,
-            permissions: JSON.stringify(permissions.map(p => typeof p === 'string' ? p : JSON.stringify(p))),
-            isSystem,
-            resourceId: resource.id
-          }
-        });
-      };
+      // Upsert all 13 framework roles — create if missing, update description/metadata if exists
+      for (const r of FRAMEWORK_ROLES) {
+        const existing = await tx.appRole.findUnique({ where: { name: r.name } });
+        if (!existing) {
+          const resource = await tx.resource.create({
+            data: { resourceType: "IAM_ROLE", name: r.name, status: "ACTIVE" }
+          });
+          await tx.appRole.create({
+            data: {
+              name: r.name, description: r.description, isSystem: r.isSystem,
+              scope: r.scope, color: r.color, icon: r.icon,
+              isCustom: false, resourceId: resource.id,
+            }
+          });
+        } else {
+          await tx.appRole.update({
+            where: { name: r.name },
+            data: {
+              description: r.description, isSystem: r.isSystem,
+              scope: r.scope, color: r.color, icon: r.icon, isCustom: false,
+            }
+          });
+        }
+      }
 
-      // --- Administrative Layer (NON-CONFIGURABLE) ---
-      const platformAdmin = await ensureRole("Platform Admin", "Global sovereign with full orchestration authority across all pods.", ["GLOBAL_ADMIN", "IAM_ACCESS", "SYSTEM_CONFIG"], true);
-      await ensureRole("Admin User", "Top-level administrative authority for a specific Customer organization.", ["TENANT_ADMIN", "USER_INVITE", "ORG_CONFIG"], true);
-      await ensureRole("Tenant Admin", "Administrative control over a specific Tenant/Department instance.", ["TENANT_CONFIG", "USER_MANAGEMENT"], true);
-
-      // --- Ensure Internal Identity Provider ---
+      // Ensure internal identity provider
       const existingProvider = await tx.identityProvider.findFirst({ where: { name: "Platform Internal" } });
       if (!existingProvider) {
         await tx.identityProvider.create({
-          data: {
-            name: "Platform Internal",
-            type: "INTERNAL",
-            configJson: "{}",
-            syncStatus: "Active"
-          }
+          data: { name: "Platform Internal", type: "INTERNAL", configJson: "{}", syncStatus: "Active" }
         });
       }
 
-      // --- Executive Layer ---
-      await ensureRole("Executive / CXO", "Strategic visibility and ROI tracking. Portfolio-level analytics and financial metrics.", [{
-        menus: ["LIFECYCLE"],
-        functions: { "ASSESSMENT": ["View"], "ROI_CALC": ["View"], "PROJECTS": ["View"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("Business Unit Head", "Domain owner. Approves automation demand, monitors department KPIs and budgets.", [{
-        menus: ["LIFECYCLE", "TENANT_HUB"],
-        functions: { "ASSESSMENT": ["View", "Modify"], "ROI_CALC": ["View"], "REVIEW_APPROVAL": ["Execute"], "PROJECTS": ["View"] },
-        tenants: [], folders: []
-      }]);
-
-      // --- Governance & Strategy ---
-      await ensureRole("RPA CoE Lead / Automation Director", "Governance and scaling lead. Defines standards and governs license allocation.", [{
-        menus: ["LIFECYCLE", "TENANT_HUB", "ADMIN"],
-        functions: { "PROJECTS": ["View", "Modify", "Delete"], "USER_DIRECTORY": ["View", "Modify"], "ACCESS_GROUPS": ["View", "Modify"], "CUSTOM_ROLES": ["View", "Modify"], "FOLDERS": ["View", "Modify"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("Solution Architect (RPA + AI)", "End-to-end design across environments. Integration lead for APIs and AI models.", [{
-        menus: ["LIFECYCLE", "TENANT_HUB", "STUDIO"],
-        functions: { "ASSESSMENT": ["View", "Modify"], "STUDIO_DESIGNER": ["View", "Modify", "Execute"], "AI_BUILDER": ["View", "Modify", "Execute"], "DEPLOYMENT": ["View", "Execute"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("Security & Compliance Officer", "Risk and audit lead. Monitors credential usage and ensures regulatory compliance.", [{
-        menus: ["ADMIN", "TENANT_HUB"],
-        functions: { "LOGS": ["View"], "USER_DIRECTORY": ["View"], "FOLDERS": ["View"], "MONITORING": ["View"] },
-        tenants: [], folders: []
-      }]);
-
-      // --- Delivery & Build ---
-      await ensureRole("Technical Architect", "Platform and infrastructure design. Control Room admin and queue architect.", [{
-        menus: ["STUDIO", "TENANT_HUB", "AGENTS"],
-        functions: { "STUDIO_DESIGNER": ["View", "Modify", "Execute"], "QUEUES": ["View", "Modify", "Execute"], "SCHEDULES": ["View", "Modify", "Execute"], "AGENT_SETUP": ["View", "Modify", "Execute"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("RPA Developer", "Builds automations. Workflow design, exception handling, and API integration.", [{
-        menus: ["STUDIO", "TENANT_HUB"],
-        functions: { "STUDIO_DESIGNER": ["View", "Create", "Modify", "Execute"], "BOT_LIBRARY": ["View", "Upload"], "PROJECTS": ["View", "Create"], "LOGS": ["View"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("AI/ML Engineer", "Builds AI models and services. Manages AI pipelines and inference endpoints.", [{
-        menus: ["STUDIO"],
-        functions: { "AI_BUILDER": ["View", "Create", "Modify", "Execute"], "OBJECT_FINDER": ["View", "Execute"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("QA / Test Engineer", "Validates automations. Executes bots in UAT and manages regression testing.", [{
-        menus: ["STUDIO", "TENANT_HUB"],
-        functions: { "STUDIO_DESIGNER": ["View", "Execute"], "LOGS": ["View"], "PROJECTS": ["View"] },
-        tenants: [], folders: []
-      }]);
-
-      // --- Operations ---
-      await ensureRole("Bot Controller / Operator", "Run and monitor bots. Manages queues and retry policies.", [{
-        menus: ["MONITORING", "TENANT_HUB"],
-        functions: { "MONITORING": ["View", "Execute"], "QUEUES": ["View", "Execute"], "SCHEDULES": ["View", "Execute"], "LOGS": ["View"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("Support Engineer (L2/L3)", "Troubleshooting and root cause analysis. Incident management lead.", [{
-        menus: ["MONITORING", "TENANT_HUB"],
-        functions: { "LOGS": ["View", "Execute"], "QUEUES": ["View"], "PROCESSES": ["View"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("Infrastructure Admin", "Platform stability lead. Patch management, backups, and resource scaling.", [{
-        menus: ["ADMIN", "AGENTS"],
-        functions: { "AGENT_SETUP": ["View", "Modify", "Execute"], "FOLDERS": ["View", "Modify"] },
-        tenants: [], folders: []
-      }]);
-
-      // --- Business Layer ---
-      await ensureRole("Business SME", "Process knowledge lead. Defines business rules and validates logic.", [{
-        menus: ["LIFECYCLE"],
-        functions: { "ASSESSMENT": ["View", "Modify"], "REQUIREMENTS": ["View", "Modify"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("Process Owner", "Process lifecycle owner. Approves automation changes and defines SLAs.", [{
-        menus: ["LIFECYCLE"],
-        functions: { "REVIEW_APPROVAL": ["Execute"], "PROJECTS": ["View"] },
-        tenants: [], folders: []
-      }]);
-      await ensureRole("Business User", "End user / Citizen developer. Runs attended bots and submits ideas.", [{
-        menus: ["TENANT_HUB"],
-        functions: { "PROJECTS": ["View"], "QUEUES": ["View", "Execute"] },
-        tenants: [], folders: []
-      }]);
-
-      // 3. Create Initial Admin User (if platformAdmin was just created or if we need to link)
-      const pAdmin = platformAdmin || await tx.appRole.findUnique({ where: { name: "Platform Admin" } });
-      if (pAdmin) {
+      // Ensure the platform admin user exists
+      const platformAdminRole = await tx.appRole.findUnique({ where: { name: "Platform Admin" } });
+      if (platformAdminRole) {
         await tx.appUser.upsert({
           where: { email: "ratheesh@zohomail.ca" },
           update: {},
@@ -289,7 +320,7 @@ export async function seedIdentityData() {
             email: "ratheesh@zohomail.ca",
             fullName: "Platform Admin (Ratheesh)",
             status: "Protected",
-            roles: { connect: { id: pAdmin.id } }
+            roles: { connect: { id: platformAdminRole.id } }
           }
         });
       }

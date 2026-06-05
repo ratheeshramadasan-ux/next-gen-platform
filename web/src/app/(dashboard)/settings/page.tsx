@@ -2,7 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Settings, User, Bell, Globe, Database, Key, ShieldCheck, Palette } from "lucide-react";
 
 export default function SettingsPage() {

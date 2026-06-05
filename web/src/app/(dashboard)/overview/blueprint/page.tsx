@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
-import { BlueprintCanvas } from "@/components/dashboard/v2/blueprint-canvas";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
+import { BlueprintCanvas } from "@/components/next-gen/v2/blueprint-canvas";
 import { getBlueprintState, ModuleDossier, BlueprintState } from "@/app/actions/blueprintActions";
 import { useAppContext } from "@/lib/context";
 import { motion, AnimatePresence } from "framer-motion";

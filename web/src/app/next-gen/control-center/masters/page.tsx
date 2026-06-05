@@ -87,17 +87,7 @@ const MASTER_CONFIGS: CategoryConfig[] = [
       { key: "description", label: "Description", type: "textarea", placeholder: "Define customer tier..." }
     ]
   },
-  { 
-    id: "PRIORITY", 
-    label: "Priorities", 
-    icon: LucideIcons.Zap,
-    headers: ["Levels", "Description", "Status"],
-    fields: [
-      { key: "label", label: "Levels", placeholder: "e.g. High" },
-      { key: "description", label: "Description", type: "textarea", placeholder: "SLA requirements..." }
-    ]
-  },
-  { 
+  {
     id: "ENGAGEMENT_TIER", 
     label: "Engagement Tiers", 
     icon: LucideIcons.Sparkles,
@@ -157,7 +147,7 @@ function MastersPageContent() {
           TIMEZONE: res.timezones || [],
           CUSTOMER_TYPE: res.customerTypes || [],
           CLASSIFICATION: res.classifications || [],
-          PRIORITY: res.priorities || [],
+          
           ENGAGEMENT_TIER: res.engagementTiers || []
         });
         console.log("[DICTIONARIES] Updated lookups state keys:", Object.keys(lookups));
@@ -169,7 +159,7 @@ function MastersPageContent() {
         // Still set empty state so page doesn't stay loading
         setLookups({
           INDUSTRY: [], REGION: [], CURRENCY: [], TIMEZONE: [],
-          CUSTOMER_TYPE: [], CLASSIFICATION: [], PRIORITY: [],
+          CUSTOMER_TYPE: [], CLASSIFICATION: [],
           ENGAGEMENT_TIER: []
         });
       }
@@ -177,7 +167,7 @@ function MastersPageContent() {
       console.error("[DICTIONARIES] Error calling getPlatformLookups:", err);
       setLookups({
         INDUSTRY: [], REGION: [], CURRENCY: [], TIMEZONE: [],
-        CUSTOMER_TYPE: [], CLASSIFICATION: [], PRIORITY: [],
+        CUSTOMER_TYPE: [], CLASSIFICATION: [],
         ENGAGEMENT_TIER: []
       });
     } finally {
@@ -416,7 +406,7 @@ function MastersPageContent() {
                       <tr key={item.id} className="hover:bg-muted/10 transition-colors group">
 
                         {/* Icon column — only for registries that have an Icon header */}
-                        {!["TIMEZONE", "CUSTOMER_TYPE", "PRIORITY", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(activeConfig.id) && (
+                        {!["TIMEZONE", "CUSTOMER_TYPE", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(activeConfig.id) && (
                           <td className="px-4 py-2 text-center w-24">
                             <div 
                               className="w-10 h-10 bg-primary/5 border border-primary/20 rounded-sm flex items-center justify-center group-hover:bg-primary/20 transition-all mx-auto shadow-sm"
@@ -461,7 +451,7 @@ function MastersPageContent() {
                         </td>
                         
                         {/* Type/Priority/Classification/Engagement: Description column */}
-                        {["CUSTOMER_TYPE", "PRIORITY", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(activeConfig.id) && (
+                        {["CUSTOMER_TYPE", "CLASSIFICATION", "ENGAGEMENT_TIER"].includes(activeConfig.id) && (
                           <td className="px-4 py-2">
                             <span className="text-xs font-medium text-muted-foreground leading-relaxed">{item.description || "—"}</span>
                           </td>
@@ -628,7 +618,7 @@ function MastersPageContent() {
                       Intelligence Core Active: Commas or Newlines separate individual items.
                     </p>
                     <p className="text-[9px] text-muted-foreground mt-1">
-                      {["INDUSTRY", "TIMEZONE", "CUSTOMER_TYPE", "PRIORITY"].includes(selectedCategory) 
+                      {["INDUSTRY", "TIMEZONE", "CUSTOMER_TYPE"].includes(selectedCategory) 
                         ? "Example: Technology, Healthcare, Energy (Simple List)" 
                         : `Format: ${activeConfig.fields.map(f => f.label).join(", ")} (Structured CSV)`}
                     </p>
@@ -637,7 +627,7 @@ function MastersPageContent() {
 
                 <textarea 
                   required rows={12} value={bulkInput} onChange={e => setBulkInput(e.target.value)}
-                  placeholder={["INDUSTRY", "TIMEZONE", "CUSTOMER_TYPE", "PRIORITY"].includes(selectedCategory) 
+                  placeholder={["INDUSTRY", "TIMEZONE", "CUSTOMER_TYPE"].includes(selectedCategory) 
                     ? "Paste names separated by commas or enters..." 
                     : "Paste CSV rows here..."}
                   className="w-full px-5 py-4 bg-muted/10 border border-border rounded-sm text-sm font-mono outline-none focus:border-primary resize-none custom-scrollbar"

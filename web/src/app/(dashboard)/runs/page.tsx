@@ -4,7 +4,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { getWorkflowExecutions, getExecutionMetrics } from "@/app/actions/executionActions";
 import { useAppContext } from "@/lib/context";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { ListFilter, AlertCircle, Play, CheckCircle2, RefreshCw, Activity } from "lucide-react";
 
 export default function RunsPage() {

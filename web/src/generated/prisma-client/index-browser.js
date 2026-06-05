@@ -199,7 +199,8 @@ exports.Prisma.TenantScalarFieldEnum = {
   customerId: 'customerId',
   resourceId: 'resourceId',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  deletedAt: 'deletedAt'
 };
 
 exports.Prisma.TenantConfigScalarFieldEnum = {
@@ -282,6 +283,11 @@ exports.Prisma.AppUserScalarFieldEnum = {
   verificationToken: 'verificationToken',
   lastLogin: 'lastLogin',
   isGovernanceLocked: 'isGovernanceLocked',
+  mfaEnabled: 'mfaEnabled',
+  mfaMethod: 'mfaMethod',
+  jobTitle: 'jobTitle',
+  department: 'department',
+  avatarUrl: 'avatarUrl',
   customerId: 'customerId',
   tenantId: 'tenantId',
   createdAt: 'createdAt',
@@ -293,7 +299,16 @@ exports.Prisma.AppRoleScalarFieldEnum = {
   name: 'name',
   description: 'description',
   isSystem: 'isSystem',
+  isCustom: 'isCustom',
   permissions: 'permissions',
+  scope: 'scope',
+  color: 'color',
+  icon: 'icon',
+  parentRoleId: 'parentRoleId',
+  customerId: 'customerId',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
   resourceId: 'resourceId'
 };
 
@@ -301,7 +316,99 @@ exports.Prisma.AppGroupScalarFieldEnum = {
   id: 'id',
   name: 'name',
   description: 'description',
+  customerId: 'customerId',
+  tenantId: 'tenantId',
+  createdAt: 'createdAt',
   resourceId: 'resourceId'
+};
+
+exports.Prisma.PermissionDefinitionScalarFieldEnum = {
+  id: 'id',
+  resource: 'resource',
+  action: 'action',
+  displayName: 'displayName',
+  description: 'description',
+  category: 'category',
+  isSystem: 'isSystem'
+};
+
+exports.Prisma.RolePermissionScalarFieldEnum = {
+  id: 'id',
+  roleId: 'roleId',
+  permissionId: 'permissionId',
+  effect: 'effect',
+  conditions: 'conditions'
+};
+
+exports.Prisma.UserPermissionOverrideScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  permissionId: 'permissionId',
+  effect: 'effect',
+  grantedBy: 'grantedBy',
+  reason: 'reason',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.RoleTenantScopeScalarFieldEnum = {
+  id: 'id',
+  roleId: 'roleId',
+  tenantId: 'tenantId',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.SodRuleScalarFieldEnum = {
+  id: 'id',
+  roleAId: 'roleAId',
+  roleBId: 'roleBId',
+  severity: 'severity',
+  description: 'description',
+  isActive: 'isActive',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MfaPolicyScalarFieldEnum = {
+  id: 'id',
+  customerId: 'customerId',
+  tenantId: 'tenantId',
+  isEnforced: 'isEnforced',
+  allowedMethods: 'allowedMethods',
+  gracePeriodDays: 'gracePeriodDays',
+  bypassRoles: 'bypassRoles',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SessionPolicyScalarFieldEnum = {
+  id: 'id',
+  customerId: 'customerId',
+  tenantId: 'tenantId',
+  sessionTimeoutMinutes: 'sessionTimeoutMinutes',
+  idleTimeoutMinutes: 'idleTimeoutMinutes',
+  maxConcurrentSessions: 'maxConcurrentSessions',
+  requireDeviceTrust: 'requireDeviceTrust',
+  allowedIpRanges: 'allowedIpRanges',
+  geoRestrictions: 'geoRestrictions',
+  riskBasedAuthEnabled: 'riskBasedAuthEnabled',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AccessRequestScalarFieldEnum = {
+  id: 'id',
+  requesterId: 'requesterId',
+  targetUserId: 'targetUserId',
+  roleId: 'roleId',
+  permissionId: 'permissionId',
+  customerId: 'customerId',
+  tenantId: 'tenantId',
+  justification: 'justification',
+  status: 'status',
+  reviewedBy: 'reviewedBy',
+  reviewedAt: 'reviewedAt',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.SubscriptionPlanScalarFieldEnum = {
@@ -365,23 +472,6 @@ exports.Prisma.LookupRegionScalarFieldEnum = {
   category: 'category',
   isActive: 'isActive',
   isGovernanceLocked: 'isGovernanceLocked'
-};
-
-exports.Prisma.LookupClassificationScalarFieldEnum = {
-  id: 'id',
-  label: 'label',
-  isActive: 'isActive',
-  isGovernanceLocked: 'isGovernanceLocked',
-  category: 'category',
-  description: 'description'
-};
-
-exports.Prisma.LookupPriorityScalarFieldEnum = {
-  id: 'id',
-  label: 'label',
-  isActive: 'isActive',
-  isGovernanceLocked: 'isGovernanceLocked',
-  description: 'description'
 };
 
 exports.Prisma.LookupCurrencyScalarFieldEnum = {
@@ -936,7 +1026,19 @@ exports.Prisma.ExecutionRunScalarFieldEnum = {
   inputData: 'inputData',
   outputData: 'outputData',
   startedAt: 'startedAt',
-  finishedAt: 'finishedAt'
+  finishedAt: 'finishedAt',
+  generationId: 'generationId'
+};
+
+exports.Prisma.ExecutionEventScalarFieldEnum = {
+  id: 'id',
+  executionId: 'executionId',
+  eventType: 'eventType',
+  payload: 'payload',
+  correlationId: 'correlationId',
+  causationId: 'causationId',
+  rootExecutionId: 'rootExecutionId',
+  timestamp: 'timestamp'
 };
 
 exports.Prisma.ExecutionLogScalarFieldEnum = {
@@ -1141,17 +1243,373 @@ exports.Prisma.StudioExecutionNodeLogScalarFieldEnum = {
   stackTrace: 'stackTrace'
 };
 
+exports.Prisma.BusinessUnitScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  name: 'name',
+  description: 'description',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.DiscoveryAssessmentScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  organizationId: 'organizationId',
+  businessUnitId: 'businessUnitId',
+  environmentType: 'environmentType',
+  regionId: 'regionId',
+  status: 'status',
+  createdBy: 'createdBy',
+  resourceId: 'resourceId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.DiscoveryAssetScalarFieldEnum = {
+  id: 'id',
+  assessmentId: 'assessmentId',
+  hostname: 'hostname',
+  ipAddress: 'ipAddress',
+  assetType: 'assetType',
+  osType: 'osType',
+  osVersion: 'osVersion',
+  criticality: 'criticality',
+  environmentId: 'environmentId',
+  regionId: 'regionId',
+  owner: 'owner',
+  internetFacing: 'internetFacing',
+  discoveredDate: 'discoveredDate',
+  metadata: 'metadata',
+  resourceId: 'resourceId',
+  organizationId: 'organizationId'
+};
+
+exports.Prisma.DiscoveryAccountScalarFieldEnum = {
+  id: 'id',
+  assetId: 'assetId',
+  username: 'username',
+  accountType: 'accountType',
+  privilegedLevel: 'privilegedLevel',
+  sharedAccount: 'sharedAccount',
+  orphaned: 'orphaned',
+  mfaEnabled: 'mfaEnabled',
+  lastUsed: 'lastUsed'
+};
+
+exports.Prisma.DiscoveryConnectorScalarFieldEnum = {
+  id: 'id',
+  connectorType: 'connectorType',
+  name: 'name',
+  status: 'status',
+  config: 'config',
+  resourceId: 'resourceId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.DiscoveryJobScalarFieldEnum = {
+  id: 'id',
+  assessmentId: 'assessmentId',
+  connectorId: 'connectorId',
+  status: 'status',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  results: 'results'
+};
+
+exports.Prisma.ComplianceFrameworkScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  version: 'version'
+};
+
+exports.Prisma.ComplianceControlScalarFieldEnum = {
+  id: 'id',
+  frameworkId: 'frameworkId',
+  name: 'name',
+  severity: 'severity',
+  description: 'description'
+};
+
+exports.Prisma.AssetComplianceMappingScalarFieldEnum = {
+  id: 'id',
+  assetId: 'assetId',
+  controlId: 'controlId',
+  status: 'status'
+};
+
+exports.Prisma.RiskFindingScalarFieldEnum = {
+  id: 'id',
+  assetId: 'assetId',
+  riskType: 'riskType',
+  severity: 'severity',
+  description: 'description',
+  remediation: 'remediation'
+};
+
+exports.Prisma.PamPlatformScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  deploymentModel: 'deploymentModel',
+  version: 'version'
+};
+
+exports.Prisma.PamReadinessScalarFieldEnum = {
+  id: 'id',
+  assetId: 'assetId',
+  platformId: 'platformId',
+  cpmReady: 'cpmReady',
+  psmReady: 'psmReady',
+  onboardingStatus: 'onboardingStatus'
+};
+
+exports.Prisma.DiscoveryRecommendationScalarFieldEnum = {
+  id: 'id',
+  assetId: 'assetId',
+  recommendationType: 'recommendationType',
+  recommendationText: 'recommendationText',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MasterCategoryScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  label: 'label',
+  isSystem: 'isSystem'
+};
+
+exports.Prisma.MasterValueScalarFieldEnum = {
+  id: 'id',
+  categoryId: 'categoryId',
+  name: 'name',
+  code: 'code',
+  description: 'description',
+  parentValueId: 'parentValueId',
+  isActive: 'isActive',
+  sortOrder: 'sortOrder',
+  metadata: 'metadata'
+};
+
+exports.Prisma.IntakeConnectorScalarFieldEnum = {
+  id: 'id',
+  customerId: 'customerId',
+  tenantId: 'tenantId',
+  folderId: 'folderId',
+  name: 'name',
+  type: 'type',
+  status: 'status',
+  enabled: 'enabled',
+  pollingInterval: 'pollingInterval',
+  configuration: 'configuration',
+  lastHeartbeat: 'lastHeartbeat',
+  lastSync: 'lastSync',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  createdBy: 'createdBy'
+};
+
+exports.Prisma.IntakeRunScalarFieldEnum = {
+  id: 'id',
+  connectorId: 'connectorId',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  status: 'status',
+  filesProcessed: 'filesProcessed',
+  errorMessage: 'errorMessage',
+  logs: 'logs'
+};
+
+exports.Prisma.IntakeDocumentScalarFieldEnum = {
+  id: 'id',
+  connectorId: 'connectorId',
+  fileName: 'fileName',
+  storagePath: 'storagePath',
+  status: 'status',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.UserPersonalizationScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  navigationMode: 'navigationMode',
+  themeKey: 'themeKey',
+  animationLevel: 'animationLevel',
+  leftNavCollapsed: 'leftNavCollapsed',
+  immersiveEffectsEnabled: 'immersiveEffectsEnabled',
+  aiCommandBarEnabled: 'aiCommandBarEnabled',
+  densityMode: 'densityMode',
+  fontScale: 'fontScale',
+  soundEffectsEnabled: 'soundEffectsEnabled',
+  defaultLandingService: 'defaultLandingService',
+  dashboardLayout: 'dashboardLayout',
+  customSettings: 'customSettings',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PlatformServiceScalarFieldEnum = {
+  id: 'id',
+  serviceKey: 'serviceKey',
+  displayName: 'displayName',
+  description: 'description',
+  route: 'route',
+  iconType: 'iconType',
+  iconConfig: 'iconConfig',
+  accentColor: 'accentColor',
+  animationType: 'animationType',
+  category: 'category',
+  enabled: 'enabled',
+  displayOrder: 'displayOrder',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.RoleServiceAccessScalarFieldEnum = {
+  id: 'id',
+  roleId: 'roleId',
+  serviceId: 'serviceId',
+  canAccess: 'canAccess',
+  canCustomize: 'canCustomize',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.UserFavoriteServiceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  serviceId: 'serviceId',
+  displayOrder: 'displayOrder',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.UserRecentServiceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  serviceId: 'serviceId',
+  lastAccessedAt: 'lastAccessedAt',
+  accessCount: 'accessCount'
+};
+
+exports.Prisma.PlatformThemeScalarFieldEnum = {
+  id: 'id',
+  themeKey: 'themeKey',
+  displayName: 'displayName',
+  themeConfig: 'themeConfig',
+  isDefault: 'isDefault',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.AiModelRegistryScalarFieldEnum = {
+  id: 'id',
+  modelKey: 'modelKey',
+  modelName: 'modelName',
+  category: 'category',
+  modelType: 'modelType',
+  version: 'version',
+  framework: 'framework',
+  runtime: 'runtime',
+  inferenceType: 'inferenceType',
+  supportsGpu: 'supportsGpu',
+  supportsCpu: 'supportsCpu',
+  requiresGpu: 'requiresGpu',
+  supportedRegions: 'supportedRegions',
+  supportedLanguages: 'supportedLanguages',
+  confidenceScore: 'confidenceScore',
+  deploymentStatus: 'deploymentStatus',
+  packagePath: 'packagePath',
+  dockerImage: 'dockerImage',
+  checksumSha256: 'checksumSha256',
+  uploadedBy: 'uploadedBy',
+  uploadedAt: 'uploadedAt',
+  isPrebuilt: 'isPrebuilt',
+  isActive: 'isActive',
+  metadata: 'metadata',
+  benchmarkResults: 'benchmarkResults',
+  schemaDefinition: 'schemaDefinition'
+};
+
+exports.Prisma.AiModelVersionScalarFieldEnum = {
+  id: 'id',
+  modelId: 'modelId',
+  version: 'version',
+  packagePath: 'packagePath',
+  changelog: 'changelog',
+  releasedBy: 'releasedBy',
+  releasedAt: 'releasedAt',
+  rollbackSupported: 'rollbackSupported',
+  validationStatus: 'validationStatus',
+  benchmarkScore: 'benchmarkScore',
+  isCurrent: 'isCurrent'
+};
+
+exports.Prisma.AiModelRuntimeMappingScalarFieldEnum = {
+  id: 'id',
+  modelId: 'modelId',
+  runtimeEngine: 'runtimeEngine',
+  executionMode: 'executionMode',
+  dockerImage: 'dockerImage',
+  cpuRequired: 'cpuRequired',
+  gpuRequired: 'gpuRequired',
+  ramRequiredGb: 'ramRequiredGb',
+  inferenceTimeoutSec: 'inferenceTimeoutSec',
+  scalingPolicy: 'scalingPolicy'
+};
+
+exports.Prisma.ExtractionFieldScalarFieldEnum = {
+  id: 'id',
+  modelId: 'modelId',
+  fieldName: 'fieldName',
+  fieldType: 'fieldType',
+  extractionMode: 'extractionMode',
+  confidenceThreshold: 'confidenceThreshold',
+  pageStrategy: 'pageStrategy',
+  aiEnabled: 'aiEnabled',
+  validationEnabled: 'validationEnabled',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.ExtractionAnchorScalarFieldEnum = {
+  id: 'id',
+  fieldId: 'fieldId',
+  anchorType: 'anchorType',
+  anchorValue: 'anchorValue',
+  relativePosition: 'relativePosition',
+  confidence: 'confidence',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.ExtractionRepeatRegionScalarFieldEnum = {
+  id: 'id',
+  modelId: 'modelId',
+  regionName: 'regionName',
+  detectionMode: 'detectionMode',
+  dynamicHeight: 'dynamicHeight',
+  extractionDirection: 'extractionDirection',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.ExtractionTableScalarFieldEnum = {
+  id: 'id',
+  modelId: 'modelId',
+  tableName: 'tableName',
+  multiPage: 'multiPage',
+  continuationDetection: 'continuationDetection',
+  nestedRows: 'nestedRows',
+  aiRepair: 'aiRepair',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
 };
 
-exports.Prisma.JsonNullValueInput = {
+exports.Prisma.NullableJsonNullValueInput = {
+  DbNull: Prisma.DbNull,
   JsonNull: Prisma.JsonNull
 };
 
-exports.Prisma.NullableJsonNullValueInput = {
-  DbNull: Prisma.DbNull,
+exports.Prisma.JsonNullValueInput = {
   JsonNull: Prisma.JsonNull
 };
 
@@ -1180,7 +1638,9 @@ exports.ResourceType = exports.$Enums.ResourceType = {
   BOT_HOST: 'BOT_HOST',
   IAM_ROLE: 'IAM_ROLE',
   IAM_GROUP: 'IAM_GROUP',
-  APPLICATION: 'APPLICATION'
+  APPLICATION: 'APPLICATION',
+  DISCOVERY_ASSESSMENT: 'DISCOVERY_ASSESSMENT',
+  DISCOVERY_CONNECTOR: 'DISCOVERY_CONNECTOR'
 };
 
 exports.DeploymentStatus = exports.$Enums.DeploymentStatus = {
@@ -1192,6 +1652,96 @@ exports.DeploymentStatus = exports.$Enums.DeploymentStatus = {
   SUCCESS: 'SUCCESS',
   FAILED: 'FAILED',
   ROLLED_BACK: 'ROLLED_BACK'
+};
+
+exports.EnvironmentType = exports.$Enums.EnvironmentType = {
+  ON_PREM: 'ON_PREM',
+  CLOUD: 'CLOUD',
+  HYBRID: 'HYBRID',
+  MULTI_CLOUD: 'MULTI_CLOUD',
+  AIR_GAPPED: 'AIR_GAPPED'
+};
+
+exports.AssessmentStatus = exports.$Enums.AssessmentStatus = {
+  DRAFT: 'DRAFT',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  ARCHIVED: 'ARCHIVED'
+};
+
+exports.AssetType = exports.$Enums.AssetType = {
+  WINDOWS: 'WINDOWS',
+  LINUX: 'LINUX',
+  DATABASE: 'DATABASE',
+  KUBERNETES: 'KUBERNETES',
+  CONTAINER: 'CONTAINER',
+  VMWARE: 'VMWARE',
+  NETWORK: 'NETWORK',
+  SAAS: 'SAAS',
+  CLOUD: 'CLOUD',
+  MAINFRAME: 'MAINFRAME',
+  API: 'API',
+  CERTIFICATE: 'CERTIFICATE'
+};
+
+exports.AccountType = exports.$Enums.AccountType = {
+  USER: 'USER',
+  SERVICE_ACCOUNT: 'SERVICE_ACCOUNT',
+  PRIVILEGED_GROUP: 'PRIVILEGED_GROUP',
+  LOCAL_ADMIN: 'LOCAL_ADMIN',
+  SSH_KEY: 'SSH_KEY',
+  API_TOKEN: 'API_TOKEN',
+  BREAK_GLASS: 'BREAK_GLASS',
+  SHARED: 'SHARED'
+};
+
+exports.DiscoveryJobStatus = exports.$Enums.DiscoveryJobStatus = {
+  PENDING: 'PENDING',
+  RUNNING: 'RUNNING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED'
+};
+
+exports.RiskSeverity = exports.$Enums.RiskSeverity = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL'
+};
+
+exports.ComplianceStatus = exports.$Enums.ComplianceStatus = {
+  COMPLIANT: 'COMPLIANT',
+  NON_COMPLIANT: 'NON_COMPLIANT',
+  EXEMPT: 'EXEMPT',
+  NOT_APPLICABLE: 'NOT_APPLICABLE'
+};
+
+exports.OnboardingStatus = exports.$Enums.OnboardingStatus = {
+  READY: 'READY',
+  NOT_READY: 'NOT_READY',
+  IN_PROGRESS: 'IN_PROGRESS',
+  ONBOARDED: 'ONBOARDED'
+};
+
+exports.ConnectorType = exports.$Enums.ConnectorType = {
+  EMAIL: 'EMAIL',
+  S3: 'S3',
+  AZURE_BLOB: 'AZURE_BLOB',
+  SFTP: 'SFTP'
+};
+
+exports.ConnectorStatus = exports.$Enums.ConnectorStatus = {
+  DRAFT: 'DRAFT',
+  INITIALIZING: 'INITIALIZING',
+  ACTIVE: 'ACTIVE',
+  ERROR: 'ERROR',
+  DISABLED: 'DISABLED'
+};
+
+exports.IntakeRunStatus = exports.$Enums.IntakeRunStatus = {
+  RUNNING: 'RUNNING',
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED'
 };
 
 exports.Prisma.ModelName = {
@@ -1206,6 +1756,14 @@ exports.Prisma.ModelName = {
   AppUser: 'AppUser',
   AppRole: 'AppRole',
   AppGroup: 'AppGroup',
+  PermissionDefinition: 'PermissionDefinition',
+  RolePermission: 'RolePermission',
+  UserPermissionOverride: 'UserPermissionOverride',
+  RoleTenantScope: 'RoleTenantScope',
+  SodRule: 'SodRule',
+  MfaPolicy: 'MfaPolicy',
+  SessionPolicy: 'SessionPolicy',
+  AccessRequest: 'AccessRequest',
   SubscriptionPlan: 'SubscriptionPlan',
   ResourceQuota: 'ResourceQuota',
   IdentityProvider: 'IdentityProvider',
@@ -1213,8 +1771,6 @@ exports.Prisma.ModelName = {
   StandardDictionary: 'StandardDictionary',
   LookupIndustry: 'LookupIndustry',
   LookupRegion: 'LookupRegion',
-  LookupClassification: 'LookupClassification',
-  LookupPriority: 'LookupPriority',
   LookupCurrency: 'LookupCurrency',
   LookupTimezone: 'LookupTimezone',
   LookupCustomerType: 'LookupCustomerType',
@@ -1259,6 +1815,7 @@ exports.Prisma.ModelName = {
   WorkflowNode: 'WorkflowNode',
   WorkflowEdge: 'WorkflowEdge',
   ExecutionRun: 'ExecutionRun',
+  ExecutionEvent: 'ExecutionEvent',
   ExecutionLog: 'ExecutionLog',
   OrganizationSettings: 'OrganizationSettings',
   Deployment: 'Deployment',
@@ -1275,7 +1832,38 @@ exports.Prisma.ModelName = {
   ApplicationAuditLog: 'ApplicationAuditLog',
   StudioWorkflowNode: 'StudioWorkflowNode',
   StudioWorkflowEdge: 'StudioWorkflowEdge',
-  StudioExecutionNodeLog: 'StudioExecutionNodeLog'
+  StudioExecutionNodeLog: 'StudioExecutionNodeLog',
+  BusinessUnit: 'BusinessUnit',
+  DiscoveryAssessment: 'DiscoveryAssessment',
+  DiscoveryAsset: 'DiscoveryAsset',
+  DiscoveryAccount: 'DiscoveryAccount',
+  DiscoveryConnector: 'DiscoveryConnector',
+  DiscoveryJob: 'DiscoveryJob',
+  ComplianceFramework: 'ComplianceFramework',
+  ComplianceControl: 'ComplianceControl',
+  AssetComplianceMapping: 'AssetComplianceMapping',
+  RiskFinding: 'RiskFinding',
+  PamPlatform: 'PamPlatform',
+  PamReadiness: 'PamReadiness',
+  DiscoveryRecommendation: 'DiscoveryRecommendation',
+  MasterCategory: 'MasterCategory',
+  MasterValue: 'MasterValue',
+  IntakeConnector: 'IntakeConnector',
+  IntakeRun: 'IntakeRun',
+  IntakeDocument: 'IntakeDocument',
+  UserPersonalization: 'UserPersonalization',
+  PlatformService: 'PlatformService',
+  RoleServiceAccess: 'RoleServiceAccess',
+  UserFavoriteService: 'UserFavoriteService',
+  UserRecentService: 'UserRecentService',
+  PlatformTheme: 'PlatformTheme',
+  AiModelRegistry: 'AiModelRegistry',
+  AiModelVersion: 'AiModelVersion',
+  AiModelRuntimeMapping: 'AiModelRuntimeMapping',
+  ExtractionField: 'ExtractionField',
+  ExtractionAnchor: 'ExtractionAnchor',
+  ExtractionRepeatRegion: 'ExtractionRepeatRegion',
+  ExtractionTable: 'ExtractionTable'
 };
 
 /**

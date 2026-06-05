@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Plus, Bot, Brain, Zap, Shield, Library, Settings2, Activity, Terminal, ChevronRight, Gauge } from "lucide-react";
 import { getAgentInstances, deployAgentAction, getAgentRuns } from "@/app/actions/agentActions";
 import { useAppContext } from "@/lib/context";

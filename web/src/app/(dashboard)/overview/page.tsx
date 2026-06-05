@@ -1,15 +1,15 @@
 "use client";
 
 import React from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { getExecutionMetrics } from "@/app/actions/executionActions";
 import { getLiveEventStream, PulseEvent } from "@/app/actions/eventActions";
 import { useAppContext } from "@/lib/context";
 import { Zap, ShieldCheck, Activity, Globe, LayoutDashboard, Brain, Cpu, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { KernelPulse } from "@/components/dashboard/v2/kernel-pulse";
-import { EventHub } from "@/components/dashboard/v2/event-hub";
-import { BriefingModal } from "@/components/dashboard/v2/briefing-modal";
+import { KernelPulse } from "@/components/next-gen/v2/kernel-pulse";
+import { EventHub } from "@/components/next-gen/v2/event-hub";
+import { BriefingModal } from "@/components/next-gen/v2/briefing-modal";
 import { getSovereignBriefing, SovereignBriefing } from "@/app/actions/briefingActions";
 
 export default function OverviewPage() {

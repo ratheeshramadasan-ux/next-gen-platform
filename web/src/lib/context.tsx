@@ -58,6 +58,8 @@ export interface Customer {
   customerTier?: string;
   logoUrl?: string | null;
   theme?: string;
+  slug?: string | null;
+  planType?: string;
 }
 
 export interface LogEvent {

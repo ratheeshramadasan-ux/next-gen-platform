@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Lock, Shield, Key, Users, History, AlertCircle, Fingerprint } from "lucide-react";
 import { getTenantUsers } from "@/app/actions/adminActions";
 import { useAppContext } from "@/lib/context";

@@ -3,7 +3,7 @@
 import React from "react";
 import { getComputeContracts, getMarketMetrics } from "@/app/actions/computeActions";
 import { useAppContext } from "@/lib/context";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Search, Store, Zap, CreditCard, Activity, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 

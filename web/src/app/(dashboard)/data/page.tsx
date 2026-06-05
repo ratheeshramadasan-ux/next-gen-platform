@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Database, History, Plus, Download } from "lucide-react";
 import { getDataArtifacts } from "@/app/actions/dataActions";
 import { useAppContext } from "@/lib/context";

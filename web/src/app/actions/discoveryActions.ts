@@ -388,3 +388,46 @@ export async function generateAssessmentReport(assessmentId: string) {
     return { success: false, error: error.message };
   }
 }
+
+// ── Global Resource Registry ──────────────────────────────────────────────────
+
+export async function getAllResources(filters?: { resourceType?: string; status?: string }) {
+  try {
+    const where: any = { deletedAt: null };
+    if (filters?.resourceType) where.resourceType = filters.resourceType;
+    if (filters?.status) where.status = filters.status;
+
+    const resources = await prisma.resource.findMany({
+      where,
+      orderBy: [{ resourceType: "asc" }, { createdAt: "desc" }],
+      take: 500,
+    });
+    return JSON.parse(JSON.stringify(resources));
+  } catch (e: any) {
+    console.error("getAllResources:", e.message);
+    return [];
+  }
+}
+
+export async function getRegistryStats() {
+  try {
+    const [total, byType, tenants, workflows] = await Promise.all([
+      prisma.resource.count({ where: { deletedAt: null } }),
+      prisma.resource.groupBy({
+        by: ["resourceType"],
+        _count: { id: true },
+        where: { deletedAt: null },
+      }),
+      prisma.tenant.count({ where: { deletedAt: null } }),
+      prisma.studioWorkflow.count(),
+    ]);
+
+    const byTypeMap: Record<string, number> = {};
+    byType.forEach(r => { byTypeMap[r.resourceType] = r._count.id; });
+
+    return { total, byType: byTypeMap, tenants, workflows };
+  } catch (e: any) {
+    console.error("getRegistryStats:", e.message);
+    return { total: 0, byType: {}, tenants: 0, workflows: 0 };
+  }
+}

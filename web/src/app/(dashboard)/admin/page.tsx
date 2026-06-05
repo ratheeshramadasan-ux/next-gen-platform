@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { PageContainer } from "@/components/dashboard/v2/page-container";
+import { PageContainer } from "@/components/next-gen/v2/page-container";
 import { Shield, Settings, Users, Server, HardDrive, ListCollapse, PlayCircle, Globe, Activity, Cpu } from "lucide-react";
 import { getTenantDetails, getTenantUsers, updateTenantConfig } from "@/app/actions/adminActions";
 import { useAppContext } from "@/lib/context";
