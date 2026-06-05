@@ -828,29 +828,27 @@ export function StudioCanvas({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Keyboard shortcuts for Undo/Redo
+  // Keyboard shortcuts for Undo/Redo + Select All
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        if (e.shiftKey) {
-          if (canRedo) onRedo?.();
-        } else {
-          if (canUndo) onUndo?.();
-        }
+        if (e.shiftKey) { if (canRedo) onRedo?.(); }
+        else             { if (canUndo) onUndo?.(); }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
         e.preventDefault();
         if (canRedo) onRedo?.();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        // Select All nodes
+        e.preventDefault();
+        setNodes(nds => nds.map(n => ({ ...n, selected: true })));
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onUndo, onRedo, canUndo, canRedo]);
+  }, [onUndo, onRedo, canUndo, canRedo, setNodes]);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -862,6 +860,17 @@ export function StudioCanvas({
     y: number;
     edgeId: string;
   } | null>(null);
+
+  const [paneContextMenu, setPaneContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenu(null);
+    setEdgeContextMenu(null);
+    const x = Math.min(event.clientX, window.innerWidth  - 180 - 8);
+    const y = Math.min(event.clientY, window.innerHeight - 100 - 8);
+    setPaneContextMenu({ x, y });
+  }, []);
 
   // --- Execution Simulation State ---
   const [isRunning, setIsRunning] = useState(false);
@@ -1848,7 +1857,12 @@ export function StudioCanvas({
   const handleNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
       event.preventDefault();
-      setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id });
+      event.stopPropagation();
+      // Clamp so the menu never overflows the viewport
+      const menuW = 220, menuH = 320;
+      const x = Math.min(event.clientX, window.innerWidth  - menuW - 8);
+      const y = Math.min(event.clientY, window.innerHeight - menuH - 8);
+      setContextMenu({ x, y, nodeId: node.id });
     },
     [],
   );
@@ -1861,10 +1875,14 @@ export function StudioCanvas({
   const handleEdgeContextMenu = useCallback(
     (event: React.MouseEvent, edge: Edge) => {
       event.preventDefault();
+      event.stopPropagation();
       setContextMenu(null);
+      const menuW = 200, menuH = 160;
+      const x = Math.min(event.clientX, window.innerWidth  - menuW - 8);
+      const y = Math.min(event.clientY, window.innerHeight - menuH - 8);
       setEdgeContextMenu({
-        x: event.clientX,
-        y: event.clientY,
+        x,
+        y,
         edgeId: edge.id,
       });
     },
@@ -2126,13 +2144,16 @@ export function StudioCanvas({
         onSelectionChange={onSelectionChange}
         onNodeContextMenu={handleNodeContextMenu}
         onEdgeContextMenu={handleEdgeContextMenu}
-        onPaneClick={closeContextMenu}
+        onPaneClick={() => { closeContextMenu(); setPaneContextMenu(null); }}
+        onPaneContextMenu={handlePaneContextMenu}
         nodeTypes={nodeTypes as any}
         edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
         snapToGrid
         snapGrid={[15, 15]}
         fitView={false}
+        minZoom={0.1}
+        maxZoom={3}
         colorMode={rfColorMode}
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={["Backspace", "Delete"]}
@@ -2863,8 +2884,9 @@ export function StudioCanvas({
         )}
       </ReactFlow>
 
-      {/* Right-click Context Menu */}
+      {/* Right-click Context Menu — portal to body so no parent clips it */}
       {contextMenu &&
+        createPortal(
         (() => {
           const ctxNode = getContextNode();
           const isGroup = ctxNode?.data?.type === "group";
@@ -2878,7 +2900,7 @@ export function StudioCanvas({
           ).length;
           return (
             <div
-              className="fixed z-[100] min-w-[200px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-sm shadow-2xl py-1 animate-in fade-in zoom-in-95 duration-150"
+              className="fixed z-[9999] min-w-[200px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-sm shadow-2xl py-1 animate-in fade-in zoom-in-95 duration-150"
               style={{ left: contextMenu.x, top: contextMenu.y }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -2969,6 +2991,18 @@ export function StudioCanvas({
                 <span className="text-xs font-semibold">Copy Node ID</span>
               </button>
 
+              <button
+                onClick={() => {
+                  setNodes(nds => nds.map(n => ({ ...n, selected: true })));
+                  setContextMenu(null);
+                }}
+                className="flex items-center gap-3 w-full px-3 py-1.5 text-left hover:bg-primary/5 text-foreground/70 hover:text-foreground transition-colors"
+              >
+                <MousePointer2 size={13} />
+                <span className="text-xs font-semibold">Select All</span>
+                <span className="text-xs text-muted-foreground/30 ml-auto">⌘A</span>
+              </button>
+
               <div className="h-px bg-border/20 mx-2 my-0.5" />
 
               {/* Visual Controls */}
@@ -3030,10 +3064,11 @@ export function StudioCanvas({
               </button>
             </div>
           )
-        })()}
+        })(), document.body)}
 
-      {/* --- Edge Right-Click Context Menu --- */}
+      {/* --- Edge Right-Click Context Menu — portal to body --- */}
       {edgeContextMenu &&
+        createPortal(
         (() => {
           const ctxEdge = edges.find((e) => e.id === edgeContextMenu.edgeId);
           const sourceLabel =
@@ -3046,7 +3081,7 @@ export function StudioCanvas({
             "?";
           return (
             <div
-              className="fixed z-[100] min-w-[180px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-sm shadow-2xl py-1 animate-in fade-in zoom-in-95 duration-150"
+              className="fixed z-[9999] min-w-[180px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-sm shadow-2xl py-1 animate-in fade-in zoom-in-95 duration-150"
               style={{ left: edgeContextMenu.x, top: edgeContextMenu.y }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -3103,7 +3138,36 @@ export function StudioCanvas({
               </button>
             </div>
           )
-        })()}
+        })(), document.body)}
+
+      {/* Pane (canvas background) right-click menu */}
+      {paneContextMenu && createPortal(
+        <div
+          className="fixed z-[9999] min-w-[180px] bg-card/95 backdrop-blur-xl border border-border/50 rounded-sm shadow-2xl py-1 animate-in fade-in zoom-in-95 duration-150"
+          style={{ left: paneContextMenu.x, top: paneContextMenu.y }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="px-3 py-1.5 border-b border-border/20">
+            <span className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/40">Canvas</span>
+          </div>
+          <button
+            onClick={() => { setNodes(nds => nds.map(n => ({ ...n, selected: true }))); setPaneContextMenu(null); }}
+            className="flex items-center gap-3 w-full px-3 py-1.5 text-left hover:bg-primary/5 text-foreground/70 hover:text-foreground transition-colors"
+          >
+            <MousePointer2 size={13} />
+            <span className="text-xs font-semibold">Select All</span>
+            <span className="text-xs text-muted-foreground/30 ml-auto">⌘A</span>
+          </button>
+          <button
+            onClick={() => { fitView({ duration: 400, padding: 0.15 }); setPaneContextMenu(null); }}
+            className="flex items-center gap-3 w-full px-3 py-1.5 text-left hover:bg-primary/5 text-foreground/70 hover:text-foreground transition-colors"
+          >
+            <Maximize size={13} />
+            <span className="text-xs font-semibold">Fit to View</span>
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
