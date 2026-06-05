@@ -771,6 +771,136 @@ const KB: Record<string, KbEntry> = {
     related: ["Bot Agents", "Action Center", "Queue Management"]
   },
 
+  // ── Flow Studio Designer ────────────────────────────────────────────────────
+  "/next-gen/studio": {
+    module: "Flow Studio",
+    layer: "Layer 3 — Automation Hub",
+    description: "Flow Studio is the visual workflow designer. Open a project from the left panel, build your automation on the canvas by dragging activities from the Activity Library, then run or deploy.",
+    howTo: {
+      steps: [
+        "Select a project from the left folder tree — it opens in the centre canvas.",
+        "Switch the left panel to the Activity Library tab to browse available actions.",
+        "Drag an activity from the library onto the canvas.",
+        "Connect activities by drawing from one node's output handle to the next node's input.",
+        "Click any node to configure it in the Properties panel on the right.",
+        "Press Run (toolbar) to execute in debug mode — watch the spark travel edge by edge.",
+        "Fix any validation errors shown by the top-right indicator, then click Deploy.",
+      ],
+      workflows: [
+        {
+          name: "Build a simple sequential flow",
+          steps: [
+            "Drop a Start node, then drag your activity nodes in order.",
+            "Connect them left-to-right: Start → Action 1 → Action 2 → End.",
+            "Set each node's inputs in the Properties panel.",
+            "Click Run to verify step-by-step execution before deploying.",
+          ],
+        },
+        {
+          name: "Add conditional branching",
+          steps: [
+            "Drag a Decision (IF) node after the step where you need to branch.",
+            "Draw a 'Yes' edge to the action to take when the condition is true.",
+            "Draw a 'No' edge to an alternative action or directly to End.",
+            "Set the condition in Properties — e.g. {status} == 'Approved'.",
+          ],
+        },
+        {
+          name: "Handle errors gracefully",
+          steps: [
+            "Wrap risky activities (API calls, file ops) in a Try Catch node.",
+            "Connect the happy path inside the Try block.",
+            "Connect the Catch output to a Log Message or notification step.",
+            "Set Continue on Error = true on the Try Catch if the flow should proceed regardless.",
+          ],
+        },
+      ],
+      warnings: [
+        "Always add a Start node — flows without one will fail validation.",
+        "Never hard-code credentials. Store them as Assets and reference them by name.",
+        "Test in Debug (slow) mode before deploying to production.",
+      ],
+    },
+    sections: [
+      {
+        title: "Flow Control Activities",
+        description: "Structural building blocks that control how execution moves through the flow.",
+        fields: [
+          { name: "Start", definition: "Entry point — every flow must have exactly one. Execution begins here.", tip: "Connect it directly to your first action." },
+          { name: "End", definition: "Terminates the flow on that path. You can have multiple End nodes for different exit scenarios (success, error, early exit)." },
+          { name: "Decision (IF)", definition: "Evaluates a Boolean expression. Routes to the Yes branch when true, No branch when false.", tip: "Use {variable} syntax to reference variables: {amount} > 1000" },
+          { name: "Parallel Execute", definition: "Splits flow into concurrent branches. All branches must complete before execution continues past the merge point.", tip: "Place a second Parallel node downstream to merge branches back." },
+          { name: "For Each", definition: "Iterates over a collection (list, DataTable, range). Current item is available as {item} inside the loop.", tip: "Use {index} for the zero-based position." },
+          { name: "Try Catch", definition: "Catches exceptions. If any activity inside Try fails, the Catch branch runs instead of stopping the flow.", tip: "Outputs {error} and {errorMessage} in the Catch branch." },
+          { name: "Log Message", definition: "Writes a message to the execution log at the chosen severity (Info / Warning / Error). Ideal for audit trails and debugging." },
+          { name: "Message Box", definition: "Shows a dialog and waits for the user to click OK or Cancel. Attended automation only — not suitable for unattended robots.", tip: "Output {userResponse} contains 'OK' or 'Cancel'." },
+          { name: "Break", definition: "Exits the current loop early, optionally based on a condition expression." },
+        ],
+      },
+      {
+        title: "UI Automation Activities",
+        description: "Interact with desktop and web applications.",
+        fields: [
+          { name: "Click", definition: "Simulates a mouse click on the element matching the CSS/XPath selector or recorded coordinates.", tip: "Use Record App to auto-capture selectors from a live application." },
+          { name: "Type Into", definition: "Types text into an input field keystroke by keystroke. Supports {variable} tokens and control keys like {ENTER}, {TAB}." },
+          { name: "Get Text", definition: "Reads the visible text of a UI element into an output variable.", tip: "Output stored in {text} — use it in expressions or Log Message." },
+          { name: "Open Browser", definition: "Launches Chrome, Edge, or Firefox and navigates to the given URL. Returns a {browserId} for subsequent web actions." },
+          { name: "Extract Table", definition: "Scrapes all rows and columns from an HTML table element into a DataTable variable." },
+          { name: "Wait Element", definition: "Pauses the flow until a UI element reaches the specified state (Visible, Enabled, Hidden) or the timeout is exceeded." },
+        ],
+      },
+      {
+        title: "Data & Spreadsheet Activities",
+        description: "Manipulate variables, DataTables, and Excel files.",
+        fields: [
+          { name: "Assign", definition: "Evaluates the right-hand expression and stores the result in a named variable. Supports math and string concatenation: {price} * {qty}" },
+          { name: "Filter Table", definition: "Returns a new DataTable containing only rows where the condition is true. Example condition: Status == 'Open'" },
+          { name: "Build Table", definition: "Creates a new empty DataTable with the specified column names." },
+          { name: "Add Data Row", definition: "Appends a row of values to an existing DataTable." },
+          { name: "Lookup Table", definition: "Finds the first row in a DataTable where the named column equals the search value." },
+          { name: "Sort Table", definition: "Reorders a DataTable by the specified column, ascending or descending." },
+          { name: "Get Asset", definition: "Retrieves a credential, connection string, or secret from the platform's encrypted vault by asset name. Never hard-code passwords.", tip: "Output stored in {assetValue} — pass it to HTTP Request headers or database connection strings." },
+        ],
+      },
+      {
+        title: "Node Properties Reference",
+        description: "Common settings available on every activity node via the Properties panel.",
+        fields: [
+          { name: "Display Name", definition: "Label shown on the canvas node. Does not affect execution — use it to describe what this specific instance does." },
+          { name: "Timeout (ms)", definition: "Maximum milliseconds the activity may run before throwing a TimeoutException. Default: 30 000 ms (30 seconds)." },
+          { name: "Retry Count", definition: "Number of automatic retries when the activity fails. Set to 3 for unstable network calls or flaky UI elements." },
+          { name: "Retry Interval (ms)", definition: "Milliseconds to wait between retry attempts. Give a slow service time to recover: 2 000–5 000 ms is typical." },
+          { name: "Continue on Error", definition: "When enabled, a failure is logged but the flow keeps running. Use for non-critical steps like sending an optional notification." },
+          { name: "Delay Before / After (ms)", definition: "Wait before or after the activity executes. Useful to pace UI automation on slow applications." },
+          { name: "Log Level", definition: "Controls what severity appears in the execution log for this step: Info (default), Warning, or Error." },
+          { name: "Screenshot on Error", definition: "Captures a screenshot automatically when this activity fails. Invaluable for debugging UI automation issues remotely." },
+        ],
+      },
+      {
+        title: "Flow Tools & Canvas Formatting",
+        description: "BPMN elements and layout tools in the right panel.",
+        fields: [
+          { name: "Decision Gateway", definition: "XOR gateway — routes to exactly one branch based on a condition. Use for if/else logic." },
+          { name: "Parallel Gateway", definition: "AND gateway — splits into all branches simultaneously. Add a second Parallel node to merge them back." },
+          { name: "User Task", definition: "Pauses the flow and creates an Action Center task for a human to complete before execution resumes." },
+          { name: "Service Task", definition: "Automated step — an API call, file operation, database query, or any non-UI action." },
+          { name: "Align Left / Right / Top / Bottom", definition: "Snaps the selected nodes' edges to match the outermost node in that direction. Select ≥2 nodes first." },
+          { name: "H-Center / V-Center", definition: "Centres selected nodes around their average midpoint horizontally or vertically." },
+          { name: "Distribute Horizontally / Vertically", definition: "Spaces selected nodes so the gaps between them are equal." },
+          { name: "Auto-Arrange Flow", definition: "Automatically re-lays out the entire flow using a topological left-to-right sort. Existing manual positions are replaced." },
+        ],
+      },
+    ],
+    tips: [
+      "Hover any activity in the Library and click the ⓘ icon to see its inline guide — When, How, Example, and Outputs.",
+      "The debug Run mode slows execution to ~2 seconds per step so you can watch the spark travel edge to edge.",
+      "Multi-tab support: click a workflow in the Project panel to open it in a new canvas tab without closing the current one.",
+      "Use Ctrl+S to save and Ctrl+Z / Ctrl+Y for undo/redo.",
+      "The Expression Builder (⤢ icon on any field) gives you a 60 % writing area with fuzzy function search and autocomplete.",
+    ],
+    related: ["Bot Agents", "Action Center", "Assets & Credentials"]
+  },
+
   "/next-gen/bot-agents": {
     module: "Bot Agents",
     layer: "Layer 3 — Automation Hub",
