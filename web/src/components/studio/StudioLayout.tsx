@@ -20,6 +20,7 @@ import {
   Workflow,
   FolderOpen,
   FileText,
+  X,
   Folder,
   Plus,
   Search,
@@ -121,6 +122,13 @@ interface StudioLayoutProps {
   hideSubHeader?: boolean;
   hideRightPanel?: boolean;
   hideBottomDock?: boolean;
+
+  // ── Centre-panel multi-tab support ──────────────────────────────────
+  designerTabs?: Array<{ id: string; label: string; isDirty?: boolean }>;
+  activeDesignerTabId?: string | null;
+  onDesignerTabChange?: (tabId: string) => void;
+  onDesignerTabClose?: (tabId: string) => void;
+  onDesignerTabNew?: () => void;
 }
 
 
@@ -174,7 +182,12 @@ export function StudioLayout({
   onSideTabChange,
   hideSubHeader = false,
   hideRightPanel = false,
-  hideBottomDock = false
+  hideBottomDock = false,
+  designerTabs,
+  activeDesignerTabId,
+  onDesignerTabChange,
+  onDesignerTabClose,
+  onDesignerTabNew,
 }: StudioLayoutProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -579,6 +592,70 @@ export function StudioLayout({
 
         {/* Main Content Area */}
         <main className="flex-1 relative flex flex-col min-w-0 min-h-0 bg-transparent overflow-hidden">
+
+          {/* ── Centre-panel designer tab bar ── */}
+          {activeTab === "studio" && designerTabs && designerTabs.length > 0 && (
+            <div
+              className="flex items-stretch shrink-0 overflow-x-auto"
+              style={{
+                height: "36px",
+                background: "var(--studio-surface)",
+                borderBottom: "1px solid var(--studio-border)",
+                boxShadow: "0 1px 0 0 var(--studio-border)",
+              }}
+            >
+              {/* Tabs */}
+              {designerTabs.map((tab) => {
+                const isActive = tab.id === activeDesignerTabId;
+                return (
+                  <div
+                    key={tab.id}
+                    className={cn(
+                      "group flex items-center gap-2 px-3 h-full shrink-0 cursor-pointer select-none border-r transition-colors relative",
+                      isActive
+                        ? "bg-background text-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
+                    )}
+                    style={{
+                      borderRight: "1px solid var(--studio-border)",
+                      borderTop: isActive ? "2px solid var(--primary)" : "2px solid transparent",
+                      maxWidth: "200px",
+                      minWidth: "100px",
+                    }}
+                    onClick={() => onDesignerTabChange?.(tab.id)}
+                  >
+                    <FileText size={12} className={isActive ? "text-primary shrink-0" : "text-muted-foreground/50 shrink-0"} />
+                    <span className="text-xs font-medium truncate flex-1">{tab.label}</span>
+                    {tab.isDirty && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" title="Unsaved changes" />
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDesignerTabClose?.(tab.id); }}
+                      className={cn(
+                        "w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors",
+                        isActive
+                          ? "opacity-60 hover:opacity-100 hover:bg-muted"
+                          : "opacity-0 group-hover:opacity-60 hover:opacity-100 hover:bg-muted",
+                      )}
+                      title="Close tab"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* New-tab button */}
+              <button
+                onClick={onDesignerTabNew}
+                className="flex items-center justify-center w-8 h-full shrink-0 text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors"
+                title="New workflow tab"
+              >
+                <Plus size={13} />
+              </button>
+            </div>
+          )}
+
           <div className="flex-1 relative min-h-0">
             <div className="absolute inset-0 overflow-hidden flex flex-col">
               {activeTab === "studio" ? (

@@ -48,6 +48,22 @@ import { validateStudioFlow } from "@/lib/studio/validation";
 import { ExecutionEngine } from "@/lib/studio/engine/ExecutionEngine";
 import { FlowParser } from "@/lib/studio/engine/FlowParser";
 
+// ── Per-tab state snapshot ───────────────────────────────────────────
+interface DesignerTab {
+  id: string;
+  workflowId: string | null;
+  label: string;
+  nodes: Node[];
+  edges: Edge[];
+  variables: any[];
+  arguments: any[];
+  workflowName: string;
+  isDirty: boolean;
+  lastSaved: Date | null;
+  past: { nodes: Node[]; edges: Edge[] }[];
+  future: { nodes: Node[]; edges: Edge[] }[];
+}
+
 export default function DesignerPageWrapper() {
   return (
     <ReactFlowProvider>
@@ -151,17 +167,20 @@ function DesignerPage() {
     const isInteractionEnd = changes.some((c: any) => (c.type === 'position' && !c.dragging) || c.type === 'remove' || c.type === 'add');
     if (isInteractionEnd) {
       takeSnapshot();
+      // Mark active tab dirty
+      setDesignerTabs(prev => prev.map(t => t.id === activeDesignerTabId ? { ...t, isDirty: true } : t));
     }
     onNodesChange(changes);
-  }, [onNodesChange, takeSnapshot]);
+  }, [onNodesChange, takeSnapshot, activeDesignerTabId]);
 
   const onEdgesChangeWithHistory = useCallback((changes: any) => {
     const isInteractionEnd = changes.some((c: any) => c.type === 'remove' || c.type === 'add');
     if (isInteractionEnd) {
       takeSnapshot();
+      setDesignerTabs(prev => prev.map(t => t.id === activeDesignerTabId ? { ...t, isDirty: true } : t));
     }
     onEdgesChange(changes);
-  }, [onEdgesChange, takeSnapshot]);
+  }, [onEdgesChange, takeSnapshot, activeDesignerTabId]);
 
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -172,6 +191,118 @@ function DesignerPage() {
   const [activeEdgeType, setActiveEdgeType] = useState("smoothstep");
   const [workflowName, setWorkflowName] = useState("");
   const [runTrigger, setRunTrigger] = useState(0);
+
+  // ── Multi-tab state ────────────────────────────────────────────────
+  const initialTabId = useRef(uuidv4());
+  const [designerTabs, setDesignerTabs] = useState<DesignerTab[]>([]);
+  const [activeDesignerTabId, setActiveDesignerTabId] = useState<string>(initialTabId.current);
+  // Ref so snapshot helpers can read latest tab list synchronously
+  const tabsRef = useRef<DesignerTab[]>([]);
+  tabsRef.current = designerTabs;
+
+  // Snapshot current canvas state into the active tab record
+  const snapshotActiveTab = useCallback(() => {
+    setDesignerTabs(prev => prev.map(t =>
+      t.id === activeDesignerTabId
+        ? { ...t, nodes, edges, variables, arguments: arguments_, workflowName, workflowId, past, future, isDirty: true }
+        : t
+    ));
+  }, [activeDesignerTabId, nodes, edges, variables, arguments_, workflowName, workflowId, past, future]);
+
+  // Restore canvas from a tab's snapshot
+  const restoreTab = useCallback((tab: DesignerTab) => {
+    setWorkflowId(tab.workflowId);
+    setNodes(tab.nodes);
+    setEdges(tab.edges);
+    setVariables(tab.variables);
+    setArguments(tab.arguments);
+    setWorkflowName(tab.workflowName);
+    setPast(tab.past);
+    setFuture(tab.future);
+  }, [setNodes, setEdges]);
+
+  // Switch to an existing tab
+  const handleDesignerTabChange = useCallback((tabId: string) => {
+    if (tabId === activeDesignerTabId) return;
+    snapshotActiveTab();
+    const target = tabsRef.current.find(t => t.id === tabId);
+    if (target) {
+      setActiveDesignerTabId(tabId);
+      restoreTab(target);
+    }
+  }, [activeDesignerTabId, snapshotActiveTab, restoreTab]);
+
+  // Close a tab; switch to the nearest remaining tab
+  const handleDesignerTabClose = useCallback((tabId: string) => {
+    const tabs = tabsRef.current;
+    if (tabs.length <= 1) return; // keep at least one tab
+    const idx = tabs.findIndex(t => t.id === tabId);
+    const remaining = tabs.filter(t => t.id !== tabId);
+    setDesignerTabs(remaining);
+    if (tabId === activeDesignerTabId) {
+      const next = remaining[Math.max(0, idx - 1)];
+      setActiveDesignerTabId(next.id);
+      restoreTab(next);
+    }
+  }, [activeDesignerTabId, restoreTab]);
+
+  // Open a workflow in a new tab (or focus existing)
+  const openWorkflowInTab = useCallback(async (wfId: string, wfName: string) => {
+    // Already open? Just switch
+    const existing = tabsRef.current.find(t => t.workflowId === wfId);
+    if (existing) { handleDesignerTabChange(existing.id); return; }
+    // Snapshot current tab first
+    snapshotActiveTab();
+    // Load the workflow
+    let wfNodes: Node[] = [], wfEdges: Edge[] = [], wfVars: any[] = [], wfArgs: any[] = [], wfEdgeType = "smoothstep";
+    try {
+      const data = (await getStudioWorkflow(wfId)) as any;
+      if (data) {
+        wfNodes = data.nodes || [];
+        wfEdges = data.edges || [];
+        wfVars = data.variables || [];
+        wfArgs = data.arguments || [];
+        wfEdgeType = data.activeEdgeType || "smoothstep";
+        wfName = data.name || wfName;
+      }
+    } catch (_) {}
+    const newTab: DesignerTab = {
+      id: uuidv4(), workflowId: wfId, label: wfName,
+      nodes: wfNodes, edges: wfEdges, variables: wfVars, arguments: wfArgs,
+      workflowName: wfName, isDirty: false, lastSaved: null, past: [], future: [],
+    };
+    setDesignerTabs(prev => [...prev, newTab]);
+    setActiveDesignerTabId(newTab.id);
+    setWorkflowId(wfId);
+    setNodes(wfNodes);
+    setEdges(wfEdges);
+    setVariables(wfVars);
+    setArguments(wfArgs);
+    setWorkflowName(wfName);
+    setActiveEdgeType(wfEdgeType);
+    setPast([]);
+    setFuture([]);
+  }, [snapshotActiveTab, handleDesignerTabChange]);
+
+  // Add a blank new tab
+  const handleDesignerTabNew = useCallback(() => {
+    snapshotActiveTab();
+    const newTab: DesignerTab = {
+      id: uuidv4(), workflowId: null, label: "New Flow",
+      nodes: [], edges: [], variables: [], arguments: [],
+      workflowName: "", isDirty: false, lastSaved: null, past: [], future: [],
+    };
+    setDesignerTabs(prev => [...prev, newTab]);
+    setActiveDesignerTabId(newTab.id);
+    setWorkflowId(null);
+    setNodes([]);
+    setEdges([]);
+    setVariables([]);
+    setArguments([]);
+    setWorkflowName("");
+    setPast([]);
+    setFuture([]);
+  }, [snapshotActiveTab]);
 
 
   const { setNodes: rfSetNodes, getNodes, getEdges, fitView } = useReactFlow();
@@ -802,16 +933,35 @@ function DesignerPage() {
         if (workflowId) {
           const data = (await getStudioWorkflow(workflowId)) as any;
           if (data) {
+            const loadedName = data.name || "";
             setNodes(data.nodes || []);
             setEdges(data.edges || []);
             setVariables(data.variables || []);
             setArguments(data.arguments || []);
-            setWorkflowName(data.name || "");
+            setWorkflowName(loadedName);
             setActiveEdgeType(data.activeEdgeType || "smoothstep");
-            setProject({ 
-              id: projectId || data.projectId, 
+            setProject({
+              id: projectId || data.projectId,
               name: data.projectName || data.project?.name || data.name,
               projectType: data.projectType
+            });
+            // Bootstrap the initial tab on first load
+            setDesignerTabs(prev => {
+              if (prev.length > 0) return prev; // already initialised
+              return [{
+                id: initialTabId.current,
+                workflowId,
+                label: loadedName || "Main Process",
+                nodes: data.nodes || [],
+                edges: data.edges || [],
+                variables: data.variables || [],
+                arguments: data.arguments || [],
+                workflowName: loadedName,
+                isDirty: false,
+                lastSaved: null,
+                past: [],
+                future: [],
+              }];
             });
 
 
@@ -1057,6 +1207,8 @@ function DesignerPage() {
         setWorkflowId(res.workflowId as string);
         lastSavedStateRef.current = currentState;
         setLastSaved(new Date());
+        // Clear dirty flag on the active tab
+        setDesignerTabs(prev => prev.map(t => t.id === activeDesignerTabId ? { ...t, isDirty: false, lastSaved: new Date() } : t));
         if (!isAuto) toast.success(`Workflow saved successfully`);
         router.refresh();
       } else {
@@ -1282,12 +1434,13 @@ function DesignerPage() {
           hiddenTabs={["published"]}
 
 
+          designerTabs={designerTabs}
+          activeDesignerTabId={activeDesignerTabId}
+          onDesignerTabChange={handleDesignerTabChange}
+          onDesignerTabClose={handleDesignerTabClose}
+          onDesignerTabNew={handleDesignerTabNew}
           onWorkflowSelect={(wf: any) => {
-            if (wf.id) {
-              router.push(
-                `/next-gen/studio/designer?projectId=${projectId}&workflowId=${wf.id}${workspaceId ? `&workspaceId=${workspaceId}` : ""}${folderId ? `&folderId=${folderId}` : ""}`,
-              );
-            }
+            if (wf.id) openWorkflowInTab(wf.id, wf.name || wf.label || "Workflow");
           }}
           sidebar={<StudioToolbox projectId={projectId || undefined} workflowId={workflowId || undefined} />}
           properties={
