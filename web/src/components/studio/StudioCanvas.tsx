@@ -159,141 +159,123 @@ import { DEFAULT_STUDIO_THEME, UniversalActivity } from "@/types/studio";
 // --- Custom Edge Type ---
 
 function StudioEdge(props: any) {
-  const {
-    id,
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    style = {},
-    markerEnd,
-    data,
-    selected,
-  } = props;
-  const getPath = () => {
-    const params = {
-      sourceX,
-      sourceY,
-      sourcePosition,
-      targetX,
-      targetY,
-      targetPosition,
-    };
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style = {}, data, selected } = props;
 
-    const edgeShape = data?.edgeType || props.type || "bezier";
-    switch (edgeShape) {
-      case "straight":
-        return getStraightPath(params);
-      case "smoothstep":
-        return getSmoothStepPath(params);
-      case "step":
-        return getSmoothStepPath({ ...params, borderRadius: 0 });
-      case "bezier":
-      default:
-        return getBezierPath(params);
-    }
-  };
-
-  const [edgePath, labelX, labelY] = getPath();
+  const params = { sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition };
+  const edgeShape = data?.edgeType || props.type || "smoothstep";
+  const [edgePath, labelX, labelY] =
+    edgeShape === "straight"   ? getStraightPath(params) :
+    edgeShape === "step"       ? getSmoothStepPath({ ...params, borderRadius: 0 }) :
+    edgeShape === "bezier"     ? getBezierPath(params) :
+                                 getSmoothStepPath(params);
 
   const onEdgeUpdate = props.onEdgeUpdate;
-
   const [isHovered, setIsHovered] = useState(false);
+
+  // Derive visual state from execution data
+  const execStatus = data?.execStatus as "idle" | "spark" | "done" | "error" | undefined;
+  const isRunning  = execStatus === "spark";
+  const isDone     = execStatus === "done";
+  const isError    = execStatus === "error";
+
+  // Colour per state
+  const strokeColor =
+    isError    ? "var(--destructive, #ef4444)"  :
+    isDone     ? "#10b981"                       :
+    isRunning  ? "var(--primary)"               :
+    selected   ? "var(--primary)"               :
+    isHovered  ? "var(--primary)"               :
+                 "var(--muted-foreground, #888)";
+
+  const strokeOpacity =
+    isDone || isRunning || selected || isHovered ? 1 : 0.55;
+
+  const strokeWidth = selected || isRunning ? 2.5 : 2;
+
+  // Unique marker id per state so SVG re-renders the colour
+  const markerId = isError ? "arrow-error" : isDone ? "arrow-done" : selected || isHovered ? "arrow-active" : "arrow-idle";
 
   return (
     <>
-      {/* Background/Shadow Path (for depth and better hover target) */}
-      <path
-        id={id + "_bg"}
-        d={edgePath}
-        fill="none"
-        strokeWidth={12}
-        stroke="transparent"
-        className="cursor-pointer"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      />
+      {/* Wide invisible hit area */}
+      <path d={edgePath} fill="none" strokeWidth={16} stroke="transparent" className="cursor-pointer"
+        onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} />
 
-      {/* Main Connection Path (Glowing) */}
+      {/* Main solid directional line */}
       <path
         id={id}
         d={edgePath}
         fill="none"
-        markerEnd="url(#studio-arrowhead)"
+        markerEnd={`url(#${markerId})`}
+        className="react-flow__edge-path"
         style={{
           ...style,
-          strokeWidth: selected ? 3 : 2,
-          stroke: selected
-            ? "var(--primary)"
-            : isHovered
-              ? "var(--primary)"
-              : "var(--foreground, #888)",
-          filter:
-            selected || isHovered
-              ? "drop-shadow(0 0 8px var(--primary))"
-              : "none",
-          transition: "all 0.3s ease",
-          opacity: selected || isHovered ? 1 : 0.4,
+          stroke: strokeColor,
+          strokeWidth,
+          opacity: strokeOpacity,
+          transition: "stroke 0.3s, opacity 0.3s, stroke-width 0.2s",
         }}
-        className="react-flow__edge-path"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       />
 
-      {/* Animated Flow Path (Moving light effect) */}
-      {(selected || isHovered || data?.status === "running") && (
-        <path
-          d={edgePath}
-          fill="none"
-          strokeWidth={selected ? 3 : 2}
-          stroke="url(#edge-gradient)"
-          className="animate-flow"
-          style={{ opacity: 0.8 }}
+      {/* Glow overlay when active/selected */}
+      {(selected || isHovered || isRunning) && (
+        <path d={edgePath} fill="none" strokeWidth={strokeWidth}
+          stroke={strokeColor}
+          style={{ opacity: 0.25, filter: "blur(4px)", pointerEvents: "none" }}
         />
+      )}
+
+      {/* ── Spark: glowing dot traveling along the edge during execution ── */}
+      {isRunning && (
+        <g style={{ pointerEvents: "none" }}>
+          {/* Glow halo */}
+          <circle r="7" fill="var(--primary)" opacity="0.25">
+            <animateMotion dur="1.2s" repeatCount="indefinite" path={edgePath} rotate="auto" />
+          </circle>
+          {/* Bright core */}
+          <circle r="4" fill="var(--primary)" opacity="1"
+            style={{ filter: "drop-shadow(0 0 6px var(--primary)) drop-shadow(0 0 12px var(--primary))" }}>
+            <animateMotion dur="1.2s" repeatCount="indefinite" path={edgePath} rotate="auto" />
+          </circle>
+          {/* Trailing comet tail */}
+          <circle r="2" fill="var(--primary)" opacity="0.6">
+            <animateMotion dur="1.2s" repeatCount="indefinite" begin="-0.08s" path={edgePath} rotate="auto" />
+          </circle>
+        </g>
+      )}
+
+      {/* Completed: green check tick at midpoint */}
+      {isDone && (
+        <g transform={`translate(${labelX},${labelY})`} style={{ pointerEvents: "none" }}>
+          <circle r="8" fill="#10b981" opacity="0.15" />
+          <text x="0" y="4" textAnchor="middle" fontSize="9" fill="#10b981" fontWeight="bold">✓</text>
+        </g>
       )}
 
       <EdgeLabelRenderer>
         <div
-          style={{
-            position: "absolute",
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: "all",
-          }}
+          style={{ position: "absolute", transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`, pointerEvents: "all" }}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           className="flex flex-col items-center gap-1 group/edge-label"
         >
-          {/* Editable Edge Label / Comment */}
           <input
             type="text"
             value={data?.label || ""}
-            placeholder={isHovered ? "Add comment..." : ""}
-            onChange={(e) => {
-              const newLabel = e.target.value;
-              onEdgeUpdate?.(id, { label: newLabel });
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            }}
+            placeholder={isHovered ? "Add label…" : ""}
+            onChange={e => onEdgeUpdate?.(id, { label: e.target.value })}
+            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
             className={cn(
-              "bg-card/90 backdrop-blur-xl border border-border/40 rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest text-center outline-none transition-all w-24 hover:w-32 focus:w-48 focus:border-primary focus:ring-4 focus:ring-primary/10",
-              selected || isHovered
-                ? "opacity-100 scale-100"
-                : data?.label
-                  ? "opacity-40 scale-90"
-                  : "opacity-0 scale-75",
+              "bg-card/90 backdrop-blur-xl border border-border/40 rounded-full px-3 py-1 text-[9px] font-semibold uppercase tracking-wide text-center outline-none transition-all w-24 hover:w-32 focus:w-48 focus:border-primary focus:ring-2 focus:ring-primary/10",
+              selected || isHovered ? "opacity-100 scale-100" : data?.label ? "opacity-50 scale-90" : "opacity-0 scale-75",
             )}
           />
-
-          {/* Quick Insert Button (Hover only) */}
           {(isHovered || selected) && (
             <button
-              className="w-6 h-6 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:scale-125 hover:rotate-90 transition-all cursor-pointer animate-in fade-in zoom-in-50 duration-200 ring-4 ring-primary/20"
-              onClick={(e) => {
-                e.stopPropagation();
-                // Future: open activity picker at this position
-              }}
-              title="Insert activity here"
+              className="w-6 h-6 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:scale-125 hover:rotate-90 transition-all cursor-pointer animate-in fade-in zoom-in-50 duration-200 ring-2 ring-primary/20"
+              onClick={e => e.stopPropagation()} title="Insert activity here"
             >
               <Plus size={12} strokeWidth={3} />
             </button>
@@ -307,16 +289,70 @@ function StudioEdge(props: any) {
 // --- Custom Node Type ---
 
 const StudioNode = (props: any) => {
-  const { data, selected, executionVars } = props;
+  const { data, selected } = props;
   const nodeType = String(data.type || data.dragType || props.type || "").toLowerCase();
-  
-  // Map to specialized components if possible, otherwise use a generic circular BaseNode
-  if (nodeType === 'gateway') return <GatewayNode {...props} />;
-  if (nodeType === 'event' || nodeType === 'start' || nodeType === 'end') return <EventNode {...props} />;
-  
-  // Generic fallback for any other "studioNode" — make it circular
+  const execStatus = data?.execution?.status as string | undefined;
+  const isRunning  = execStatus === "running";
+  const isComplete = execStatus === "completed";
+  const isFailed   = execStatus === "failed";
+
+  // Pick the right inner component
+  const inner =
+    nodeType === "gateway"                                        ? <GatewayNode {...props} /> :
+    nodeType === "event" || nodeType === "start" || nodeType === "end" ? <EventNode {...props} /> :
+                                                                    <TaskNode {...props} />;
+
+  // Execution overlay: pulsing ring + glow around the node container
+  if (!isRunning && !isComplete && !isFailed) return inner;
+
+  const ringColor =
+    isFailed  ? "rgba(239,68,68,0.5)"   :
+    isComplete ? "rgba(16,185,129,0.4)"  :
+                 "color-mix(in srgb,var(--primary) 50%,transparent)";
+
   return (
-    <TaskNode {...props} />
+    <div style={{ position: "relative" }}>
+      {inner}
+      {/* Pulsing outer ring */}
+      <div
+        style={{
+          position: "absolute",
+          inset: -6,
+          borderRadius: "inherit",
+          border: `2px solid ${ringColor}`,
+          pointerEvents: "none",
+          animation: isRunning ? "exec-pulse 1.2s ease-in-out infinite" : "none",
+          boxShadow: isRunning
+            ? `0 0 16px 4px ${ringColor}`
+            : isComplete
+              ? "0 0 12px 2px rgba(16,185,129,0.3)"
+              : "0 0 10px 2px rgba(239,68,68,0.3)",
+        }}
+      />
+      {/* Running indicator badge */}
+      {isRunning && (
+        <div
+          style={{
+            position: "absolute",
+            top: -10,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "var(--primary)",
+            color: "var(--primary-foreground)",
+            fontSize: 9,
+            fontWeight: 700,
+            padding: "1px 6px",
+            borderRadius: 4,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            letterSpacing: "0.05em",
+            textTransform: "uppercase",
+          }}
+        >
+          ● Running
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -696,7 +732,7 @@ export function StudioCanvas({
 
   const { theme, resolvedTheme } = useTheme();
 
-  const { setNodes, getNodes, getEdges, fitView } = useReactFlow();
+  const { setNodes, setEdges: rfSetEdges, getNodes, getEdges, fitView } = useReactFlow();
 
 
 
@@ -1325,6 +1361,8 @@ export function StudioCanvas({
       setIsRunning(false);
       setRunningNodeId(null);
       setExecutionStatus("idle");
+      // Clear edge and node states on manual stop
+      rfSetEdges(prev => prev.map(e => ({ ...e, data: { ...e.data, execStatus: "idle" } })));
       if (isMounted.current) {
         onNodesChange(
           nodes.map((n) => ({
@@ -1386,6 +1424,10 @@ export function StudioCanvas({
     let step = 0;
     let localHasError = false;
     const allVars: Record<string, any> = {};
+    let prevNodeId: string | null = null; // Track previous node for edge spark
+
+    // Reset all edge exec states
+    rfSetEdges(prev => prev.map(e => ({ ...e, data: { ...e.data, execStatus: "idle" } })));
 
     // Initialize with variables and arguments values
     variables.forEach((v) => {
@@ -1395,11 +1437,37 @@ export function StudioCanvas({
       if (a.name) allVars[a.name] = a.value;
     });
 
+    // Debug step delay — slower so the spark is clearly visible
+    const STEP_DELAY_MS = 1800 + Math.random() * 700; // 1.8–2.5 s
+
     while (nodeQueue.length > 0 && !abortRef.current) {
       const currentNodeId = nodeQueue.shift()!;
       if (visited.has(currentNodeId)) continue;
       visited.add(currentNodeId);
       step++;
+
+      // ── Animate the edge leading TO this node ───────────────────────────
+      if (prevNodeId) {
+        const activeEdge = getEdges().find(e => e.source === prevNodeId && e.target === currentNodeId);
+        if (activeEdge) {
+          // Light up this edge as "sparking"
+          rfSetEdges(prev => prev.map(e => ({
+            ...e,
+            data: {
+              ...e.data,
+              execStatus: e.id === activeEdge.id ? "spark" : e.data?.execStatus,
+            },
+          })));
+          // Wait for spark to travel before highlighting the node
+          await new Promise(r => setTimeout(r, Math.min(STEP_DELAY_MS * 0.5, 900)));
+          if (abortRef.current) break;
+          // Mark edge as done
+          rfSetEdges(prev => prev.map(e => ({
+            ...e,
+            data: { ...e.data, execStatus: e.id === activeEdge.id ? "done" : e.data?.execStatus },
+          })));
+        }
+      }
 
       const currentNode = nodes.find((n) => n.id === currentNodeId);
       if (!currentNode) continue;
@@ -1467,7 +1535,8 @@ export function StudioCanvas({
         if (abortRef.current) break;
       } else {
         // Normal simulation delay
-        await new Promise((r) => setTimeout(r, 600 + Math.random() * 600));
+        // Debug delay — remaining time after edge spark animation
+        await new Promise((r) => setTimeout(r, STEP_DELAY_MS * 0.5));
         if (abortRef.current) break;
       }
 
@@ -1624,6 +1693,8 @@ export function StudioCanvas({
         }
       }
 
+      prevNodeId = currentNodeId; // update for edge spark on next iteration
+
       if (currentNode.data.type === "end") continue;
 
       const outEdges = edges.filter((e) => e.source === currentNodeId);
@@ -1655,6 +1726,8 @@ export function StudioCanvas({
 
     setRunningNodeId(null);
     setIsRunning(false);
+    // Clear all edge animation states
+    rfSetEdges(prev => prev.map(e => ({ ...e, data: { ...e.data, execStatus: "idle" } })));
 
     if (!abortRef.current) {
       const finalStatus = localHasError ? "FAILED" : "SUCCESS";
@@ -2088,8 +2161,8 @@ export function StudioCanvas({
         defaultEdgeOptions={{
           type: "smoothstep",
           animated: false,
-          style: { strokeWidth: 2, stroke: "hsl(var(--muted-foreground) / 0.4)" },
-          markerEnd: { type: MarkerType.ArrowClosed, color: "hsl(var(--muted-foreground) / 0.4)" },
+          style: { strokeWidth: 2 },
+          markerEnd: undefined,   /* StudioEdge handles its own arrowheads */
         }}
       >
         <Background
@@ -2101,36 +2174,25 @@ export function StudioCanvas({
           style={{ opacity: 0.1 }}
         />
 
-        {/* Custom SVG Definitions for premium edge effects */}
-        <svg style={{ position: "absolute", width: 0, height: 0 }}>
+        {/* SVG definitions — arrowheads per state, spark gradient */}
+        <svg style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
           <defs>
-            <marker
-              id="studio-arrowhead"
-              markerWidth="6"
-              markerHeight="6"
-              refX="5"
-              refY="3"
-              orient="auto"
-              markerUnits="strokeWidth"
-            >
-              <path
-                d="M0,0 L6,3 L0,6 Z"
-                fill="currentColor"
-                className="text-foreground/40 group-hover:text-primary transition-colors"
-              />
+            {/* Idle arrowhead — muted */}
+            <marker id="arrow-idle" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--muted-foreground, #888)" opacity="0.6" />
             </marker>
-
-            <linearGradient
-              id="edge-gradient"
-              x1="0%"
-              y1="0%"
-              x2="100%"
-              y2="0%"
-            >
-              <stop offset="0%" stopColor="var(--primary)" stopOpacity="0" />
-              <stop offset="50%" stopColor="var(--primary)" stopOpacity="1" />
-              <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
-            </linearGradient>
+            {/* Active / selected arrowhead — primary */}
+            <marker id="arrow-active" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--primary)" />
+            </marker>
+            {/* Completed arrowhead — emerald */}
+            <marker id="arrow-done" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#10b981" />
+            </marker>
+            {/* Error arrowhead — destructive */}
+            <marker id="arrow-error" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L6,3 L0,6 Z" fill="var(--destructive, #ef4444)" />
+            </marker>
           </defs>
         </svg>
 
