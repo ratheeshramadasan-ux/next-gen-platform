@@ -77,14 +77,20 @@
   --input: oklch(0.88 0 0);
   --ring: oklch(0.708 0 0);
 
-  /* ── Studio surface tokens: give panels real contrast on any theme ── */
-  --studio-surface:       oklch(0.975 0 0);   /* panel bg — just off-white */
-  --studio-surface-raised: oklch(0.96 0 0);   /* panel header / raised row */
-  --studio-surface-sunken: oklch(0.985 0 0);  /* content well / input bg */
-  --studio-border:        oklch(0.84 0 0);    /* stronger than --border */
-  --studio-shadow-sm:     0 1px 3px 0 rgb(0 0 0 / 0.08), 0 0 0 1px rgb(0 0 0 / 0.04);
-  --studio-shadow-md:     0 4px 12px -2px rgb(0 0 0 / 0.10), 0 0 0 1px rgb(0 0 0 / 0.05);
-  --studio-shadow-panel:  0 8px 24px -4px rgb(0 0 0 / 0.12), 0 0 0 1px rgb(0 0 0 / 0.06);
+  /* ── Studio surface tokens: give panels real contrast on any theme ──
+     Surface hierarchy (light theme, top = brightest):
+       canvas/background  #ffffff  (base — the "well")
+       studio-surface     #f6f6f7  panels surrounding the canvas
+       studio-surface-raised #eeeeef  panel headers, tab bars, raised rows
+       studio-border      #d4d4d8  clearly visible dividers
+  ── */
+  --studio-surface:        oklch(0.967 0 0);   /* panel bodies — off-white */
+  --studio-surface-raised: oklch(0.938 0 0);   /* headers, tab bars — visibly grey */
+  --studio-surface-sunken: oklch(0.985 0 0);   /* input backgrounds */
+  --studio-border:         oklch(0.82 0 0);    /* solid, always visible */
+  --studio-shadow-sm:      0 1px 4px 0 rgb(0 0 0 / 0.09), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --studio-shadow-md:      0 4px 14px -2px rgb(0 0 0 / 0.11), 0 0 0 1px rgb(0 0 0 / 0.05);
+  --studio-shadow-panel:   0 8px 28px -4px rgb(0 0 0 / 0.13), 0 0 0 1px rgb(0 0 0 / 0.06);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -213,18 +219,17 @@
   --muted-foreground: #94A3B8;
   --accent: #F43F5E;
   --accent-foreground: #FFFFFF;
-  --border: #1E293B;
+  --border: #2a3654;
   --sidebar: #0F172A;
   --radius: 0.5rem;
-  /* --- Studio Pro Theme Extension --- */
-  --studio-bg: #0d0d0e;
-  --studio-panel: #111112;
-  --studio-accent-blue: #3b82f6;
-  --studio-accent-emerald: #10b981;
-  --studio-accent-amber: #f59e0b;
-  --studio-accent-purple: #8b5cf6;
-  --studio-border: rgba(255, 255, 255, 0.05);
-  /* --- Studio Legibility Scale --- */
+  /* Studio surface tokens for dark theme */
+  --studio-surface:         #111827;   /* panel body — slightly lighter than background */
+  --studio-surface-raised:  #1a2540;   /* panel headers — clearly distinct */
+  --studio-surface-sunken:  #0d1424;   /* input wells */
+  --studio-border:          #2e3f60;   /* visible divider on dark */
+  --studio-shadow-sm:       0 1px 4px 0 rgb(0 0 0 / 0.30), 0 0 0 1px rgb(0 0 0 / 0.20);
+  --studio-shadow-md:       0 4px 14px -2px rgb(0 0 0 / 0.40), 0 0 0 1px rgb(0 0 0 / 0.20);
+  --studio-shadow-panel:    0 8px 28px -4px rgb(0 0 0 / 0.50), 0 0 0 1px rgb(0 0 0 / 0.25);
   --studio-font-size-base: 14px;
   --studio-font-size-heading: 16px;
   --studio-font-size-label: 13px;
@@ -346,6 +351,75 @@
   border-bottom-color: var(--primary);
   background-color: var(--card);
   font-weight: 600;
+}
+
+/* ─────────────────────────────────────────────────
+   THEME OVERRIDES for studio surface tokens
+   Each named theme supplies its own surface stack
+   so panels are always visible on that theme.
+   ───────────────────────────────────────────────── */
+.theme-sand-serenity {
+  --studio-surface:        #ede4d9;
+  --studio-surface-raised: #e3d8cb;
+  --studio-surface-sunken: #f5efe8;
+  --studio-border:         #c8b4a1;
+}
+.theme-ink-wash {
+  --studio-surface:        #f4f4f4;
+  --studio-surface-raised: #eaeaea;
+  --studio-surface-sunken: #fafafa;
+  --studio-border:         #c8c8c8;
+}
+.theme-jade-pebble {
+  --studio-surface:        #dcdcdc;
+  --studio-surface-raised: #d0d0d0;
+  --studio-surface-sunken: #e8e8e8;
+  --studio-border:         #b0b8aa;
+}
+.theme-woodland {
+  --studio-surface:        #ddd8d0;
+  --studio-surface-raised: #d0c8be;
+  --studio-surface-sunken: #e8e4e0;
+  --studio-border:         #b8a898;
+}
+.theme-opaline {
+  --studio-surface:        #ebebed;
+  --studio-surface-raised: #e0e0e2;
+  --studio-surface-sunken: #f4f4f6;
+  --studio-border:         #c8c8ca;
+}
+.theme-mocha-espresso {
+  --studio-surface:        #2a2220;
+  --studio-surface-raised: #322826;
+  --studio-surface-sunken: #221a18;
+  --studio-border:         #4a3a36;
+}
+.theme-minimalist-slate {
+  --studio-surface:        #22272e;
+  --studio-surface-raised: #2d333b;
+  --studio-surface-sunken: #1c1f25;
+  --studio-border:         #404856;
+}
+.theme-cyberpunk-neon, .theme-jet-black, .theme-wraith, .theme-deep-space,
+.theme-obsidian-glass {
+  --studio-surface:        rgba(255,255,255,0.05);
+  --studio-surface-raised: rgba(255,255,255,0.09);
+  --studio-surface-sunken: rgba(0,0,0,0.20);
+  --studio-border:         rgba(255,255,255,0.14);
+}
+.theme-pure-alabaster, .theme-arctic-reflection, .theme-silk-glass,
+.theme-frosted-glass, .theme-horizon-glass {
+  --studio-surface:        oklch(0.963 0 0);
+  --studio-surface-raised: oklch(0.934 0 0);
+  --studio-surface-sunken: oklch(0.983 0 0);
+  --studio-border:         oklch(0.80 0 0);
+}
+.theme-emerald-empire, .theme-crimson-velvet, .theme-oceanic-depth,
+.theme-lavender-mist, .theme-aurora-glass, .theme-next-gen-ultra {
+  --studio-surface:        color-mix(in srgb, var(--card) 70%, var(--muted));
+  --studio-surface-raised: color-mix(in srgb, var(--muted) 80%, var(--card));
+  --studio-surface-sunken: var(--card);
+  --studio-border:         color-mix(in srgb, var(--border) 80%, var(--foreground) 20%);
 }
 
 /* Studio Glossy Card */

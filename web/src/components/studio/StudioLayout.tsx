@@ -275,7 +275,14 @@ export function StudioLayout({
   return (
     <div className="w-full h-full transition-all duration-300 overflow-hidden flex flex-col bg-background text-foreground font-sans">
       {/* ── Top Bar — Document-Processing style h-20 header ── */}
-      <header className="h-20 bg-card/80 backdrop-blur-md border-b border-border/50 px-6 flex items-center justify-between shrink-0 z-50 shadow-[0_1px_10px_rgba(0,0,0,0.04)]">
+      <header
+        className="h-20 px-6 flex items-center justify-between shrink-0 z-50"
+        style={{
+          background: "var(--studio-surface-raised)",
+          borderBottom: "1.5px solid var(--studio-border)",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.10), 0 1px 0 0 var(--studio-border)",
+        }}
+      >
         {/* Left: Back + Brand + Flow Identity */}
         <div className="flex items-center gap-4">
           <a
@@ -414,7 +421,14 @@ export function StudioLayout({
       </header>
 
       {/* ── Nav Tabs Sub-Header ── */}
-      <div className="h-10 bg-card/60 backdrop-blur-sm border-b border-border/40 px-6 flex items-center shrink-0 z-40 shadow-sm">
+      <div
+        className="h-10 px-6 flex items-center shrink-0 z-40"
+        style={{
+          background: "var(--studio-surface)",
+          borderBottom: "1px solid var(--studio-border)",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        }}
+      >
         <div className="flex items-center gap-0 flex-1">
           {navTabs.map((tab) => (
             <button
@@ -461,19 +475,33 @@ export function StudioLayout({
       </div>
 
       {/* ── Main Workspace ── */}
-      <div className="flex-1 flex min-h-0 overflow-hidden relative mt-2 pb-2 px-2 gap-2">
+      {/* Canvas area uses --background (white/base) so it sits visually
+          below the surrounding panels which use --studio-surface (off-white) */}
+      <div className="flex-1 flex min-h-0 overflow-hidden relative gap-0" style={{ background: "var(--background)" }}>
         {/* Left Sidebars */}
         {["studio", "application"].includes(activeTab) && showSideNav && (
           <div className="flex h-full gap-1 overflow-hidden">
             {/* Tab Content Panel */}
             <aside
               className={cn(
-                "rounded-sm border border-border/10 transition-all duration-300 flex flex-col group/sidebar relative z-40 shadow-2xl overflow-hidden min-h-0 bg-card",
-                folderState === "expanded" ? "w-[380px]" : folderState === "collapsed" ? "w-0 m-0" : "w-0 m-0 border-none"
+                "transition-all duration-300 flex flex-col group/sidebar relative z-40 overflow-hidden min-h-0",
+                folderState === "expanded" ? "w-[380px]" : folderState === "collapsed" ? "w-0" : "w-0"
               )}
+              style={{
+                background: "var(--studio-surface)",
+                borderRight: "1.5px solid var(--studio-border)",
+                boxShadow: "4px 0 18px rgba(0,0,0,0.07)",
+                borderRadius: "0 12px 12px 0",
+              }}
             >
               {/* Panel Header */}
-              <div className="h-12 flex items-center justify-between px-3 bg-muted/30 border-b border-border/40 shrink-0">
+              <div
+                className="h-12 flex items-center justify-between px-3 shrink-0"
+                style={{
+                  background: "var(--studio-surface-raised)",
+                  borderBottom: "1px solid var(--studio-border)",
+                }}
+              >
                 <div className="flex items-center gap-0.5">
                   {leftSideRailTabs.map((tab) => (
                     <button
@@ -699,12 +727,24 @@ export function StudioLayout({
             {/* Tab Content Panel */}
             <aside
               className={cn(
-                "rounded-sm border border-border/10 transition-all duration-300 flex flex-col relative z-40 shadow-2xl overflow-hidden min-h-0 bg-card",
-                rightState === "expanded" ? "w-[380px]" : rightState === "collapsed" ? "w-0 m-0" : "w-0 m-0 border-none"
+                "transition-all duration-300 flex flex-col relative z-40 overflow-hidden min-h-0",
+                rightState === "expanded" ? "w-[380px]" : rightState === "collapsed" ? "w-0" : "w-0"
               )}
+              style={{
+                background: "var(--studio-surface)",
+                borderLeft: "1.5px solid var(--studio-border)",
+                boxShadow: "-4px 0 18px rgba(0,0,0,0.07)",
+                borderRadius: "12px 0 0 12px",
+              }}
             >
               {/* Panel Header */}
-              <div className="h-12 flex items-center justify-between px-3 bg-muted/30 border-b border-border/40 shrink-0">
+              <div
+                className="h-12 flex items-center justify-between px-3 shrink-0"
+                style={{
+                  background: "var(--studio-surface-raised)",
+                  borderBottom: "1px solid var(--studio-border)",
+                }}
+              >
                 <button
                   onClick={() => setRightState("hidden")}
                   className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-colors"
@@ -760,9 +800,15 @@ export function StudioLayout({
       {/* ── Bottom Dock ── */}
       {!hideBottomDock && ["studio", "application"].includes(activeTab) && (
         <section
-          style={{ height: bottomSize === "hidden" ? "40px" : `${bottomHeight}px` }}
+          style={{
+            height: bottomSize === "hidden" ? "40px" : `${bottomHeight}px`,
+            background: "var(--studio-surface)",
+            borderTop: "1.5px solid var(--studio-border)",
+            boxShadow: "0 -4px 18px rgba(0,0,0,0.08)",
+            borderRadius: "12px 12px 0 0",
+          }}
           className={cn(
-            "rounded-xl border border-border/50 bg-card backdrop-blur-3xl transition-all relative z-50 shadow-xl overflow-hidden shrink-0",
+            "transition-all relative z-50 overflow-hidden shrink-0",
             isResizingBottom ? "transition-none" : "duration-300"
           )}
         >
@@ -772,7 +818,13 @@ export function StudioLayout({
             className="absolute top-0 left-0 w-full h-1.5 cursor-ns-resize hover:bg-primary/30 z-[60] transition-colors"
           />
 
-          <div className="h-10 flex items-center justify-between px-5 bg-muted/30 border-b border-border/40 shrink-0">
+          <div
+            className="h-10 flex items-center justify-between px-5 shrink-0"
+            style={{
+              background: "var(--studio-surface-raised)",
+              borderBottom: "1px solid var(--studio-border)",
+            }}
+          >
             <div className="flex items-center gap-3">
               <div className="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
                 <LayoutGrid size={13} className="text-primary" />
