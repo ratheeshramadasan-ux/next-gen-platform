@@ -572,113 +572,75 @@ interface StudioCanvasProps {
   canRedo?: boolean;
 }
 
-// --- Unified Canvas Navigator: MiniMap + Zoom in one card ---
-function CanvasNavigator() {
+// --- Canvas Navigator: zoom strip (MiniMap is rendered separately as a sibling) ---
+// MiniMap must NOT be nested inside a custom div — it uses ReactFlow's
+// internal pointer-event system which breaks when wrapped in overflow:hidden.
+// Both elements share matching border/shadow/width so they look like one card.
+function ZoomStrip() {
   const { zoom } = useViewport();
   const { zoomIn, zoomOut, setViewport, fitView } = useReactFlow();
   const pct = Math.round(zoom * 100);
 
-  const border = "var(--studio-border, oklch(0.84 0 0))";
-  const surface = "var(--studio-surface, oklch(0.967 0 0))";
-  const surfaceRaised = "var(--studio-surface-raised, oklch(0.938 0 0))";
-  const shadow = "0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)";
+  const border  = "var(--studio-border, oklch(0.84 0 0))";
+  const raised  = "var(--studio-surface-raised, oklch(0.938 0 0))";
+  const shadow  = "0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)";
+  const CARD_W  = 180;
 
   return (
     <Panel position="bottom-right" className="mb-3 mr-3">
+      {/* Bottom half of the unified card — rounded bottom corners only */}
       <div
-        className="flex flex-col overflow-hidden"
+        className="flex items-center gap-1 px-2 py-1.5"
         style={{
-          width: 180,
-          borderRadius: 12,
-          background: surface,
+          width: CARD_W,
+          background: raised,
           border: `1px solid ${border}`,
+          borderTop: "none",           /* top is provided by MiniMap */
+          borderRadius: "0 0 12px 12px",
           boxShadow: shadow,
         }}
       >
-        {/* ── MiniMap section ── */}
-        <div style={{ position: "relative", height: 110, overflow: "hidden", borderBottom: `1px solid ${border}` }}>
-          <MiniMap
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              margin: 0,
-              border: "none",
-              borderRadius: 0,
-              boxShadow: "none",
-              background: "var(--background, #fff)",
-            }}
-            nodeStrokeColor={(n) =>
-              n.type === "eventNode" ? "#10b981" : n.type === "gatewayNode" ? "#f59e0b" : "var(--primary)"
-            }
-            nodeColor={(n) =>
-              n.type === "eventNode" ? "rgba(16,185,129,0.25)" : n.type === "gatewayNode" ? "rgba(245,158,11,0.25)" : "color-mix(in srgb,var(--primary) 20%,transparent)"
-            }
-            maskColor="rgba(0,0,0,0.04)"
-            zoomable
-            pannable
-          />
-        </div>
+        <button
+          onClick={() => zoomOut({ duration: 200 })}
+          disabled={pct <= 10}
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors disabled:opacity-30"
+          style={{ color: "var(--muted-foreground)" }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+          title="Zoom out"
+        ><Minus size={13} /></button>
 
-        {/* ── Zoom controls ── */}
-        <div
-          className="flex items-center px-2 py-1.5 gap-1"
-          style={{ background: surfaceRaised }}
+        <button
+          onClick={() => setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 250 })}
+          className="flex-1 h-7 flex items-center justify-center rounded-lg transition-colors"
+          style={{ color: "var(--foreground)" }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+          title="Reset to 100%"
         >
-          {/* Zoom out */}
-          <button
-            onClick={() => zoomOut({ duration: 200 })}
-            disabled={pct <= 10}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors disabled:opacity-30"
-            style={{ color: "var(--muted-foreground)" }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
-            title="Zoom out"
-          >
-            <Minus size={13} />
-          </button>
+          <span className="text-xs font-semibold tabular-nums">{pct}%</span>
+        </button>
 
-          {/* Percentage — click to reset to 100% */}
-          <button
-            onClick={() => setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 250 })}
-            className="flex-1 h-7 flex items-center justify-center rounded-lg transition-colors"
-            style={{ color: "var(--foreground)" }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
-            title="Reset to 100%"
-          >
-            <span className="text-xs font-semibold tabular-nums">{pct}%</span>
-          </button>
+        <button
+          onClick={() => zoomIn({ duration: 200 })}
+          disabled={pct >= 300}
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors disabled:opacity-30"
+          style={{ color: "var(--muted-foreground)" }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+          title="Zoom in"
+        ><ZoomIn size={13} /></button>
 
-          {/* Zoom in */}
-          <button
-            onClick={() => zoomIn({ duration: 200 })}
-            disabled={pct >= 300}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors disabled:opacity-30"
-            style={{ color: "var(--muted-foreground)" }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
-            title="Zoom in"
-          >
-            <ZoomIn size={13} />
-          </button>
+        <div className="w-px h-4" style={{ background: border }} />
 
-          {/* Divider */}
-          <div className="w-px h-4 mx-0.5" style={{ background: border }} />
-
-          {/* Fit to view */}
-          <button
-            onClick={() => fitView({ duration: 400, padding: 0.15 })}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
-            style={{ color: "var(--muted-foreground)" }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
-            title="Fit all nodes"
-          >
-            <Maximize size={13} />
-          </button>
-        </div>
+        <button
+          onClick={() => fitView({ duration: 400, padding: 0.15 })}
+          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+          style={{ color: "var(--muted-foreground)" }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+          title="Fit all nodes"
+        ><Maximize size={13} /></button>
       </div>
     </Panel>
   );
@@ -2172,7 +2134,33 @@ export function StudioCanvas({
           </defs>
         </svg>
 
-        <CanvasNavigator />
+        {/* ZoomStrip + MiniMap are siblings, not nested — nesting breaks
+            ReactFlow's pointer-event system and prevents canvas panning.
+            They share matching border/width/shadow so they look like one card. */}
+        <ZoomStrip />
+        <MiniMap
+          style={{
+            width: 180,
+            height: 110,
+            margin: 0,
+            bottom: 47,   /* sits flush above ZoomStrip (40px strip + 7px margin) */
+            right: 12,
+            borderRadius: "12px 12px 0 0",
+            border: "1px solid var(--studio-border, oklch(0.84 0 0))",
+            borderBottom: "1px solid var(--studio-border, oklch(0.84 0 0))",
+            background: "var(--background, #fff)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
+          }}
+          nodeStrokeColor={(n) =>
+            n.type === "eventNode" ? "#10b981" : n.type === "gatewayNode" ? "#f59e0b" : "var(--primary)"
+          }
+          nodeColor={(n) =>
+            n.type === "eventNode" ? "rgba(16,185,129,0.25)" : n.type === "gatewayNode" ? "rgba(245,158,11,0.25)" : "color-mix(in srgb,var(--primary) 20%,transparent)"
+          }
+          maskColor="rgba(0,0,0,0.04)"
+          zoomable
+          pannable
+        />
 
         {/* Validation Overlay */}
         <Panel position="top-right" className="m-4">
