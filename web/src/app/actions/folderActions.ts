@@ -265,7 +265,7 @@ export async function getTenantFolderTree(
         name: true,
         parentId: true,
         workspaceId: true,
-        level: true,
+        // level omitted — nullable Int causes Prisma WASM crash on older rows
         path: true,
         isArchived: true,
         createdAt: true,
@@ -420,7 +420,7 @@ export async function getTenantDocReaderRegistry(
         name: true,
         parentId: true,
         workspaceId: true,
-        level: true,
+        // level omitted — nullable Int causes Prisma WASM crash on older rows
         path: true,
         projects: {
           where: projectWhere,
@@ -582,7 +582,7 @@ export async function getTenantStudioRegistry(
         name: true,
         parentId: true,
         workspaceId: true,
-        level: true,
+        // level omitted — nullable Int causes Prisma WASM crash on older rows
         path: true,
         projects: {
           where: projectWhere,

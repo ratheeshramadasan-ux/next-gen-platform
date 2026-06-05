@@ -1533,9 +1533,13 @@ export async function getStudioWorkflow(workflowId: string) {
 }
 
 export async function getStudioFolders(customerId: string, tenantId?: string) {
+  // Guard: Prisma WASM panics bypass JS try/catch — never let invalid input reach the query.
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!customerId || !uuidRe.test(customerId)) return [];
+
   try {
     const where: any = { customerId, isArchived: false };
-    if (tenantId) {
+    if (tenantId && uuidRe.test(tenantId)) {
       where.tenantId = tenantId;
     }
 
