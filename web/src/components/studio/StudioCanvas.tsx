@@ -572,98 +572,112 @@ interface StudioCanvasProps {
   canRedo?: boolean;
 }
 
-// --- Zoom Controls Panel (Document-Designer style) ---
-function ZoomControls() {
+// --- Unified Canvas Navigator: MiniMap + Zoom in one card ---
+function CanvasNavigator() {
   const { zoom } = useViewport();
   const { zoomIn, zoomOut, setViewport, fitView } = useReactFlow();
   const pct = Math.round(zoom * 100);
 
+  const border = "var(--studio-border, oklch(0.84 0 0))";
+  const surface = "var(--studio-surface, oklch(0.967 0 0))";
+  const surfaceRaised = "var(--studio-surface-raised, oklch(0.938 0 0))";
+  const shadow = "0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)";
+
   return (
     <Panel position="bottom-right" className="mb-3 mr-3">
       <div
-        className="flex flex-col overflow-hidden rounded-xl"
+        className="flex flex-col overflow-hidden"
         style={{
-          background: "var(--card)",
-          border: "1px solid var(--studio-border, oklch(0.84 0 0))",
-          boxShadow: "var(--studio-shadow-md, 0 4px 12px -2px rgb(0 0 0 / 0.10), 0 0 0 1px rgb(0 0 0 / 0.05))",
-          width: 164,
+          width: 180,
+          borderRadius: 12,
+          background: surface,
+          border: `1px solid ${border}`,
+          boxShadow: shadow,
         }}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-3 py-2"
-          style={{
-            background: "var(--studio-surface-raised, oklch(0.96 0 0))",
-            borderBottom: "1px solid var(--studio-border, oklch(0.84 0 0))",
-          }}
-        >
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Canvas</span>
-          <button
-            onClick={() => fitView({ duration: 400, padding: 0.15 })}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-            title="Fit all nodes into view"
-          >
-            <Maximize size={12} />
-            <span>Fit</span>
-          </button>
+        {/* ── MiniMap section ── */}
+        <div style={{ position: "relative", height: 110, overflow: "hidden", borderBottom: `1px solid ${border}` }}>
+          <MiniMap
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              margin: 0,
+              border: "none",
+              borderRadius: 0,
+              boxShadow: "none",
+              background: "var(--background, #fff)",
+            }}
+            nodeStrokeColor={(n) =>
+              n.type === "eventNode" ? "#10b981" : n.type === "gatewayNode" ? "#f59e0b" : "var(--primary)"
+            }
+            nodeColor={(n) =>
+              n.type === "eventNode" ? "rgba(16,185,129,0.25)" : n.type === "gatewayNode" ? "rgba(245,158,11,0.25)" : "color-mix(in srgb,var(--primary) 20%,transparent)"
+            }
+            maskColor="rgba(0,0,0,0.04)"
+            zoomable
+            pannable
+          />
         </div>
 
-        {/* Zoom row */}
-        <div className="flex items-center gap-1 px-2 py-2">
+        {/* ── Zoom controls ── */}
+        <div
+          className="flex items-center px-2 py-1.5 gap-1"
+          style={{ background: surfaceRaised }}
+        >
+          {/* Zoom out */}
           <button
-            onClick={() => zoomOut({ duration: 180 })}
+            onClick={() => zoomOut({ duration: 200 })}
             disabled={pct <= 10}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors disabled:opacity-30"
+            style={{ color: "var(--muted-foreground)" }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
             title="Zoom out"
           >
-            <Minus size={14} />
+            <Minus size={13} />
           </button>
 
+          {/* Percentage — click to reset to 100% */}
           <button
-            onClick={() => setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 200 })}
-            className="flex-1 h-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
+            onClick={() => setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 250 })}
+            className="flex-1 h-7 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: "var(--foreground)" }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
             title="Reset to 100%"
           >
-            <span
-              className="text-sm font-semibold tabular-nums"
-              style={{ color: "var(--foreground)", minWidth: "3.5ch", textAlign: "center" }}
-            >
-              {pct}%
-            </span>
+            <span className="text-xs font-semibold tabular-nums">{pct}%</span>
           </button>
 
+          {/* Zoom in */}
           <button
-            onClick={() => zoomIn({ duration: 180 })}
-            disabled={pct >= 200}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30"
+            onClick={() => zoomIn({ duration: 200 })}
+            disabled={pct >= 300}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors disabled:opacity-30"
+            style={{ color: "var(--muted-foreground)" }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
             title="Zoom in"
           >
-            <ZoomIn size={14} />
+            <ZoomIn size={13} />
           </button>
-        </div>
 
-        {/* Quick presets */}
-        <div
-          className="flex items-center gap-0.5 px-2 pb-2"
-        >
-          {[50, 100, 150].map(v => (
-            <button
-              key={v}
-              onClick={() => setViewport({ x: 0, y: 0, zoom: v / 100 }, { duration: 200 })}
-              className="flex-1 h-6 rounded-md text-xs transition-colors"
-              style={{
-                background: pct === v ? "color-mix(in srgb,var(--primary) 12%,transparent)" : "var(--muted)",
-                color: pct === v ? "var(--primary)" : "var(--muted-foreground)",
-                fontWeight: pct === v ? 600 : 400,
-                border: "1px solid transparent",
-              }}
-              onMouseEnter={e => { if (pct !== v) (e.currentTarget as HTMLElement).style.background = "var(--accent)"; }}
-              onMouseLeave={e => { if (pct !== v) (e.currentTarget as HTMLElement).style.background = "var(--muted)"; }}
-              title={`Set zoom to ${v}%`}
-            >
-              {v}%
-            </button>
-          ))}
+          {/* Divider */}
+          <div className="w-px h-4 mx-0.5" style={{ background: border }} />
+
+          {/* Fit to view */}
+          <button
+            onClick={() => fitView({ duration: 400, padding: 0.15 })}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: "var(--muted-foreground)" }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--muted)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+            title="Fit all nodes"
+          >
+            <Maximize size={13} />
+          </button>
         </div>
       </div>
     </Panel>
@@ -2085,6 +2099,7 @@ export function StudioCanvas({
         snapGrid={[15, 15]}
         fitView={false}
         colorMode={rfColorMode}
+        proOptions={{ hideAttribution: true }}
         deleteKeyCode={["Backspace", "Delete"]}
         multiSelectionKeyCode={["Control", "Meta"]}
         selectionMode={SelectionMode.Partial}
@@ -2157,36 +2172,7 @@ export function StudioCanvas({
           </defs>
         </svg>
 
-        <ZoomControls />
-        <MiniMap
-          style={{
-            borderRadius: "12px",
-            border: "1px solid var(--studio-border, oklch(0.84 0 0))",
-            background: "var(--card)",
-            boxShadow: "var(--studio-shadow-sm, 0 1px 3px 0 rgb(0 0 0 / 0.08))",
-            width: 164,
-            height: 108,
-            bottom: 110,   /* sits above the zoom panel */
-            right: 12,
-          }}
-          nodeStrokeColor={(n) =>
-            n.type === "eventNode"
-              ? "#10b981"
-              : n.type === "gatewayNode"
-                ? "#f59e0b"
-                : "#3b82f6"
-          }
-          nodeColor={(n) =>
-            n.type === "eventNode"
-              ? "#10b98120"
-              : n.type === "gatewayNode"
-                ? "#f59e0b20"
-                : "#3b82f620"
-          }
-          maskColor="rgba(0, 0, 0, 0.05)"
-          zoomable
-          pannable
-        />
+        <CanvasNavigator />
 
         {/* Validation Overlay */}
         <Panel position="top-right" className="m-4">
