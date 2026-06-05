@@ -2252,8 +2252,8 @@ export function StudioToolbox({
                           }
                           const Icon = item.icon;
                           return (
+                            <React.Fragment key={i}>
                             <div
-                              key={i}
                               draggable
                               onDragStart={e => {
                                 let dragData: any;
@@ -2314,6 +2314,7 @@ export function StudioToolbox({
                             {!collapsed && openGuideId === item.name && ACTIVITY_GUIDE[item.name] && (
                               <GuideCard guide={ACTIVITY_GUIDE[item.name]!} name={item.name} />
                             )}
+                            </React.Fragment>
                           );
                         })}
                       </div>
