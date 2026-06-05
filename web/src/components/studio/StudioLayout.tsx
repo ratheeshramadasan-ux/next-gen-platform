@@ -46,7 +46,6 @@ import {
   History as HistoryIcon,
   Undo2,
   Redo2,
-  BookOpen,
   type LucideIcon
 } from "lucide-react";
 
@@ -62,7 +61,6 @@ import {
   StudioDock,
   FlowToolsPanel,
   FlowFormattingPanel,
-  GuidePanel,
 } from "./StudioPanels";
 
 // Lazy-load monitoring and other heavier components
@@ -210,7 +208,7 @@ export function StudioLayout({
     }
   };
 
-  const [activeRightSideTab, setActiveRightSideTab] = useState<"properties" | "flow-tool" | "flow-formatting" | "guide">("properties");
+  const [activeRightSideTab, setActiveRightSideTab] = useState<"properties" | "flow-tool" | "flow-formatting">("properties");
   
   const [bottomHeight, setBottomHeight] = useState(240);
   const [isResizingBottom, setIsResizingBottom] = useState(false);
@@ -285,7 +283,6 @@ export function StudioLayout({
     { id: 'properties',     label: 'Properties', icon: Settings },
     { id: 'flow-tool',      label: 'Flow Tools',  icon: GitBranch },
     { id: 'flow-formatting',label: 'Formatting',  icon: LayoutGrid },
-    { id: 'guide',          label: 'Guide',        icon: BookOpen },
   ];
 
   return (
@@ -910,9 +907,6 @@ export function StudioLayout({
                     onDistribute={onDistribute}
                     onAutoLayout={onAutoLayout}
                   />
-                </div>
-                <div className={cn("flex-1 overflow-hidden flex flex-col", activeRightSideTab !== "guide" && "hidden")}>
-                  <GuidePanel />
                 </div>
               </div>
             </aside>
