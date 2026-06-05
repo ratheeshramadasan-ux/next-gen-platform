@@ -434,21 +434,34 @@ export function StudioLayout({
         }}
       >
         <div className="flex items-center gap-0 flex-1">
-          {navTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "px-3 py-1.5 h-10 font-semibold uppercase tracking-wide transition-all flex items-center gap-1.5 shrink-0 border-b-2 text-xs",
-                activeTab === tab.id
-                  ? "text-primary border-primary bg-primary/5"
-                  : "text-muted-foreground/50 border-transparent hover:text-primary/70 hover:bg-primary/5"
-              )}
-            >
-              {tab.icon && <tab.icon size={12} className={cn(activeTab === tab.id ? "text-primary" : "text-muted-foreground/40")} />}
-              <span className={cn(windowWidth < 1280 && tab.id !== activeTab ? "hidden" : "")}>{tab.label}</span>
-            </button>
-          ))}
+          {navTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "px-4 py-1.5 h-10 font-semibold uppercase tracking-wide transition-colors flex items-center gap-1.5 shrink-0 text-xs relative",
+                )}
+                style={{
+                  color: isActive ? "var(--primary)" : "var(--muted-foreground)",
+                  background: isActive ? "var(--background)" : "transparent",
+                  borderBottom: isActive ? "2px solid var(--primary)" : "2px solid transparent",
+                  boxShadow: isActive ? "inset 0 -1px 0 0 var(--primary)" : "none",
+                }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "var(--studio-surface-raised)"; }}
+                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                {tab.icon && (
+                  <tab.icon
+                    size={13}
+                    style={{ color: isActive ? "var(--primary)" : "var(--muted-foreground)", opacity: isActive ? 1 : 0.6 }}
+                  />
+                )}
+                <span className={cn(windowWidth < 1280 && !isActive ? "hidden" : "")}>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
         {/* ── Canvas toolbar slot — StudioCanvas portals its buttons here ── */}
         {["studio", "application"].includes(activeTab) && !hideSubHeader && (
