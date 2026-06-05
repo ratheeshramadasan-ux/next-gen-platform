@@ -1539,10 +1539,27 @@ export async function getStudioFolders(customerId: string, tenantId?: string) {
       where.tenantId = tenantId;
     }
 
-    // 1. Fetch flat, high-speed indexed lists of folders and projects in a single round-trip
+    // 1. Fetch flat list — use explicit select to avoid the nullable Int `level`
+    //    field which causes Prisma WASM to throw "invalid type: unit value, expected usize"
+    //    on rows that have level = NULL from before the column was added.
     const flatFolders = await prisma.folder.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        parentId: true,
+        workspaceId: true,
+        customerId: true,
+        tenantId: true,
+        path: true,
+        isArchived: true,
+        isGovernanceLocked: true,
+        createdAt: true,
+        updatedAt: true,
+        // NOTE: `level` intentionally omitted — it can be NULL in older rows
+        // (Prisma Int but DB column nullable) and WASM deserializer crashes on null Int.
+        // We recompute depth from the tree structure below.
         workspace: {
           select: { id: true, name: true },
         },
@@ -1552,6 +1569,8 @@ export async function getStudioFolders(customerId: string, tenantId?: string) {
             name: true,
             version: true,
             isGovernanceLocked: true,
+            createdAt: true,
+            updatedAt: true,
             studioWorkflows: {
               select: { id: true, status: true, name: true, version: true },
             },
@@ -1568,12 +1587,13 @@ export async function getStudioFolders(customerId: string, tenantId?: string) {
 
     // 2. Perform safe, blazing-fast, O(N) in-memory tree reconstruction
     const folderMap = new Map<string, any>();
-    
-    // Initialize the mapping index
+
+    // Initialize the mapping index (no `level` from DB — we derive it)
     flatFolders.forEach((f) => {
       folderMap.set(f.id, {
         ...JSON.parse(JSON.stringify(f)),
-        subfolders: []
+        level: 0,       // will be set correctly in the depth pass below
+        subfolders: [],
       });
     });
 
@@ -1585,9 +1605,9 @@ export async function getStudioFolders(customerId: string, tenantId?: string) {
       if (f.parentId) {
         const parentObj = folderMap.get(f.parentId);
         if (parentObj) {
+          folderObj.level = (parentObj.level ?? 0) + 1;
           parentObj.subfolders.push(folderObj);
         } else {
-          // If parent is missing, treat as top-level folder
           topLevel.push(folderObj);
         }
       } else {
