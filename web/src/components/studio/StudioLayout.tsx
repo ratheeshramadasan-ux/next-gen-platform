@@ -446,32 +446,36 @@ export function StudioLayout({
             </button>
           ))}
         </div>
-        {/* Sub-header right: undo/redo + zoom + export */}
-        <div className="flex items-center gap-4 ml-auto">
-          {["studio", "application"].includes(activeTab) && !hideSubHeader && (
-            <>
-              <div className="flex items-center gap-1">
-                <button className="p-1.5 rounded-md text-muted-foreground/40 hover:bg-primary/5 hover:text-primary transition-all" title="Undo"><Undo2 size={13} /></button>
-                <button className="p-1.5 rounded-md text-muted-foreground/40 hover:bg-primary/5 hover:text-primary transition-all" title="Redo"><Redo2 size={13} /></button>
-              </div>
-              <div className="h-4 w-px bg-border/20" />
-              <button
-                onClick={onExport}
-                className="px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
-                title="Export"
-              >
-                <Download size={11} /> Export
-              </button>
-              <button
-                onClick={() => document.getElementById('flow-import-input')?.click()}
-                className="px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wide transition-all text-muted-foreground/50 hover:bg-primary/5 flex items-center gap-1.5"
-                title="Import"
-              >
-                <Upload size={11} /> Import
-              </button>
-            </>
-          )}
-        </div>
+        {/* ── Canvas toolbar slot — StudioCanvas portals its buttons here ── */}
+        {["studio", "application"].includes(activeTab) && !hideSubHeader && (
+          <div className="flex items-center ml-auto">
+            {/* Toolbar buttons are injected by StudioCanvas via createPortal */}
+            <div id="studio-canvas-toolbar" className="flex items-center" />
+
+            <div className="h-5 w-px mx-3" style={{ background: "var(--studio-border)" }} />
+
+            <button
+              onClick={onExport}
+              className="px-2 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5"
+              style={{ color: "var(--muted-foreground)" }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--foreground)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--muted-foreground)"}
+              title="Export flow as JSON"
+            >
+              <Download size={12} /> Export
+            </button>
+            <button
+              onClick={() => document.getElementById('flow-import-input')?.click()}
+              className="px-2 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5"
+              style={{ color: "var(--muted-foreground)" }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--foreground)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--muted-foreground)"}
+              title="Import flow from JSON"
+            >
+              <Upload size={12} /> Import
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Main Workspace ── */}

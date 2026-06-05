@@ -6,6 +6,7 @@ import React, {
   useState,
   useRef,
   useEffect,
+  createPortal,
 } from "react";
 import {
   ReactFlow,
@@ -852,6 +853,17 @@ export function StudioCanvas({
 
   // --- Execution Simulation State ---
   const [isRunning, setIsRunning] = useState(false);
+
+  // ── Portal slot: toolbar buttons live in the StudioLayout sub-header ──
+  const [toolbarSlot, setToolbarSlot] = useState<Element | null>(null);
+  useEffect(() => {
+    // Retry until the slot div (rendered by StudioLayout) is in the DOM
+    const attempt = () => {
+      const el = document.getElementById("studio-canvas-toolbar");
+      if (el) { setToolbarSlot(el); } else { setTimeout(attempt, 50); }
+    };
+    attempt();
+  }, []);
   const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
   const [executionLog, setExecutionLog] = useState<
     {
@@ -2228,161 +2240,148 @@ export function StudioCanvas({
             )}
           </div>
         </Panel>
-        <Panel position="top-center" className="mt-6">
-          <div className="bg-card/40 backdrop-blur-3xl border border-border/40 rounded-full p-2 flex items-center gap-2 shadow-[0_8px_32px_rgba(0,0,0,0.4)] px-5">
-            <Button
+        {/* ── Toolbar portaled into StudioLayout's sub-header slot ── */}
+        {toolbarSlot && createPortal(
+          <div className="flex items-center gap-0.5">
+            {/* ── Tool selection ── */}
+            <button
               onClick={() => setActiveTool("select")}
-              variant="ghost"
-              size="icon"
               className={cn(
-                "h-10 w-10 rounded-full transition-all duration-300",
+                "h-8 w-8 flex items-center justify-center rounded-lg transition-all",
                 activeTool === "select"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-110"
-                  : "text-muted-foreground/60 hover:bg-accent hover:text-foreground",
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
-              title="Selection Tool (V) — Click to select nodes, drag handles to connect them, and manage your workflow structure."
+              title="Select (V)"
             >
-              <MousePointer2 size={18} />
-            </Button>
-
-
-            <Button
+              <MousePointer2 size={15} />
+            </button>
+            <button
               onClick={() => setActiveTool("pan")}
-              variant="ghost"
-              size="icon"
               className={cn(
-                "h-10 w-10 rounded-full transition-all duration-300",
+                "h-8 w-8 flex items-center justify-center rounded-lg transition-all",
                 activeTool === "pan"
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-110"
-                  : "text-muted-foreground/60 hover:bg-accent hover:text-foreground",
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
-              title="Hand Tool (H) — Click and drag to navigate the canvas freely without affecting node positions."
+              title="Pan (H)"
             >
-              <Hand size={18} />
-            </Button>
+              <Hand size={15} />
+            </button>
 
+            <div className="h-5 w-px mx-1.5" style={{ background: "var(--studio-border)" }} />
 
-            <div className="w-px h-6 bg-border/20 mx-1" />
+            {/* ── Undo / Redo ── */}
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              className={cn(
+                "h-8 w-8 flex items-center justify-center rounded-lg transition-all",
+                canUndo
+                  ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "text-muted-foreground/25 cursor-not-allowed",
+              )}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 size={15} />
+            </button>
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              className={cn(
+                "h-8 w-8 flex items-center justify-center rounded-lg transition-all",
+                canRedo ? "text-muted-foreground hover:bg-muted hover:text-foreground" : "text-muted-foreground/25 cursor-not-allowed",
+              )}
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 size={15} />
+            </button>
 
-            <div className="flex items-center gap-1">
-              <Button
-                onClick={onUndo}
-                disabled={!canUndo}
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-10 w-10 rounded-full transition-all",
-                  canUndo ? "text-primary hover:bg-primary/10" : "text-muted-foreground/20 cursor-not-allowed"
-                )}
-                title="Undo (Ctrl+Z) — Revert your last action."
-              >
-                <Undo2 size={18} />
-              </Button>
-              <Button
-                onClick={onRedo}
-                disabled={!canRedo}
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-10 w-10 rounded-full transition-all",
-                  canRedo ? "text-primary hover:bg-primary/10" : "text-muted-foreground/20 cursor-not-allowed"
-                )}
-                title="Redo (Ctrl+Y) — Restore the action you just undid."
-              >
-                <Redo2 size={18} />
-              </Button>
-            </div>
+            <div className="h-5 w-px mx-1.5" style={{ background: "var(--studio-border)" }} />
 
-            <div className="w-px h-6 bg-border/20 mx-1" />
-
-            <Button
+            {/* ── Layout + Save ── */}
+            <button
               onClick={onAutoLayout}
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 rounded-full transition-all"
-              title="Auto-Arrange Flow — Automatically organize your workflow layout for maximum readability and clean connections."
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+              title="Auto-arrange"
             >
-              <Sparkles size={18} />
-            </Button>
-
-
-            <Button
+              <Sparkles size={15} />
+            </button>
+            <button
               onClick={onSave}
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-muted-foreground/60 hover:bg-primary/10 hover:text-primary rounded-full transition-all"
-              title="Save Workflow (Ctrl+S) — Commit your changes to the cloud. Version history will be automatically updated."
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+              title="Save (Ctrl+S)"
             >
-              <Save size={18} />
-            </Button>
+              <Save size={15} />
+            </button>
 
+            <div className="h-5 w-px mx-1.5" style={{ background: "var(--studio-border)" }} />
 
-            <Button
-              onClick={() => {
-                handleRun();
-              }}
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 rounded-full transition-all"
-              title="Debug Workflow (F6) — Execute nodes with detailed state inspection and breakpoint support."
+            {/* ── Debug tools ── */}
+            <button
+              onClick={handleRun}
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+              title="Debug (F6)"
             >
-              <Bug size={18} />
-            </Button>
-
-            <Button
-              onClick={() => {
-                handleRun();
-              }}
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 rounded-full transition-all"
-              title="Step-by-Step Debug — Manually advance through each node to precisely validate data transformations."
+              <Bug size={15} />
+            </button>
+            <button
+              onClick={handleRun}
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+              title="Step (F7)"
             >
-              <StepForward size={18} />
-            </Button>
+              <StepForward size={15} />
+            </button>
 
-            <div className="w-px h-6 bg-border/20 mx-1" />
+            <div className="h-5 w-px mx-1.5" style={{ background: "var(--studio-border)" }} />
 
+            {/* ── Run / Stop — semantic accent colour retained ── */}
             {isRunning ? (
-              <Button
+              <button
                 onClick={handleRun}
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 rounded-full bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-all scale-110"
-                title="Stop Execution — Immediately terminate the current simulation and reset all variable states."
+                className="h-8 px-3 flex items-center gap-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  background: "color-mix(in srgb,var(--destructive) 12%,transparent)",
+                  color: "var(--destructive)",
+                  border: "1px solid color-mix(in srgb,var(--destructive) 30%,transparent)",
+                }}
+                title="Stop"
               >
-                <Square size={16} fill="currentColor" />
-              </Button>
+                <Square size={13} fill="currentColor" /> Stop
+              </button>
             ) : (
-              <Button
+              <button
                 onClick={handleRun}
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 rounded-full text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/40 transition-all shadow-lg shadow-emerald-500/5"
-                title="Run Workflow (F5) — Execute the workflow at full speed and view live data propagation."
+                className="h-8 px-3 flex items-center gap-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  background: "color-mix(in srgb,var(--primary) 10%,transparent)",
+                  color: "var(--primary)",
+                  border: "1px solid color-mix(in srgb,var(--primary) 25%,transparent)",
+                }}
+                title="Run (F5)"
               >
-                <Play size={18} fill="currentColor" className="ml-0.5" />
-              </Button>
+                <Play size={13} fill="currentColor" className="ml-0.5" /> Run
+              </button>
             )}
 
-            <div className="w-px h-6 bg-border/20 mx-1" />
+            <div className="h-5 w-px mx-1.5" style={{ background: "var(--studio-border)" }} />
 
-            <Button
+            {/* ── Risk flag ── */}
+            <button
               onClick={handleMarkHighRisk}
-              variant="ghost"
-              size="icon"
               className={cn(
-                "h-10 w-10 rounded-full transition-all duration-300",
+                "h-8 w-8 flex items-center justify-center rounded-lg transition-all",
                 getNodes().some(n => n.selected && (n.data as UniversalActivity).risk?.level === 'HIGH')
-                  ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20 scale-110"
-                  : "text-rose-500 hover:bg-rose-500/10"
+                  ? "bg-destructive text-destructive-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-destructive",
               )}
-              title="Toggle High Risk (Critical) — Mark selected activities as high-risk for governance and runtime monitoring."
+              title="Flag high-risk"
             >
-              <ShieldAlert size={18} />
-            </Button>
-          </div>
-        </Panel>
+              <ShieldAlert size={15} />
+            </button>
+          </div>,
+          toolbarSlot
+        )}
 
         {/* --- Execution Log Panel (bottom) --- */}
         {executionStatus !== "idle" && (
