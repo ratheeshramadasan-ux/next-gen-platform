@@ -500,7 +500,7 @@ export function StudioLayout({
 
         {/* Left Sidebars */}
         {["studio", "application"].includes(activeTab) && showSideNav && (
-          <div className="flex h-full gap-1 overflow-hidden">
+          <div className="flex h-full">
             {/* Tab Content Panel */}
             <aside
               className={cn(
@@ -743,7 +743,7 @@ export function StudioLayout({
 
         {/* Right Side Panels */}
         {!hideRightPanel && ["studio", "application"].includes(activeTab) && (
-          <div className="flex h-full overflow-hidden">
+          <div className="flex h-full">
             {/* Right-edge restore strip — visible only when right panel is hidden */}
             {rightState === "hidden" && (
               <button
