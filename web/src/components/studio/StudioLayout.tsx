@@ -400,16 +400,7 @@ export function StudioLayout({
             <Save size={13} className={cn(isBusy && "animate-pulse")} />
             <span className="hidden lg:block">{isBusy ? "Saving..." : "Save"}</span>
           </Button>
-          <Button
-            size="sm"
-            onClick={onRun}
-            disabled={isBusy}
-            className="h-9 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold uppercase tracking-wide px-4 rounded-xl shadow-lg shadow-emerald-600/20"
-            title="Run flow"
-          >
-            <Play size={13} fill="currentColor" className={cn(isBusy && "animate-pulse")} />
-            <span className="hidden lg:block">Run</span>
-          </Button>
+          {/* Run is in the canvas toolbar — only Deploy stays here as a lifecycle action */}
           <Button
             size="sm"
             onClick={onDeploy}
@@ -524,7 +515,7 @@ export function StudioLayout({
                 background: "var(--studio-surface)",
                 borderRight: "1.5px solid var(--studio-border)",
                 boxShadow: "6px 0 32px rgba(0,0,0,0.18), 2px 0 8px rgba(0,0,0,0.10)",
-                borderRadius: "0 12px 12px 0",
+                borderRadius: "0",
               }}
             >
               {/* Panel Header */}
@@ -847,7 +838,7 @@ export function StudioLayout({
                 background: "var(--studio-surface)",
                 borderLeft: "1.5px solid var(--studio-border)",
                 boxShadow: "-6px 0 32px rgba(0,0,0,0.18), -2px 0 8px rgba(0,0,0,0.10)",
-                borderRadius: "12px 0 0 12px",
+                borderRadius: "0",
               }}
             >
               {/* Panel Header */}
@@ -918,7 +909,7 @@ export function StudioLayout({
             background: "var(--studio-surface)",
             borderTop: "1.5px solid var(--studio-border)",
             boxShadow: "0 -4px 18px rgba(0,0,0,0.08)",
-            borderRadius: "12px 12px 0 0",
+            borderRadius: "0",
           }}
           className={cn(
             "transition-all relative z-50 overflow-hidden shrink-0",

@@ -2307,15 +2307,7 @@ export function StudioCanvas({
             >
               <Sparkles size={15} />
             </button>
-            <button
-              onClick={onSave}
-              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-              title="Save (Ctrl+S)"
-            >
-              <Save size={15} />
-            </button>
-
-            <div className="h-5 w-px mx-1.5" style={{ background: "var(--studio-border)" }} />
+            {/* Save is in the header — no duplicate here */}
 
             {/* ── Debug tools ── */}
             <button
@@ -2745,10 +2737,7 @@ export function StudioCanvas({
 
 
 
-        <Controls
-          className="bg-card/80 border-border shadow-2xl rounded-md overflow-hidden backdrop-blur-3xl m-6"
-          showInteractive={false}
-        />
+        {/* Controls removed — ZoomControls panel (bottom-right) handles zoom */}
 
         {/* --- RECORDING OVERLAY --- */}
         {isRecording && (
