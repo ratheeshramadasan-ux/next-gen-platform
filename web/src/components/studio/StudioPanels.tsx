@@ -3195,7 +3195,7 @@ export function StudioInspector({
 
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center py-4 gap-4 bg-card/40 border-l border-border/40 h-full">
+      <div className="flex flex-col items-center py-4 gap-4 border-l border-border/40 h-full" style={{ background: "var(--studio-surface)" }}>
          {tabs.map(tab => (
            <button 
              key={tab.id}
@@ -3210,9 +3210,9 @@ export function StudioInspector({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-transparent overflow-hidden font-sans">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden font-sans" style={{ background: "var(--studio-surface)" }}>
       {/* Header */}
-      <div className="h-14 border-b border-border/40 flex items-center justify-between px-4 shrink-0 bg-primary/5">
+      <div className="panel-header justify-between">
         <div className="flex items-center gap-3">
           <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
             <Activity size={12} className="text-primary" />
@@ -3239,7 +3239,7 @@ export function StudioInspector({
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-border/40 px-2 shrink-0 bg-card/20">
+      <div className="tab-bar shrink-0">
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -3256,7 +3256,7 @@ export function StudioInspector({
       </div>
 
       {/* Content Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-20 space-y-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-20 space-y-6" style={{ background: "var(--studio-surface)" }}>
         
         {/* --- Main Properties Tab --- */}
         {activeTab === 'properties' && (
@@ -3363,7 +3363,7 @@ export function StudioInspector({
         {activeTab === 'risk' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
             {/* Risk Master Toggle */}
-            <div className="bg-card border border-border/40 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+            <div className="rounded-2xl p-4 flex items-center justify-between shadow-sm" style={{ background: "var(--studio-surface-raised)", border: "1px solid var(--studio-border)" }}>
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
@@ -3431,7 +3431,7 @@ export function StudioInspector({
                       <select 
                         value={selectedNode.data.risk?.category || 'Operational'}
                         onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, category: e.target.value as any } })}
-                        className="w-full bg-card border border-border/40 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10 transition-all"
+                        className="w-full border border-border/40 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10 transition-all" style={{ background: "var(--studio-surface-sunken)" }}
                       >
                         <option value="Financial">Financial Risk</option>
                         <option value="Operational">Operational Risk</option>
@@ -3447,7 +3447,7 @@ export function StudioInspector({
                         value={selectedNode.data.risk?.why || ""}
                         onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, why: e.target.value } })}
                         placeholder="Explain why this risk level was assigned and how it's being mitigated..."
-                        className="w-full h-24 bg-card border border-border/40 rounded-xl px-4 py-3 text-xs text-foreground/70 outline-none focus:ring-2 focus:ring-primary/10 transition-all resize-none  leading-relaxed"
+                        className="w-full h-24 border border-border/40 rounded-xl px-4 py-3 text-xs text-foreground/70 outline-none focus:ring-2 focus:ring-primary/10 transition-all resize-none leading-relaxed" style={{ background: "var(--studio-surface-sunken)" }}
                       />
                     </div>
                 </div>
@@ -3579,7 +3579,7 @@ export function StudioInspector({
 
       {/* Bottom Actions */}
       {!collapsed && (
-        <div className="border-t border-border/40 p-3 space-y-2 bg-card/20">
+        <div className="border-t border-border/40 p-3 space-y-2" style={{ background: "var(--studio-surface-raised)" }}>
           <button className="flex items-center justify-center gap-2 w-full py-2 rounded-sm bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 transition-all group">
             <Sparkles size={13} className="text-emerald-500" />
             <span className="text-xs font-semibold text-emerald-500">Auto-Map Variables</span>
@@ -3831,7 +3831,7 @@ export function StudioDock({
   };
 
   return (
-    <div className="flex flex-col h-full bg-card text-foreground font-sans">
+    <div className="flex flex-col h-full text-foreground font-sans" style={{ background: "var(--studio-surface)" }}>
       {/* Tab Bar */}
       <div className="flex items-center justify-between border-b border-border/40 px-4 shrink-0 bg-primary/5">
         <div className="flex gap-0">
