@@ -2107,7 +2107,7 @@ export function StudioToolbox({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-card overflow-hidden text-card-foreground transition-colors duration-300 font-sans border-r border-border/40">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden text-foreground transition-colors duration-300 font-sans" style={{ background: "var(--studio-surface)" }}>
       <div className="p-4 space-y-3 border-b border-border/40 bg-primary/5">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium uppercase tracking-wide text-primary border-b-2 border-primary pb-1">
@@ -4126,7 +4126,8 @@ export function FlowToolsPanel({ onEdgeTypeChange }: { onEdgeTypeChange?: (type:
   const [activeConnector, setActiveConnector] = useState("Angled");
 
   return (
-    <div className="p-4 space-y-5 overflow-y-auto">
+    <div className="h-full overflow-y-auto" style={{ background: "var(--studio-surface)" }}>
+    <div className="p-4 space-y-5">
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">BPMN Elements — Drag to Canvas</p>
         <div className="space-y-1">
@@ -4168,7 +4169,7 @@ export function FlowToolsPanel({ onEdgeTypeChange }: { onEdgeTypeChange?: (type:
                 "flex flex-col items-center justify-center gap-2 p-3 rounded-xl border transition-all",
                 activeConnector === tool.label
                   ? "bg-primary border-primary text-primary-foreground shadow-lg shadow-primary/20"
-                  : "bg-card border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                  : "border border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary"
               )}
               title={tool.help}
             >
@@ -4179,10 +4180,11 @@ export function FlowToolsPanel({ onEdgeTypeChange }: { onEdgeTypeChange?: (type:
         </div>
       </div>
     </div>
+    </div>
   );
 }
 
-export function FlowFormattingPanel({ 
+export function FlowFormattingPanel({
   onAlign, 
   onDistribute, 
   onAutoLayout 
@@ -4203,7 +4205,8 @@ export function FlowFormattingPanel({
   ];
 
   return (
-    <div className="p-4 space-y-5 overflow-y-auto">
+    <div className="flex flex-col h-full overflow-y-auto" style={{ background: "var(--studio-surface)" }}>
+    <div className="p-4 space-y-5">
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground/60 px-1">Alignment & Distribution</p>
         <div className="grid grid-cols-4 gap-1.5">
@@ -4233,6 +4236,7 @@ export function FlowFormattingPanel({
           Auto-Arrange Flow
         </button>
       </div>
+    </div>
     </div>
   );
 }
