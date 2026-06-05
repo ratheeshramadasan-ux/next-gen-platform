@@ -682,7 +682,7 @@ export default function ThemeSettingsPage() {
               { id: 'arctic-aurora', name: 'Arctic Aurora' },
               { id: 'frosted-glass', name: 'Frosted Glass' },
             ].map((bg) => {
-              const url = `/backgrounds/next-gen/${bg.id}.png`;
+              const url = `/backgrounds/dashboard/${bg.id}.png`;
               const isActive = activeBackground === url;
               return (
                 <button

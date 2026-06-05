@@ -333,7 +333,8 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     if (savedTheme) setActiveTheme(savedTheme);
     if (savedIcon) setActiveIconSet(savedIcon);
     if (savedFont) setActiveFont(savedFont);
-    if (savedBg) setActiveBackground(savedBg);
+    // Migrate old wrong path (/backgrounds/next-gen/) → correct path (/backgrounds/dashboard/)
+    if (savedBg) setActiveBackground(savedBg.replace('/backgrounds/next-gen/', '/backgrounds/dashboard/'));
     if (savedTextSize) setActiveTextSize(savedTextSize);
     if (savedOpacity) setPanelOpacity(parseFloat(savedOpacity));
   }, []);
