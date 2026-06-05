@@ -490,7 +490,7 @@ export function StudioLayout({
             style={{
               background: "var(--studio-surface)",
               borderRight: "1.5px solid var(--studio-border)",
-              boxShadow: "2px 0 8px rgba(0,0,0,0.06)",
+              boxShadow: "4px 0 16px rgba(0,0,0,0.14)",
             }}
             title="Show left panel"
           >
@@ -510,7 +510,7 @@ export function StudioLayout({
               style={{
                 background: "var(--studio-surface)",
                 borderRight: "1.5px solid var(--studio-border)",
-                boxShadow: "4px 0 18px rgba(0,0,0,0.07)",
+                boxShadow: "6px 0 32px rgba(0,0,0,0.18), 2px 0 8px rgba(0,0,0,0.10)",
                 borderRadius: "0 12px 12px 0",
               }}
             >
@@ -752,7 +752,7 @@ export function StudioLayout({
                 style={{
                   background: "var(--studio-surface)",
                   borderLeft: "1.5px solid var(--studio-border)",
-                  boxShadow: "-2px 0 8px rgba(0,0,0,0.06)",
+                  boxShadow: "-4px 0 16px rgba(0,0,0,0.14)",
                 }}
                 title="Show right panel"
               >
@@ -769,7 +769,7 @@ export function StudioLayout({
               style={{
                 background: "var(--studio-surface)",
                 borderLeft: "1.5px solid var(--studio-border)",
-                boxShadow: "-4px 0 18px rgba(0,0,0,0.07)",
+                boxShadow: "-6px 0 32px rgba(0,0,0,0.18), -2px 0 8px rgba(0,0,0,0.10)",
                 borderRadius: "12px 0 0 12px",
               }}
             >
