@@ -118,6 +118,13 @@ function DesignerPage() {
   const [past, setPast] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const [future, setFuture] = useState<{ nodes: Node[]; edges: Edge[] }[]>([]);
 
+  // ── Multi-tab state — declared early so callbacks below can reference it ──
+  const initialTabId = useRef(uuidv4());
+  const [designerTabs, setDesignerTabs] = useState<DesignerTab[]>([]);
+  const [activeDesignerTabId, setActiveDesignerTabId] = useState<string>(initialTabId.current);
+  const tabsRef = useRef<DesignerTab[]>([]);
+  tabsRef.current = designerTabs;
+
   const takeSnapshot = useCallback(() => {
     // Functional update to ensure we use the most recent state
     // Note: We capture current nodes/edges before they are changed
@@ -191,14 +198,6 @@ function DesignerPage() {
   const [activeEdgeType, setActiveEdgeType] = useState("smoothstep");
   const [workflowName, setWorkflowName] = useState("");
   const [runTrigger, setRunTrigger] = useState(0);
-
-  // ── Multi-tab state ────────────────────────────────────────────────
-  const initialTabId = useRef(uuidv4());
-  const [designerTabs, setDesignerTabs] = useState<DesignerTab[]>([]);
-  const [activeDesignerTabId, setActiveDesignerTabId] = useState<string>(initialTabId.current);
-  // Ref so snapshot helpers can read latest tab list synchronously
-  const tabsRef = useRef<DesignerTab[]>([]);
-  tabsRef.current = designerTabs;
 
   // Snapshot current canvas state into the active tab record
   const snapshotActiveTab = useCallback(() => {
