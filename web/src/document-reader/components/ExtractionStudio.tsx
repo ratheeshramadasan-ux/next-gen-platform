@@ -2946,9 +2946,10 @@ export function ExtractionStudio() {
           }
         }
 
+        const dedupedCallouts = nextCallouts.filter((c, i, a) => a.findIndex(x => x.id === c.id) === i);
         setCalloutLabels(prev => {
           const sig = (c: CalloutLabel[]) => c.map(x => `${x.id}:${x.chipX.toFixed(1)}:${x.chipY.toFixed(1)}:${x.active}`).join("|");
-          return sig(prev) === sig(nextCallouts) ? prev : nextCallouts;
+          return sig(prev) === sig(dedupedCallouts) ? prev : dedupedCallouts;
         });
       }
     };
