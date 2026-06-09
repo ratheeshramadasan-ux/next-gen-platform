@@ -119,6 +119,50 @@ function InnerDesigner() {
   }, []);
 
   const handleUpdateNodeData = useCallback((id: string, newData: any) => {
+    const msgboxNode = nodes.find((n) => n.id === id);
+    if (
+      msgboxNode &&
+      (msgboxNode.data as any).label?.toLowerCase().includes("msgbox") &&
+      newData.inputs?.buttons === "YesNoCancel" &&
+      (msgboxNode.data as any).inputs?.buttons !== "YesNoCancel"
+    ) {
+      const hasDecisionConnection = edges.some(
+        (e) => e.source === id && (nodes.find((n) => n.id === e.target)?.data as any).type === "condition"
+      );
+      if (!hasDecisionConnection) {
+        const decisionNodeId = `n-decision-${Date.now()}`;
+        const decisionNode = {
+          id: decisionNodeId,
+          type: "studioNode",
+          position: { x: msgboxNode.position.x, y: msgboxNode.position.y + 150 },
+          data: {
+            label: "Decision",
+            icon: Split,
+            color: "text-amber-500 bg-amber-500/10",
+            type: "condition",
+            sublabel: "LOGIC BRANCH",
+            status: "none",
+            branches: [
+              { name: "Yes", condition: "{userResponse} == 'Yes'", targetNode: "", priority: 1 },
+              { name: "No", condition: "{userResponse} == 'No'", targetNode: "", priority: 2 },
+              { name: "Cancel", condition: "{userResponse} == 'Cancel'", targetNode: "", priority: 3 }
+            ]
+          }
+        };
+
+        const newEdge = {
+          id: `e-${id}-${decisionNodeId}`,
+          source: id,
+          target: decisionNodeId,
+          animated: true,
+          markerEnd: { type: MarkerType.ArrowClosed }
+        };
+
+        setNodes((nds) => nds.concat(decisionNode as any));
+        setEdges((eds) => eds.concat(newEdge as any));
+      }
+    }
+
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === id) {
@@ -127,7 +171,7 @@ function InnerDesigner() {
         return node;
       })
     );
-  }, [setNodes]);
+  }, [nodes, edges, setNodes, setEdges]);
 
   const handleDeleteNode = useCallback((id: string) => {
     setNodes((nds) => nds.filter((node) => node.id !== id));

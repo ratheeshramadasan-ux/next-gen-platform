@@ -19,7 +19,6 @@ export class AuditBundleService {
             workspaces: { include: { folders: true } },
             botHosts: true,
             jobs: true,
-            workflowQueues: true,
           }
         },
         users: true
@@ -36,7 +35,7 @@ export class AuditBundleService {
       "vms.json": customer.tenants.flatMap(t => t.botHosts),
       "jobs.json": customer.tenants.flatMap(t => t.jobs),
       "audit_logs.json": await prisma.auditLog.findMany({
-        where: { metadata: { contains: customerId } },
+        where: { customerId },
         orderBy: { timestamp: "desc" }
       })
     };

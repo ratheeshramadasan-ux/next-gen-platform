@@ -222,6 +222,15 @@ export function StudioLayout({
     setMounted(true);
     isMounted.current = true;
     
+    // Auto-adjust default layout based on screen resolution at load time to prevent crowded editor
+    if (window.innerWidth < 1024) {
+      setFolderState("hidden");
+      setRightState("collapsed");
+    } else if (window.innerWidth < 1280) {
+      setFolderState("collapsed");
+      setRightState("expanded");
+    }
+
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => {
@@ -459,7 +468,7 @@ export function StudioLayout({
                     style={{ color: isActive ? "var(--primary)" : "var(--muted-foreground)", opacity: isActive ? 1 : 0.6 }}
                   />
                 )}
-                <span className={cn(windowWidth < 1280 && !isActive ? "hidden" : "")}>{tab.label}</span>
+                <span className={cn(isActive ? "inline" : "hidden xl:inline")}>{tab.label}</span>
               </button>
             );
           })}
@@ -503,7 +512,11 @@ export function StudioLayout({
         {/* ── Collapsed-panel restore strips ── always visible, never hidden ── */}
         {["studio", "application"].includes(activeTab) && (!showSideNav || folderState === "hidden") && (
           <button
-            onClick={() => { setShowSideNav(true); setFolderState("expanded"); }}
+            onClick={() => {
+              setShowSideNav(true);
+              setFolderState("expanded");
+              if (windowWidth < 1200) setRightState("collapsed");
+            }}
             className="h-full w-6 flex flex-col items-center justify-center gap-1 shrink-0 z-50 group transition-all hover:w-8"
             style={{
               background: "var(--studio-surface)",
@@ -523,7 +536,7 @@ export function StudioLayout({
             <aside
               className={cn(
                 "transition-all duration-300 flex flex-col group/sidebar relative z-40 overflow-hidden min-h-0",
-                folderState === "expanded" ? "w-[380px]" : folderState === "collapsed" ? "w-0" : "w-0"
+                folderState === "expanded" ? "w-[260px] sm:w-[280px] md:w-[320px] xl:w-[380px]" : "w-0"
               )}
               style={{
                 background: "var(--studio-surface)",
@@ -839,7 +852,10 @@ export function StudioLayout({
             {/* Right-edge restore strip — visible only when right panel is hidden */}
             {rightState === "hidden" && (
               <button
-                onClick={() => setRightState("expanded")}
+                onClick={() => {
+                  setRightState("expanded");
+                  if (windowWidth < 1200) setFolderState("collapsed");
+                }}
                 className="h-full w-6 flex flex-col items-center justify-center gap-1 shrink-0 z-50 group transition-all hover:w-8"
                 style={{
                   background: "var(--studio-surface)",
@@ -856,7 +872,7 @@ export function StudioLayout({
             <aside
               className={cn(
                 "transition-all duration-300 flex flex-col relative z-40 overflow-hidden min-h-0",
-                rightState === "expanded" ? "w-[380px]" : "w-0"
+                rightState === "expanded" ? "w-[260px] sm:w-[280px] md:w-[320px] xl:w-[380px]" : "w-0"
               )}
               style={{
                 background: "var(--studio-surface)",
@@ -867,22 +883,22 @@ export function StudioLayout({
             >
               {/* Panel Header — Properties only, no tab strip needed */}
               <div
-                className="h-12 flex items-center justify-between px-3 shrink-0"
+                className="h-12 flex items-center justify-between px-4 shrink-0"
                 style={{
                   background: "var(--studio-surface-raised)",
                   borderBottom: "1px solid var(--studio-border)",
                 }}
               >
-                <div className="flex items-center gap-2">
-                  <Settings size={14} className="text-primary" />
-                  <span className="text-sm font-semibold text-foreground">Properties</span>
+                <div className="flex items-center gap-2.5">
+                  <Settings size={16} className="text-neutral-700 dark:text-neutral-300" />
+                  <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider">Properties</span>
                 </div>
                 <button
                   onClick={() => setRightState("hidden")}
-                  className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors"
                   title="Hide panel  (click edge strip to restore)"
                 >
-                  <PanelRightClose size={15} />
+                  <PanelRightClose size={16} />
                 </button>
               </div>
 

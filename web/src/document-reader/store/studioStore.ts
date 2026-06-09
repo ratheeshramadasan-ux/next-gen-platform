@@ -341,7 +341,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "edge",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.912,
@@ -365,7 +365,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.928,
@@ -389,7 +389,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: false,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.905,
@@ -412,7 +412,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.938,
@@ -436,7 +436,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.952,
@@ -460,7 +460,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.958,
@@ -484,7 +484,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.972,
@@ -508,7 +508,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: false,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.924,
@@ -556,7 +556,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.898,
@@ -579,7 +579,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.925,
@@ -603,7 +603,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.965,
@@ -627,7 +627,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: true,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.942,
@@ -651,7 +651,7 @@ const MOCK_INFRASTRUCTURE: ExtractionInfrastructure = {
       deploymentMode: "on-prem",
       isGpuSupported: false,
       isOfflineSupported: true,
-      status: "offline",
+      status: "inactive",
       healthStatus: "healthy",
       isConfigured: true,
       accuracyScore: 0.992,
@@ -2511,6 +2511,14 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   loadState: async () => {
     const state = get();
     const projectId = state.projectId || 'default';
+
+    // If documents are already live in memory for this project, don't overwrite
+    // them with (possibly pruned or stale) localStorage data. The in-memory state
+    // is always the authoritative source for an active session.
+    if (state.trainingDocuments && state.trainingDocuments.length > 0) {
+      return;
+    }
+
     let raw = localStorage.getItem(`studio_state_${projectId}`);
     let data: any = null;
 

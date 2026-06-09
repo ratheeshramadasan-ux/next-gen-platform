@@ -586,7 +586,7 @@ export interface DataTransformationNode extends FlowNode {
     expression?: string;
     mappingRef?: string;
   };
-  validation: {
+  transformationValidation: {
     validateInputSchema?: boolean;
     validateOutputSchema: boolean;
     onValidationError: "HALT_AND_CATCH" | "SEND_TO_REVIEW" | "USE_DEFAULTS" | "WARN_ONLY";

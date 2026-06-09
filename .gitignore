@@ -10,3 +10,4 @@ coverage
 apps/*/dist
 apps/*/.next
 packages/*/dist
+.aider*

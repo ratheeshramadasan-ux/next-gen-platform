@@ -91,6 +91,7 @@ export function BaseNode({ data, selected, children, className, hideHandles, hid
       animate={{ scale: 1, opacity: 1 }}
       className={cn(
         "relative flex flex-col items-center gap-2 group/node transition-all duration-300",
+        data.execution?.enabled === false && "opacity-45 grayscale select-none",
         className
       )}
       style={{ filter: statusGlow }}
@@ -108,7 +109,7 @@ export function BaseNode({ data, selected, children, className, hideHandles, hid
               </div>
             )}
             
-            {data.risk && !data.risk.disabled && (
+            {data.risk && data.risk.disabled === false && (
               <div className="flex flex-col gap-2 pt-2 border-t border-border/20">
                 <div className="flex items-center justify-between">
                   <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">Risk Profile</span>
@@ -134,7 +135,7 @@ export function BaseNode({ data, selected, children, className, hideHandles, hid
                     <p className="text-[9px] font-medium text-foreground/60 leading-tight ">"{data.risk.why}"</p>
                   </div>
                 )}
-
+ 
                 {(data.risk.impact || data.risk.likelihood) && (
                   <div className="flex items-center gap-3">
                     {data.risk.impact && (
@@ -159,49 +160,63 @@ export function BaseNode({ data, selected, children, className, hideHandles, hid
           </div>
         </div>
       )}
-
+ 
       {/* Icon Circle (Minimalist) */}
       {!hideIcon && (
         <div 
           className={cn(
             "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 relative z-10",
             selected ? "bg-primary/70 text-primary-foreground scale-110 shadow-2xl" : "bg-card/70 backdrop-blur-md border border-border/40 text-foreground/60 hover:border-primary/40 hover:text-primary hover:scale-110",
-            data.risk?.level === 'HIGH' && !data.risk?.disabled && "border-rose-500/60 border-2 shadow-[0_0_15px_rgba(244,63,94,0.3)]",
-            data.risk?.level === 'MEDIUM' && !data.risk?.disabled && "border-amber-500/60 border-2 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+            data.risk?.level === 'HIGH' && data.risk?.disabled === false && "border-rose-500/60 border-2 shadow-[0_0_15px_rgba(244,63,94,0.3)]",
+            data.risk?.level === 'MEDIUM' && data.risk?.disabled === false && "border-amber-500/60 border-2 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
           )}
-
+ 
         >
           <Icon size={22} className={data.execution?.status === 'running' ? 'animate-pulse' : ''} />
           
+          {/* Disabled Overlay Icon */}
+          {data.execution?.enabled === false && (
+            <div className="absolute -top-1 -right-1 bg-neutral-400 dark:bg-neutral-600 text-white rounded-full p-1 shadow-lg ring-2 ring-card z-20">
+              <LucideIcons.Ban size={10} strokeWidth={3} />
+            </div>
+          )}
+ 
           {/* Risk Overlay Icon */}
-          {data.risk?.level === 'HIGH' && !data.risk?.disabled && (
+          {data.risk?.level === 'HIGH' && data.risk?.disabled === false && data.execution?.enabled !== false && (
             <div className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-1 shadow-lg ring-2 ring-card animate-bounce duration-1000">
               <LucideIcons.AlertTriangle size={10} strokeWidth={3} />
             </div>
           )}
-          {data.risk?.level === 'MEDIUM' && !data.risk?.disabled && (
+          {data.risk?.level === 'MEDIUM' && data.risk?.disabled === false && data.execution?.enabled !== false && (
             <div className="absolute -top-1 -right-1 bg-amber-500 text-white rounded-full p-1 shadow-lg ring-2 ring-card">
               <LucideIcons.AlertCircle size={10} strokeWidth={3} />
             </div>
           )}
-
+ 
           {/* Status indicator ring */}
           {data.execution?.status === 'running' && (
             <div className="absolute inset-0 rounded-full border-2 border-primary animate-ping opacity-40" />
           )}
         </div>
       )}
-
+ 
       {/* Label (Floating outside) */}
       <div className="flex flex-col items-center">
         <span className={cn(
           "text-[10px] font-black uppercase tracking-widest transition-colors",
-          selected ? "text-primary" : "text-foreground/60 group-hover/node:text-foreground"
+          data.execution?.enabled === false 
+            ? "line-through text-neutral-400 dark:text-neutral-500" 
+            : (selected ? "text-primary" : "text-foreground/60 group-hover/node:text-foreground")
         )}>
           {data.label}
         </span>
-        <span className="text-[8px] font-bold text-muted-foreground/30 uppercase tracking-tighter">
-          {data.subType?.replace(/([A-Z])/g, ' $1').trim()}
+        <span className={cn(
+          "text-[8px] font-bold uppercase tracking-tighter",
+          data.execution?.enabled === false 
+            ? "text-rose-500/80 font-black" 
+            : "text-muted-foreground/30"
+        )}>
+          {data.execution?.enabled === false ? "Disabled" : data.subType?.replace(/([A-Z])/g, ' $1').trim()}
         </span>
       </div>
 

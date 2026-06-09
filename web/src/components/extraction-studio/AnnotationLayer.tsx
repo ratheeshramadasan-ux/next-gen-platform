@@ -43,6 +43,8 @@ interface AnnotationLayerProps {
   isDrawing?: boolean;
   /** Only show the full action menu when in select/pointer mode — hide it during drawing tools so it doesn't block the canvas */
   showActionMenu?: boolean;
+  /** When false, suppress all label chips/dots inside the document — used when labels are rendered externally as callouts */
+  showLabels?: boolean;
 }
 
 interface DragOperation {
@@ -77,9 +79,11 @@ export function AnnotationLayer({
   zoom,
   getUnscaledCoords,
   isDrawing = false,
-  showActionMenu = true
+  showActionMenu = true,
+  showLabels = true
 }: AnnotationLayerProps) {
   const [dragOp, setDragOp] = useState<DragOperation | null>(null);
+  const [hoveredAnnId, setHoveredAnnId] = useState<string | null>(null);
   const uiScale = 1 / Math.max(zoom || 1, 1);
 
   const hasMovedRef = React.useRef(false);
@@ -377,6 +381,8 @@ export function AnnotationLayer({
         return (
           <div
             key={ann.id}
+            onMouseEnter={() => setHoveredAnnId(ann.id)}
+            onMouseLeave={() => setHoveredAnnId(null)}
             onClick={(e) => {
               e.stopPropagation();
               onAnnotationSelect(ann.id);
@@ -417,55 +423,66 @@ export function AnnotationLayer({
               borderClass
             )}
           >
-            {/* Compact marker. Names sit just outside the box so existing data annotations remain discoverable. */}
-            {!isAnchor ? (
+            {/* Label chip: full chip only for active/hovered; dot-only otherwise. Hidden when showLabels=false (external callout mode). */}
+            {showLabels && !isAnchor ? (
               <div
                 style={{
                   transform: `translateX(-50%) scale(${uiScale})`,
                   transformOrigin: "bottom center"
                 }}
-                className="absolute bottom-full left-1/2 z-50 mb-4 flex flex-col items-center select-none pointer-events-none"
+                className="absolute bottom-full left-1/2 z-50 mb-1 flex flex-col items-center select-none pointer-events-none"
               >
-                <div className={cn(
-                  "max-w-[260px] rounded-lg border px-3 py-2 text-[11px] font-black uppercase tracking-wider shadow-xl backdrop-blur-md",
-                  textClass
-                )}
-                  style={!isAnchor && ann.color ? { borderColor: `${ann.color}55`, color: ann.color, backgroundColor: "rgba(255,255,255,0.96)" } : undefined}
-                >
-                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    {React.cloneElement(icon, { size: 10 })}
-                    <span className="truncate">{ann.label || "Field"}</span>
-                    {ann.type === "date" && !!ann.value && (
-                      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[7px] text-blue-600">
-                        {ann.dateFormat || "DD/MM/YYYY"}
-                      </span>
+                {(isActive || hoveredAnnId === ann.id) ? (
+                  <>
+                    <div className={cn(
+                      "max-w-[260px] rounded-lg border px-3 py-1.5 text-[11px] font-black uppercase tracking-wider shadow-xl backdrop-blur-md",
+                      textClass
                     )}
-                    {!ann.value && ann.confidence === 0 && (
-                      <span className="rounded bg-zinc-700 px-1.5 py-0.5 text-[7px] text-zinc-300 font-black uppercase tracking-wider">
-                        Not found
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="h-4 w-px" style={{ backgroundColor: ann.color || "#3b82f6" }} />
-                <div className="h-2 w-2 rounded-full shadow-[0_0_0_3px_rgba(255,255,255,0.95)]" style={{ backgroundColor: ann.color || "#3b82f6" }} />
+                      style={ann.color ? { borderColor: `${ann.color}55`, color: ann.color, backgroundColor: "rgba(255,255,255,0.97)" } : undefined}
+                    >
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
+                        {React.cloneElement(icon, { size: 10 })}
+                        <span className="truncate">{ann.label || "Field"}</span>
+                        {ann.type === "date" && !!ann.value && (
+                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[7px] text-blue-600">
+                            {ann.dateFormat || "DD/MM/YYYY"}
+                          </span>
+                        )}
+                        {!ann.value && ann.confidence === 0 && (
+                          <span className="rounded bg-zinc-700 px-1.5 py-0.5 text-[7px] text-zinc-300 font-black uppercase tracking-wider">
+                            Not found
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-3 w-px" style={{ backgroundColor: ann.color || "#3b82f6" }} />
+                  </>
+                ) : null}
+                <div
+                  className="h-2 w-2 rounded-full shadow-[0_0_0_2px_rgba(255,255,255,0.95)]"
+                  style={{ backgroundColor: ann.color || "#3b82f6" }}
+                />
               </div>
-            ) : (
+            ) : showLabels ? (
               <div
                 style={{
                   transform: `translateX(-50%) scale(${uiScale})`,
                   transformOrigin: "bottom center"
                 }}
-                className="absolute bottom-full left-1/2 z-40 mb-2 flex flex-col items-center select-none pointer-events-none"
+                className="absolute bottom-full left-1/2 z-40 mb-1 flex flex-col items-center select-none pointer-events-none"
               >
-                <div className="max-w-[160px] rounded-lg border border-zinc-200 bg-white/95 px-2 py-1 text-[7px] font-black uppercase tracking-wider text-zinc-600 flex items-center gap-1 shadow-lg backdrop-blur-md">
-                  <Anchor size={7} />
-                  <span className="truncate">{ann.value || ann.label || "Anchor"}</span>
-                </div>
-                <div className="h-2.5 w-px bg-zinc-500/70" />
+                {(isActive || hoveredAnnId === ann.id) ? (
+                  <>
+                    <div className="max-w-[160px] rounded-lg border border-zinc-200 bg-white/95 px-2 py-1 text-[7px] font-black uppercase tracking-wider text-zinc-600 flex items-center gap-1 shadow-lg backdrop-blur-md">
+                      <Anchor size={7} />
+                      <span className="truncate">{ann.value || ann.label || "Anchor"}</span>
+                    </div>
+                    <div className="h-2 w-px bg-zinc-500/70" />
+                  </>
+                ) : null}
                 <div className="h-1.5 w-1.5 rounded-full bg-zinc-500 shadow-[0_0_0_2px_rgba(255,255,255,0.95)]" />
               </div>
-            )}
+            ) : null}
             {isActive && !isAnchor && showActionMenu && (
               <div
                 style={{
@@ -475,74 +492,51 @@ export function AnnotationLayer({
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
                 onMouseEnter={(e) => e.stopPropagation()}
-                className="absolute left-1/2 bottom-full z-50 mb-2 flex items-center gap-1 rounded-xl border border-border bg-white/95 p-1 shadow-2xl backdrop-blur-md whitespace-nowrap"
+                className="absolute left-1/2 bottom-full z-50 mb-1 flex items-center gap-0.5 rounded-xl border border-border bg-white/97 p-1 shadow-2xl backdrop-blur-md whitespace-nowrap"
               >
                 {/* Drag handle */}
                 <div
-                  title="Drag to reposition menu"
+                  title="Drag to reposition"
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
                     setIsDraggingMenu(true);
                     menuDragStartRef.current = { mouseX: e.clientX, mouseY: e.clientY, ox: menuOffset.x, oy: menuOffset.y };
                   }}
-                  className={`flex h-7 w-5 items-center justify-center rounded-lg text-muted-foreground/40 hover:text-muted-foreground/70 hover:bg-muted/50 ${isDraggingMenu ? "cursor-grabbing" : "cursor-grab"}`}
+                  className={`flex h-6 w-4 items-center justify-center rounded text-muted-foreground/30 hover:text-muted-foreground/60 hover:bg-muted/40 ${isDraggingMenu ? "cursor-grabbing" : "cursor-grab"}`}
                 >
-                  <GripHorizontal size={11} />
+                  <GripHorizontal size={9} />
                 </div>
-                <div className="w-px h-5 bg-border/50 mr-0.5" />
-                {/* Rename */}
-                <button
-                  title="Rename field"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAnnotationAction?.("rename", ann);
-                  }}
-                  className="flex h-7 items-center gap-1.5 px-2 rounded-lg text-muted-foreground hover:bg-sky-50 hover:text-sky-700 text-[9px] font-black uppercase tracking-wide"
-                >
-                  <Pencil size={12} className="text-sky-500" />
-                  <span className="text-sky-600">Rename</span>
-                </button>
-                <div className="w-px h-5 bg-border mx-0.5" />
+                <div className="w-px h-4 bg-border/50" />
                 {[
-                  { action: "addAnchor" as const, label: "Anchor", icon: Link2, className: "text-emerald-600" },
-                  { action: "changeType" as const, label: "Type", icon: Settings2, className: "text-amber-600" },
+                  { action: "rename" as const,    title: "Rename field",          icon: Pencil,    cls: "hover:bg-sky-50 hover:text-sky-700 text-sky-500" },
+                  { action: "addAnchor" as const, title: "Add anchor to field",   icon: Link2,     cls: "hover:bg-emerald-50 hover:text-emerald-700 text-emerald-500" },
+                  { action: "changeType" as const,title: "Change field type",     icon: Settings2, cls: "hover:bg-amber-50 hover:text-amber-700 text-amber-500" },
                 ].map(item => (
                   <button
                     key={item.action}
-                    title={item.label}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAnnotationAction?.(item.action, ann);
-                    }}
-                    className="flex h-7 items-center gap-1.5 px-2 rounded-lg text-muted-foreground hover:bg-muted text-[9px] font-black uppercase tracking-wide"
+                    title={item.title}
+                    onClick={(e) => { e.stopPropagation(); onAnnotationAction?.(item.action, ann); }}
+                    className={cn("flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors", item.cls)}
                   >
-                    <item.icon size={12} className={item.className} />
-                    <span className={item.className}>{item.label}</span>
+                    <item.icon size={12} />
                   </button>
                 ))}
-                <div className="w-px h-5 bg-border mx-0.5" />
+                <div className="w-px h-4 bg-border" />
                 <button
                   title="Delete field"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAnnotationAction?.("delete", ann);
-                  }}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-rose-50 hover:text-rose-600"
+                  onClick={(e) => { e.stopPropagation(); onAnnotationAction?.("delete", ann); }}
+                  className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition-colors"
                 >
                   <Trash2 size={12} />
                 </button>
-                <div className="w-px h-5 bg-border mx-0.5" />
+                <div className="w-px h-4 bg-border" />
                 <button
-                  title="Done — deselect field"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAnnotationAction?.("done", ann);
-                  }}
-                  className="flex h-7 items-center gap-1.5 px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-wide"
+                  title="Done — deselect"
+                  onClick={(e) => { e.stopPropagation(); onAnnotationAction?.("done", ann); }}
+                  className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
                 >
                   <CheckCheck size={12} />
-                  Done
                 </button>
               </div>
             )}

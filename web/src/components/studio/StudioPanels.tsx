@@ -161,7 +161,9 @@ import {
   ShieldAlert,
   ShieldOff,
   Scale,
-  GlobeLock
+  GlobeLock,
+  ChevronsUpDown,
+  ChevronsDownUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -1420,11 +1422,14 @@ export function StudioToolbox({
     timeout: 30000,
     retryCount: 3,
     retryInterval: 2000,
-    continueOnError: false,
+    continueOnError: true,
     delayBefore: 0,
     delayAfter: 0,
+    maxExecutionTime: 60,
+    memoryThreshold: 1024,
+    cpuThreshold: 80,
     logLevel: "Info",
-    takeScreenshotOnError: true
+    takeScreenshotOnError: false
   };
 
   const activityGroups = [
@@ -1468,7 +1473,7 @@ export function StudioToolbox({
         },
         { 
           name: "Message Box", icon: MessageSquare, 
-          dragType: JSON.stringify({ type: 'task', subType: 'serviceTask', category: 'Logic', label: 'MsgBox', icon: 'MessageSquare', inputs: { message: "", title: "Studio" }, outputs: { userResponse: "" }, properties: standardProps, execution: {} }), 
+          dragType: JSON.stringify({ type: 'task', subType: 'serviceTask', category: 'Logic', label: 'MsgBox', icon: 'MessageSquare', inputs: { message: "", title: "Studio", buttons: "OK", icon: "Information", topMost: true }, outputs: { userResponse: "" }, properties: standardProps, execution: {} }), 
           desc: "Show interactive popup dialog" 
         },
         { 
@@ -2831,7 +2836,17 @@ function PropertyField({ label, value, placeholder, onChange, fx, type, options,
           ref={inputRef as React.RefObject<HTMLInputElement>}
           type="text"
           value={String(value || "")}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => {
+            const val = e.target.value;
+            if (type === "number") {
+              if (!val.includes("{") && !val.includes("}")) {
+                const numericVal = val.replace(/[^0-9]/g, "");
+                onChange(numericVal);
+                return;
+              }
+            }
+            onChange(val);
+          }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="flex-1 bg-card/40 border border-border/40 rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground/80 outline-none focus:border-primary/40 transition-all"
@@ -3151,6 +3166,74 @@ export function StudioInspector({
   const [projectAssets, setProjectAssets] = useState<any[]>([]);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    general: true,
+    inputs: true,
+    outputs: true,
+    risk: true,
+    retry: true,
+    timing: true,
+    logs: true,
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const expandAll = () => {
+    setExpandedSections({
+      general: true,
+      inputs: true,
+      outputs: true,
+      risk: true,
+      retry: true,
+      timing: true,
+      logs: true,
+    });
+  };
+
+  const collapseAll = () => {
+    setExpandedSections({
+      general: false,
+      inputs: false,
+      outputs: false,
+      risk: false,
+      retry: false,
+      timing: false,
+      logs: false,
+    });
+  };
+
+  const matchesQuery = (text: string) => {
+    if (!searchQuery) return true;
+    return text.toLowerCase().includes(searchQuery.toLowerCase());
+  };
+
+  const showSection = (sectionKey: string, sectionTab: string) => {
+    if (searchQuery) {
+      switch (sectionKey) {
+        case 'general':
+          return matchesQuery("General Settings") || matchesQuery("Activity Name") || matchesQuery("Description") || matchesQuery(localLabel) || matchesQuery(selectedNode?.data?.description || "");
+        case 'inputs':
+          return matchesQuery("Input Arguments") || Object.entries(selectedNode?.data?.inputs || {}).some(([key, val]) => matchesQuery(key) || matchesQuery(String(val)));
+        case 'outputs':
+          return matchesQuery("Result Outputs") || Object.entries(selectedNode?.data?.outputs || {}).some(([key, val]) => matchesQuery(key) || matchesQuery(String(val)));
+        case 'risk':
+          return matchesQuery("Risk Governance") || matchesQuery("Governance Assessment") || matchesQuery("Risk Exposure Level") || matchesQuery("Risk Category") || matchesQuery("Mitigation Description") || matchesQuery("RPN") || matchesQuery("Audit Trail");
+        case 'retry':
+          return matchesQuery("Retry Policy") || matchesQuery("Retry Count") || matchesQuery("Retry Interval") || matchesQuery("Continue On Error");
+        case 'timing':
+          return matchesQuery("Timing & Performance") || matchesQuery("Timeout") || matchesQuery("Delay Before") || matchesQuery("Delay After");
+        case 'logs':
+          return matchesQuery("Governance & Logs") || matchesQuery("Log Level") || matchesQuery("Screenshot on Failure");
+        default:
+          return false;
+      }
+    }
+    return activeTab === sectionTab;
+  };
+
   useEffect(() => {
     if (projectId) {
       getAssets(projectId).then(setProjectAssets).catch(console.error);
@@ -3193,6 +3276,480 @@ export function StudioInspector({
     { id: "execution", label: "Execution", icon: Zap },
   ];
 
+  const renderGeneralSection = () => (
+    <div className="space-y-4">
+      <button
+        onClick={() => toggleSection('general')}
+        className="w-full flex items-center justify-between border-b border-border/10 pb-2 group text-left outline-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-primary/40" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60 group-hover:text-primary transition-colors">General Settings</span>
+        </div>
+        {expandedSections.general || searchQuery ? <ChevronDown size={14} className="text-muted-foreground/40" /> : <ChevronRight size={14} className="text-muted-foreground/40" />}
+      </button>
+      
+      {(expandedSections.general || searchQuery) && (
+        <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/40">Activity Name</label>
+            <input
+              type="text"
+              value={localLabel}
+              onChange={e => { setLocalLabel(e.target.value); handleUpdate({ label: e.target.value }); }}
+              className="w-full bg-primary/5 border border-border/40 rounded-lg px-3 py-2 text-sm font-bold text-foreground/80 outline-none focus:border-primary/40 transition-all font-sans"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/40">Description</label>
+            <textarea
+              value={selectedNode.data.description || ""}
+              onChange={e => handleUpdate({ description: e.target.value })}
+              placeholder="Business context..."
+              className="w-full h-20 bg-primary/5 border border-border/40 rounded-lg px-3 py-2 text-xs text-foreground/70 outline-none focus:border-primary/40 transition-all resize-none font-sans"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderInputsSection = () => (
+    <div className="space-y-4">
+      <button
+        onClick={() => toggleSection('inputs')}
+        className="w-full flex items-center justify-between border-b border-border/10 pb-2 group text-left outline-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-primary/40" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60 group-hover:text-primary transition-colors">Input Arguments</span>
+        </div>
+        {expandedSections.inputs || searchQuery ? <ChevronDown size={14} className="text-muted-foreground/40" /> : <ChevronRight size={14} className="text-muted-foreground/40" />}
+      </button>
+      
+      {(expandedSections.inputs || searchQuery) && (
+        <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+          {Object.entries(selectedNode.data.inputs || {}).map(([key, val]) => {
+            const isGetAsset = selectedNode.data.subType === 'getAsset' && key === 'assetName';
+            const isMsgBox = selectedNode.data.label?.toLowerCase().includes("msgbox");
+            
+            let fieldType: "select" | "checkbox" | "text" | undefined = undefined;
+            let fieldOptions: string[] | undefined = undefined;
+
+            if (isGetAsset) {
+              fieldType = "select";
+              fieldOptions = projectAssets.map(a => a.name);
+            } else if (isMsgBox) {
+              if (key === 'buttons') {
+                fieldType = "select";
+                fieldOptions = ["OK", "OKCancel", "YesNo", "YesNoCancel"];
+              } else if (key === 'icon') {
+                fieldType = "select";
+                fieldOptions = ["Information", "Warning", "Error", "Question", "None"];
+              } else if (key === 'topMost') {
+                fieldType = "checkbox";
+              }
+            }
+
+            return (
+              <PropertyField 
+                key={key} 
+                label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
+                value={val as any} 
+                type={fieldType}
+                options={fieldOptions}
+                onChange={v => handlePropertyChange('inputs', key, v)}
+                onCapture={onCapture ? () => onCapture(key) : undefined}
+                onFileSelected={(file) => {
+                  const currentInputs = selectedNode.data.inputs || {};
+                  const newInputs = { ...currentInputs, [key]: file.name };
+                  const rangeKey = Object.keys(newInputs).find(k => 
+                    k.toLowerCase().includes("range") || k.toLowerCase().includes("pages")
+                  );
+                  if (rangeKey) {
+                    const count = (file as any).pageCount;
+                    newInputs[rangeKey] = count ? `1-${count}` : "All";
+                  }
+                  handleUpdate({ inputs: newInputs });
+                }}
+                fx={fieldType !== 'select' && fieldType !== 'checkbox'}
+                variables={variables}
+              />
+            );
+          })}
+          {(!selectedNode.data.inputs || Object.keys(selectedNode.data.inputs).length === 0) && (
+            <p className="text-xs text-muted-foreground/40 pl-1">No inputs required for this activity.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderOutputsSection = () => (
+    <div className="space-y-4">
+      <button
+        onClick={() => toggleSection('outputs')}
+        className="w-full flex items-center justify-between border-b border-border/10 pb-2 group text-left outline-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500/40" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60 group-hover:text-primary transition-colors">Result Outputs</span>
+        </div>
+        {expandedSections.outputs || searchQuery ? <ChevronDown size={14} className="text-muted-foreground/40" /> : <ChevronRight size={14} className="text-muted-foreground/40" />}
+      </button>
+      
+      {(expandedSections.outputs || searchQuery) && (
+        <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+          {Object.entries(selectedNode.data.outputs || {}).map(([key, val]) => (
+            <PropertyField 
+              key={key} 
+              label={`Store ${key.replace(/([A-Z])/g, ' $1').toLowerCase()} In:`} 
+              value={val as any} 
+              placeholder="variable_name"
+              onChange={v => handlePropertyChange('outputs', key, v)}
+              fx
+              variables={variables}
+            />
+          ))}
+          {(!selectedNode.data.outputs || Object.keys(selectedNode.data.outputs).length === 0) && (
+            <p className="text-xs text-muted-foreground/40 pl-1">This activity does not return data.</p>
+          )}
+
+          {selectedNode.data.label?.toLowerCase().includes("msgbox") && (
+            <div className="mt-4 p-4 rounded-xl border border-dashed border-border/80 bg-primary/5 space-y-3">
+              <div className="flex items-center gap-2 text-primary">
+                <GitBranch size={14} />
+                <span className="text-xs font-bold uppercase tracking-wider">Output Value Routing</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                This MsgBox is configured with buttons: <strong className="text-foreground">{selectedNode.data.inputs?.buttons || "OK"}</strong>. Configure actions or conditional routing paths for each possible outcome:
+              </p>
+              <div className="space-y-2">
+                {((selectedNode.data.inputs?.buttons === "YesNo" && ["Yes", "No"]) ||
+                  (selectedNode.data.inputs?.buttons === "YesNoCancel" && ["Yes", "No", "Cancel"]) ||
+                  (selectedNode.data.inputs?.buttons === "OKCancel" && ["OK", "Cancel"]) ||
+                  ["OK"]).map(outcome => (
+                    <div key={outcome} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border/40 text-xs">
+                      <span className="font-bold text-foreground/80">If result is "{outcome}"</span>
+                      <select 
+                        value={selectedNode.data.properties?.[`outcome_${outcome}`] || "continue"}
+                        onChange={e => handlePropertyChange('properties', `outcome_${outcome}`, e.target.value)}
+                        className="bg-transparent text-primary font-bold outline-none cursor-pointer"
+                      >
+                        <option value="continue">Continue Flow</option>
+                        <option value="stop">Stop Flow</option>
+                        <option value="branch">Branch to Decision</option>
+                        <option value="throw">Throw Exception</option>
+                      </select>
+                    </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderRiskSection = () => (
+    <div className="space-y-4">
+      <button
+        onClick={() => toggleSection('risk')}
+        className="w-full flex items-center justify-between border-b border-border/10 pb-2 group text-left outline-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-rose-500/40" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60 group-hover:text-primary transition-colors">Risk Governance</span>
+        </div>
+        {expandedSections.risk || searchQuery ? <ChevronDown size={14} className="text-muted-foreground/40" /> : <ChevronRight size={14} className="text-muted-foreground/40" />}
+      </button>
+      
+      {(expandedSections.risk || searchQuery) && (
+        <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+          <div className="rounded-2xl p-4 flex items-center justify-between shadow-sm border border-border/40" style={{ background: "var(--studio-surface-raised)" }}>
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
+                selectedNode.data.risk?.disabled !== false ? "bg-muted text-muted-foreground" : "bg-rose-500/10 text-rose-500"
+              )}>
+                {selectedNode.data.risk?.disabled !== false ? <ShieldOff size={20} /> : <ShieldAlert size={20} />}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-foreground font-sans">Risk Governance</span>
+                <span className="text-xs text-muted-foreground/60 font-medium font-sans">
+                  {selectedNode.data.risk?.disabled !== false ? "Risk profiling is currently disabled" : "Active risk assessment tracking"}
+                </span>
+              </div>
+            </div>
+            <button 
+              onClick={() => handleUpdate({ risk: { ...(selectedNode.data.risk || { level: 'LOW' }), disabled: selectedNode.data.risk?.disabled !== false ? false : true } })}
+              className={cn(
+                "w-10 h-5 rounded-full transition-all relative",
+                selectedNode.data.risk?.disabled !== false ? "bg-muted-foreground/20" : "bg-primary"
+              )}
+            >
+              <div className={cn(
+                "absolute top-0.5 w-4 h-4 rounded-full bg-background transition-all shadow-sm",
+                selectedNode.data.risk?.disabled !== false ? "left-0.5" : "left-[22px]"
+              )} />
+            </button>
+          </div>
+
+          {selectedNode.data.risk?.disabled === false ? (
+            <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-6 space-y-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <ShieldAlert size={80} className="text-rose-500" />
+              </div>
+
+              <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-foreground tracking-tight font-sans">Governance Assessment</h3>
+                  <p className="text-xs text-muted-foreground/60 font-medium font-sans">Configure risk level and compliance strategy for this activity.</p>
+              </div>
+
+              <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5 font-sans">Risk Exposure Level</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['LOW', 'MEDIUM', 'HIGH'].map((level) => (
+                        <button
+                          key={level}
+                          onClick={() => handleUpdate({ risk: { ...selectedNode.data.risk, level: level as any, rpn: (level === 'HIGH' ? 15 : level === 'MEDIUM' ? 8 : 2) } })}
+                          className={cn(
+                            "py-2 rounded-xl border text-xs font-black transition-all font-sans",
+                            selectedNode.data.risk?.level === level 
+                              ? level === 'HIGH' ? "bg-rose-500 border-rose-600 text-white shadow-lg shadow-rose-500/20" 
+                                : level === 'MEDIUM' ? "bg-amber-500 border-amber-600 text-white shadow-lg shadow-amber-500/20"
+                                : "bg-emerald-500 border-emerald-600 text-white shadow-lg shadow-emerald-500/20"
+                              : "bg-background border-border/40 text-muted-foreground/40 hover:border-primary/20 hover:text-primary"
+                          )}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5 font-sans">Risk Category</label>
+                    <select 
+                      value={selectedNode.data.risk?.category || 'Operational'}
+                      onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, category: e.target.value as any } })}
+                      className="w-full border border-border/40 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10 transition-all font-sans" style={{ background: "var(--studio-surface-sunken)" }}
+                    >
+                      <option value="Financial">Financial Risk</option>
+                      <option value="Operational">Operational Risk</option>
+                      <option value="Security">Security Risk</option>
+                      <option value="Compliance">Compliance Risk</option>
+                      <option value="Data">Data Privacy Risk</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5 font-sans">Mitigation Description</label>
+                    <textarea 
+                      value={selectedNode.data.risk?.why || ""}
+                      onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, why: e.target.value } })}
+                      placeholder="Explain why this risk level was assigned and how it's being mitigated..."
+                      className="w-full h-24 border border-border/40 rounded-xl px-4 py-3 text-xs text-foreground/70 outline-none focus:ring-2 focus:ring-primary/10 transition-all resize-none leading-relaxed font-sans" style={{ background: "var(--studio-surface-sunken)" }}
+                    />
+                  </div>
+              </div>
+
+              <div className="pt-4 border-t border-rose-500/10 flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest font-sans">Calculated RPN</span>
+                    <span className={cn(
+                      "text-lg font-black tracking-tight font-sans",
+                      selectedNode.data.risk?.level === 'HIGH' ? "text-rose-500" : "text-primary"
+                    )}>
+                      {selectedNode.data.risk?.rpn || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/5 border border-primary/10">
+                    <Scale size={10} className="text-primary" />
+                    <span className="text-xs font-bold text-primary/70 uppercase font-sans">Governance Ready</span>
+                  </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-muted/5 border border-dashed border-border/40 rounded-2xl animate-in zoom-in-95 duration-500">
+              <div className="w-16 h-16 rounded-full bg-muted/10 flex items-center justify-center text-muted-foreground/20 mb-4">
+                <ShieldOff size={32} />
+              </div>
+              <h3 className="text-sm font-bold text-foreground/40 uppercase tracking-widest font-sans">Risk Analysis Suspended</h3>
+              <p className="text-xs text-muted-foreground/30 mt-2 max-w-[220px] font-sans">
+                Risk tracking has been disabled for this activity. It will not be flagged during compliance audits or runtime risk monitoring.
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleUpdate({ risk: { ...selectedNode.data.risk, disabled: false } })}
+                className="mt-6 h-8 text-xs font-semibold uppercase tracking-wide border-primary/20 text-primary/60 hover:bg-primary/5 font-sans"
+              >
+                Restore Risk Tracking
+              </Button>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/40 flex items-center gap-2 font-sans">
+              <History size={14} /> Audit Trail
+            </h4>
+            <div className="bg-muted/10 border border-dashed border-border/40 rounded-2xl p-6 text-center space-y-2">
+               <p className="text-xs text-muted-foreground/40 font-medium font-sans">No recent risk modifications detected for this node.</p>
+               <Button variant="ghost" size="sm" className="h-7 text-xs font-bold uppercase tracking-widest text-primary/60 font-sans">View Full Log</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderRetrySection = () => (
+    <div className="space-y-4">
+      <button
+        onClick={() => toggleSection('retry')}
+        className="w-full flex items-center justify-between border-b border-border/10 pb-2 group text-left outline-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-amber-500/40" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60 group-hover:text-primary transition-colors">Retry Policy</span>
+        </div>
+        {expandedSections.retry || searchQuery ? <ChevronDown size={14} className="text-muted-foreground/40" /> : <ChevronRight size={14} className="text-muted-foreground/40" />}
+      </button>
+      
+      {(expandedSections.retry || searchQuery) && (
+        <div className="space-y-4 pl-1 pt-1 animate-in fade-in duration-200">
+          <PropertyField 
+            label="Retry Count" 
+            type="number"
+            value={selectedNode.data.properties?.retryCount !== undefined ? selectedNode.data.properties.retryCount : "3"} 
+            placeholder="e.g. 3 or {retry_count}"
+            onChange={v => handlePropertyChange('properties', 'retryCount', v)} 
+            fx
+            variables={variables}
+          />
+          <PropertyField 
+            label="Retry Interval (ms)" 
+            type="number"
+            value={selectedNode.data.properties?.retryInterval !== undefined ? selectedNode.data.properties.retryInterval : "2000"} 
+            placeholder="e.g. 2000 or {retry_interval}"
+            onChange={v => handlePropertyChange('properties', 'retryInterval', v)} 
+            fx
+            variables={variables}
+          />
+          <PropertyField 
+            label="Continue On Error" 
+            type="checkbox" 
+            value={selectedNode.data.properties?.continueOnError !== undefined ? selectedNode.data.properties.continueOnError : true} 
+            onChange={v => handlePropertyChange('properties', 'continueOnError', v)} 
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const renderTimingSection = () => (
+    <div className="space-y-4">
+      <button
+        onClick={() => toggleSection('timing')}
+        className="w-full flex items-center justify-between border-b border-border/10 pb-2 group text-left outline-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-blue-500/40" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60 group-hover:text-primary transition-colors">Timing & Performance</span>
+        </div>
+        {expandedSections.timing || searchQuery ? <ChevronDown size={14} className="text-muted-foreground/40" /> : <ChevronRight size={14} className="text-muted-foreground/40" />}
+      </button>
+      
+      {(expandedSections.timing || searchQuery) && (
+        <div className="space-y-4 pl-1 pt-1 animate-in fade-in duration-200">
+          <PropertyField 
+            label="Timeout (ms)" 
+            type="number"
+            value={selectedNode.data.properties?.timeout !== undefined ? selectedNode.data.properties.timeout : "30000"} 
+            placeholder="e.g. 30000 or {timeout_var}"
+            onChange={v => handlePropertyChange('properties', 'timeout', v)} 
+            fx
+            variables={variables}
+          />
+          <PropertyField 
+            label="Delay Before (ms)" 
+            type="number"
+            value={selectedNode.data.properties?.delayBefore !== undefined ? selectedNode.data.properties.delayBefore : "0"} 
+            placeholder="e.g. 0 or {delay_var}"
+            onChange={v => handlePropertyChange('properties', 'delayBefore', v)} 
+            fx
+            variables={variables}
+          />
+          <PropertyField 
+            label="Delay After (ms)" 
+            type="number"
+            value={selectedNode.data.properties?.delayAfter !== undefined ? selectedNode.data.properties.delayAfter : "0"} 
+            placeholder="e.g. 0 or {delay_var}"
+            onChange={v => handlePropertyChange('properties', 'delayAfter', v)} 
+            fx
+            variables={variables}
+          />
+          <PropertyField 
+            label="Max Execution Time (s)" 
+            type="number"
+            value={selectedNode.data.properties?.maxExecutionTime !== undefined ? selectedNode.data.properties.maxExecutionTime : "60"} 
+            placeholder="e.g. 60 or {max_execution_time}"
+            onChange={v => handlePropertyChange('properties', 'maxExecutionTime', v)} 
+            fx
+            variables={variables}
+          />
+          <PropertyField 
+            label="Memory Threshold (MB)" 
+            type="number"
+            value={selectedNode.data.properties?.memoryThreshold !== undefined ? selectedNode.data.properties.memoryThreshold : "1024"} 
+            placeholder="e.g. 1024 or {memory_threshold}"
+            onChange={v => handlePropertyChange('properties', 'memoryThreshold', v)} 
+            fx
+            variables={variables}
+          />
+          <PropertyField 
+            label="CPU Threshold (%)" 
+            type="number"
+            value={selectedNode.data.properties?.cpuThreshold !== undefined ? selectedNode.data.properties.cpuThreshold : "80"} 
+            placeholder="e.g. 80 or {cpu_threshold}"
+            onChange={v => handlePropertyChange('properties', 'cpuThreshold', v)} 
+            fx
+            variables={variables}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const renderLogsSection = () => (
+    <div className="space-y-4">
+      <button
+        onClick={() => toggleSection('logs')}
+        className="w-full flex items-center justify-between border-b border-border/10 pb-2 group text-left outline-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-purple-500/40" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60 group-hover:text-primary transition-colors">Governance & Logs</span>
+        </div>
+        {expandedSections.logs || searchQuery ? <ChevronDown size={14} className="text-muted-foreground/40" /> : <ChevronRight size={14} className="text-muted-foreground/40" />}
+      </button>
+      
+      {(expandedSections.logs || searchQuery) && (
+        <div className="space-y-4 pl-1 pt-1 animate-in fade-in duration-200">
+          <PropertyField 
+            label="Log Level" 
+            type="select" 
+            value={selectedNode.data.properties?.logLevel || "Info"} 
+            options={["Verbose", "Debug", "Info", "Warning", "Error"]}
+            onChange={v => handlePropertyChange('properties', 'logLevel', v)} 
+          />
+        </div>
+      )}
+    </div>
+  );
+
   if (collapsed) {
     return (
       <div className="flex flex-col items-center py-4 gap-4 border-l border-border/40 h-full" style={{ background: "var(--studio-surface)" }}>
@@ -3232,6 +3789,16 @@ export function StudioInspector({
               <Video size={14} className={isRecording ? "animate-pulse" : ""} />
             </button>
           )}
+          <button 
+            onClick={() => handlePropertyChange('properties', 'takeScreenshotOnError', selectedNode.data.properties?.takeScreenshotOnError !== true)}
+            className={cn(
+              "p-1.5 rounded-full transition-all",
+              selectedNode.data.properties?.takeScreenshotOnError === true ? "text-primary bg-primary/10" : "text-muted-foreground/40 hover:bg-primary/5 hover:text-primary"
+            )}
+            title={selectedNode.data.properties?.takeScreenshotOnError === true ? "Disable Screenshot on Failure" : "Enable Screenshot on Failure"}
+          >
+            <Camera size={14} />
+          </button>
           <button onClick={() => onDelete(selectedNode.id)} className="p-1.5 rounded-full hover:bg-destructive/10 text-muted-foreground/40 hover:text-destructive transition-all">
             <Trash size={14} />
           </button>
@@ -3239,341 +3806,110 @@ export function StudioInspector({
       </div>
 
       {/* Navigation Tabs */}
-      <div className="tab-bar shrink-0">
+      <div className="tab-bar shrink-0 flex items-center justify-between">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "flex-1 py-3 text-xs font-semibold uppercase tracking-wide transition-all relative",
-              activeTab === tab.id ? "text-primary" : "text-muted-foreground/40 hover:text-foreground/60"
+              "flex-1 py-3 px-1 flex flex-row items-center justify-center gap-1.5 text-[10px] md:text-xs font-semibold uppercase tracking-wide transition-all relative outline-none",
+              activeTab === tab.id ? "text-primary bg-primary/5" : "text-muted-foreground/60 hover:text-foreground/80 hover:bg-primary/5"
             )}
+            title={tab.label}
           >
-            {tab.label}
+            <tab.icon size={13} className={cn("shrink-0", activeTab === tab.id ? "text-primary" : "text-muted-foreground/50")} />
+            <span className="hidden xl:inline truncate max-w-[80px]">{tab.label.split(' ')[0]}</span>
             {activeTab === tab.id && <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-t-full" />}
           </button>
         ))}
       </div>
 
+      {/* Search & Collapse/Expand Actions */}
+      <div className="px-4 py-2 border-b border-border/10 flex items-center gap-2" style={{ background: "var(--studio-surface-raised)" }}>
+        <div className="relative flex-1">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
+          <input
+            type="text"
+            placeholder="Search properties..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full bg-primary/5 border border-border/20 rounded-lg pl-8 pr-7 py-1.5 text-xs text-foreground/80 outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/10 transition-all font-sans"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery("")} 
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-foreground transition-colors"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        <button 
+          onClick={expandAll} 
+          title="Expand All Sections"
+          className="p-1.5 rounded-lg hover:bg-primary/5 text-muted-foreground/60 hover:text-primary transition-all outline-none"
+        >
+          <ChevronsUpDown size={14} />
+        </button>
+        <button 
+          onClick={collapseAll} 
+          title="Collapse All Sections"
+          className="p-1.5 rounded-lg hover:bg-primary/5 text-muted-foreground/60 hover:text-primary transition-all outline-none"
+        >
+          <ChevronsDownUp size={14} />
+        </button>
+      </div>
+
       {/* Content Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 pb-20 space-y-6" style={{ background: "var(--studio-surface)" }}>
-        
-        {/* --- Main Properties Tab --- */}
-        {activeTab === 'properties' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
-            {/* Display Label */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/40">Activity Name</label>
-              <input
-                type="text"
-                value={localLabel}
-                onChange={e => { setLocalLabel(e.target.value); handleUpdate({ label: e.target.value }); }}
-                className="w-full bg-primary/5 border border-border/40 rounded-lg px-3 py-2 text-sm font-bold text-foreground/80 outline-none focus:border-primary/40 transition-all"
-              />
+        {searchQuery ? (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="text-xs text-muted-foreground/60 font-semibold mb-2 font-sans">
+              Showing matching sections for &ldquo;{searchQuery}&rdquo;
             </div>
-
-            {/* Dynamic Inputs Section */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-border/10 pb-2">
-                <div className="w-2 h-2 rounded-full bg-primary/40" />
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Input Arguments</span>
+            {showSection('general', 'properties') && renderGeneralSection()}
+            {showSection('inputs', 'properties') && renderInputsSection()}
+            {showSection('outputs', 'data') && renderOutputsSection()}
+            {showSection('risk', 'risk') && renderRiskSection()}
+            {showSection('retry', 'execution') && renderRetrySection()}
+            {showSection('timing', 'execution') && renderTimingSection()}
+            {showSection('logs', 'execution') && renderLogsSection()}
+            
+            {!['general', 'inputs', 'outputs', 'risk', 'retry', 'timing', 'logs'].some(k => showSection(k, k === 'general' || k === 'inputs' ? 'properties' : k === 'outputs' ? 'data' : k === 'risk' ? 'risk' : 'execution')) && (
+              <div className="py-8 text-center text-xs text-muted-foreground/40 font-sans">
+                No matching properties found.
               </div>
-              <div className="space-y-4">
-                {Object.entries(selectedNode.data.inputs || {}).map(([key, val]) => {
-                  const isGetAsset = selectedNode.data.subType === 'getAsset' && key === 'assetName';
-                  return (
-                    <PropertyField 
-                      key={key} 
-                      label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} 
-                      value={val as any} 
-                      type={isGetAsset ? "select" : undefined}
-                      options={isGetAsset ? projectAssets.map(a => a.name) : undefined}
-                      onChange={v => handlePropertyChange('inputs', key, v)}
-                      onCapture={onCapture ? () => onCapture(key) : undefined}
-                      onFileSelected={(file) => {
-                        // Unified update to prevent race conditions
-                        const currentInputs = selectedNode.data.inputs || {};
-                        const newInputs = { ...currentInputs, [key]: file.name };
-                        
-                        const rangeKey = Object.keys(newInputs).find(k => 
-                          k.toLowerCase().includes("range") || k.toLowerCase().includes("pages")
-                        );
-                        
-                        if (rangeKey) {
-                          const count = (file as any).pageCount;
-                          newInputs[rangeKey] = count ? `1-${count}` : "All";
-                        }
-                        
-                        handleUpdate({ inputs: newInputs });
-                      }}
-                      fx={!isGetAsset}
-                      variables={variables}
-                    />
-                  );
-                })}
-                {(!selectedNode.data.inputs || Object.keys(selectedNode.data.inputs).length === 0) && (
-                  <p className="text-xs text-muted-foreground/40  pl-1">No inputs required for this activity.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/40">Description</label>
-              <textarea
-                value={selectedNode.data.description || ""}
-                onChange={e => handleUpdate({ description: e.target.value })}
-                placeholder="Business context..."
-                className="w-full h-20 bg-primary/5 border border-border/40 rounded-lg px-3 py-2 text-xs text-foreground/70 outline-none focus:border-primary/40 transition-all resize-none"
-              />
-            </div>
+            )}
           </div>
-        )}
-
-        {/* --- Data Mapping Tab --- */}
-        {activeTab === 'data' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
-             {/* Dynamic Outputs Section */}
-             <div className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-border/10 pb-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500/40" />
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Result Outputs</span>
-              </div>
-              <div className="space-y-4">
-                {Object.entries(selectedNode.data.outputs || {}).map(([key, val]) => (
-                  <PropertyField 
-                    key={key} 
-                    label={`Store ${key.replace(/([A-Z])/g, ' $1').toLowerCase()} In:`} 
-                    value={val as any} 
-                    placeholder="variable_name"
-                    onChange={v => handlePropertyChange('outputs', key, v)}
-                    fx
-                    variables={variables}
-                  />
-                ))}
-                {(!selectedNode.data.outputs || Object.keys(selectedNode.data.outputs).length === 0) && (
-                  <p className="text-xs text-muted-foreground/40  pl-1">This activity does not return data.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --- Risk Profile Tab --- */}
-        {activeTab === 'risk' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
-            {/* Risk Master Toggle */}
-            <div className="rounded-2xl p-4 flex items-center justify-between shadow-sm" style={{ background: "var(--studio-surface-raised)", border: "1px solid var(--studio-border)" }}>
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                  selectedNode.data.risk?.disabled ? "bg-muted text-muted-foreground" : "bg-rose-500/10 text-rose-500"
-                )}>
-                  {selectedNode.data.risk?.disabled ? <ShieldOff size={20} /> : <ShieldAlert size={20} />}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-foreground">Risk Governance</span>
-                  <span className="text-xs text-muted-foreground/60 font-medium">
-                    {selectedNode.data.risk?.disabled ? "Risk profiling is currently disabled" : "Active risk assessment tracking"}
-                  </span>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleUpdate({ risk: { ...(selectedNode.data.risk || { level: 'LOW' }), disabled: !selectedNode.data.risk?.disabled } })}
-                className={cn(
-                  "w-10 h-5 rounded-full transition-all relative",
-                  selectedNode.data.risk?.disabled ? "bg-muted-foreground/20" : "bg-primary"
-                )}
-              >
-                <div className={cn(
-                  "absolute top-0.5 w-4 h-4 rounded-full bg-background transition-all shadow-sm",
-                  selectedNode.data.risk?.disabled ? "left-0.5" : "left-[22px]"
-                )} />
-              </button>
-            </div>
-
-            {!selectedNode.data.risk?.disabled ? (
-              <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-6 space-y-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                  <ShieldAlert size={80} className="text-rose-500" />
-                </div>
-
-                <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-foreground tracking-tight">Governance Assessment</h3>
-                    <p className="text-xs text-muted-foreground/60 font-medium">Configure risk level and compliance strategy for this activity.</p>
-                </div>
-
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5">Risk Exposure Level</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {['LOW', 'MEDIUM', 'HIGH'].map((level) => (
-                          <button
-                            key={level}
-                            onClick={() => handleUpdate({ risk: { ...selectedNode.data.risk, level: level as any, rpn: (level === 'HIGH' ? 15 : level === 'MEDIUM' ? 8 : 2) } })}
-                            className={cn(
-                              "py-2 rounded-xl border text-xs font-black transition-all",
-                              selectedNode.data.risk?.level === level 
-                                ? level === 'HIGH' ? "bg-rose-500 border-rose-600 text-white shadow-lg shadow-rose-500/20" 
-                                  : level === 'MEDIUM' ? "bg-amber-500 border-amber-600 text-white shadow-lg shadow-amber-500/20"
-                                  : "bg-emerald-500 border-emerald-600 text-white shadow-lg shadow-emerald-500/20"
-                                : "bg-background border-border/40 text-muted-foreground/40 hover:border-primary/20 hover:text-primary"
-                            )}
-                          >
-                            {level}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5">Risk Category</label>
-                      <select 
-                        value={selectedNode.data.risk?.category || 'Operational'}
-                        onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, category: e.target.value as any } })}
-                        className="w-full border border-border/40 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/10 transition-all" style={{ background: "var(--studio-surface-sunken)" }}
-                      >
-                        <option value="Financial">Financial Risk</option>
-                        <option value="Operational">Operational Risk</option>
-                        <option value="Security">Security Risk</option>
-                        <option value="Compliance">Compliance Risk</option>
-                        <option value="Data">Data Privacy Risk</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 ml-0.5">Mitigation Description</label>
-                      <textarea 
-                        value={selectedNode.data.risk?.why || ""}
-                        onChange={(e) => handleUpdate({ risk: { ...selectedNode.data.risk, why: e.target.value } })}
-                        placeholder="Explain why this risk level was assigned and how it's being mitigated..."
-                        className="w-full h-24 border border-border/40 rounded-xl px-4 py-3 text-xs text-foreground/70 outline-none focus:ring-2 focus:ring-primary/10 transition-all resize-none leading-relaxed" style={{ background: "var(--studio-surface-sunken)" }}
-                      />
-                    </div>
-                </div>
-
-                <div className="pt-4 border-t border-rose-500/10 flex items-center justify-between">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest">Calculated RPN</span>
-                      <span className={cn(
-                        "text-lg font-black tracking-tight",
-                        selectedNode.data.risk?.level === 'HIGH' ? "text-rose-500" : "text-primary"
-                      )}>
-                        {selectedNode.data.risk?.rpn || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/5 border border-primary/10">
-                      <Scale size={10} className="text-primary" />
-                      <span className="text-xs font-bold text-primary/70 uppercase">Governance Ready</span>
-                    </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-muted/5 border border-dashed border-border/40 rounded-2xl animate-in zoom-in-95 duration-500">
-                <div className="w-16 h-16 rounded-full bg-muted/10 flex items-center justify-center text-muted-foreground/20 mb-4">
-                  <ShieldOff size={32} />
-                </div>
-                <h3 className="text-sm font-bold text-foreground/40 uppercase tracking-widest">Risk Analysis Suspended</h3>
-                <p className="text-xs text-muted-foreground/30 mt-2 max-w-[220px]">
-                  Risk tracking has been disabled for this activity. It will not be flagged during compliance audits or runtime risk monitoring.
-                </p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleUpdate({ risk: { ...selectedNode.data.risk, disabled: false } })}
-                  className="mt-6 h-8 text-xs font-semibold uppercase tracking-wide border-primary/20 text-primary/60 hover:bg-primary/5"
-                >
-                  Restore Risk Tracking
-                </Button>
+        ) : (
+          <>
+            {activeTab === 'properties' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
+                {renderGeneralSection()}
+                {renderInputsSection()}
               </div>
             )}
 
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/40 flex items-center gap-2">
-                <History size={14} /> Audit Trail
-              </h4>
-              <div className="bg-muted/10 border border-dashed border-border/40 rounded-2xl p-6 text-center space-y-2">
-                 <p className="text-xs text-muted-foreground/40 font-medium">No recent risk modifications detected for this node.</p>
-                 <Button variant="ghost" size="sm" className="h-7 text-xs font-bold uppercase tracking-widest text-primary/60">View Full Log</Button>
+            {activeTab === 'data' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
+                {renderOutputsSection()}
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* --- Execution Governance Tab --- */}
-        {activeTab === 'execution' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 border-b border-border/10 pb-2">
-                <div className="w-2 h-2 rounded-full bg-amber-500/40" />
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Retry Policy</span>
+            {activeTab === 'risk' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
+                {renderRiskSection()}
               </div>
-              <div className="space-y-4 pl-1">
-                <PropertyField 
-                  label="Retry Count" 
-                  value={selectedNode.data.properties?.retryCount || 0} 
-                  onChange={v => handlePropertyChange('properties', 'retryCount', parseInt(v) || 0)} 
-                />
-                <PropertyField 
-                  label="Retry Interval (ms)" 
-                  value={selectedNode.data.properties?.retryInterval || 2000} 
-                  onChange={v => handlePropertyChange('properties', 'retryInterval', parseInt(v) || 0)} 
-                />
-                <PropertyField 
-                  label="Continue On Error" 
-                  type="checkbox" 
-                  value={selectedNode.data.properties?.continueOnError} 
-                  onChange={v => handlePropertyChange('properties', 'continueOnError', v)} 
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 border-b border-border/10 pb-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500/40" />
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Timing & Performance</span>
+            {activeTab === 'execution' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-300">
+                {renderRetrySection()}
+                {renderTimingSection()}
+                {renderLogsSection()}
               </div>
-              <div className="space-y-4 pl-1">
-                <PropertyField 
-                  label="Timeout (ms)" 
-                  value={selectedNode.data.properties?.timeout || 30000} 
-                  onChange={v => handlePropertyChange('properties', 'timeout', parseInt(v) || 0)} 
-                />
-                <PropertyField 
-                  label="Delay Before (ms)" 
-                  value={selectedNode.data.properties?.delayBefore || 0} 
-                  onChange={v => handlePropertyChange('properties', 'delayBefore', parseInt(v) || 0)} 
-                />
-                <PropertyField 
-                  label="Delay After (ms)" 
-                  value={selectedNode.data.properties?.delayAfter || 0} 
-                  onChange={v => handlePropertyChange('properties', 'delayAfter', parseInt(v) || 0)} 
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 border-b border-border/10 pb-2">
-                <div className="w-2 h-2 rounded-full bg-purple-500/40" />
-                <span className="text-xs font-medium uppercase tracking-wide text-foreground/60">Governance & Logs</span>
-              </div>
-              <div className="space-y-4 pl-1">
-                <PropertyField 
-                  label="Log Level" 
-                  type="select" 
-                  value={selectedNode.data.properties?.logLevel || "Info"} 
-                  options={["Verbose", "Debug", "Info", "Warning", "Error"]}
-                  onChange={v => handlePropertyChange('properties', 'logLevel', v)} 
-                />
-                <PropertyField 
-                  label="Screenshot on Failure" 
-                  type="checkbox" 
-                  value={selectedNode.data.properties?.takeScreenshotOnError} 
-                  onChange={v => handlePropertyChange('properties', 'takeScreenshotOnError', v)} 
-                />
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </div>
 

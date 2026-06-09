@@ -66,7 +66,7 @@ export function validateFlow(flow: FlowDefinition): ValidationResult {
     if (node.type === "START" || node.type === "TIMER_BOUNDARY_EVENT" || node.type === "ERROR_BOUNDARY_EVENT" || node.type === "BUSINESS_CALENDAR") return;
     const hasIn  = flow.edges.some(e => e.target === node.id);
     const hasOut = flow.edges.some(e => e.source === node.id);
-    if (!hasIn && node.type !== "START") {
+    if (!hasIn) {
       issues.push({ nodeId: node.id, nodeName: node.name, nodeType: node.type,
         severity: "warning", code: "NODE_NO_INCOMING",
         message: `"${node.name}" has no incoming connections — it is unreachable.` });
@@ -309,7 +309,7 @@ function validateDataTransform(node: DataTransformationNode, ctx: IssueCtx): Val
     issues.push({ ...ctx, severity: "error", code: "TRANSFORM_NO_OUTPUT_SCHEMA",
       message: "Data Transformation must define an output schema reference." });
   }
-  if (!node.validation?.validateOutputSchema) {
+  if (!node.transformationValidation?.validateOutputSchema) {
     issues.push({ ...ctx, severity: "warning", code: "TRANSFORM_NO_OUTPUT_VALIDATION",
       message: "Output schema validation is disabled. Enable it to catch mapping errors at runtime." });
   }

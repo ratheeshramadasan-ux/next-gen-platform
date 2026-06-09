@@ -543,6 +543,75 @@ function DesignerPage() {
 
   const handleUpdateNodeData = useCallback(
     (id: string, newData: any) => {
+      let appendNodes: any[] = [];
+      let appendEdges: any[] = [];
+
+      // Auto-append decision node for MsgBox YesNoCancel (more than 2 values)
+      const msgboxNode = nodes.find((n) => n.id === id);
+      if (
+        msgboxNode &&
+        (msgboxNode.data as any).label?.toLowerCase().includes("msgbox") &&
+        newData.inputs?.buttons === "YesNoCancel" &&
+        (msgboxNode.data as any).inputs?.buttons !== "YesNoCancel"
+      ) {
+        const hasDecisionConnection = edges.some(
+          (e) => e.source === id && (nodes.find((n) => n.id === e.target)?.data as any).subType === "xorGateway"
+        );
+        if (!hasDecisionConnection) {
+          const decisionNodeId = uuidv4();
+          const decisionNode = {
+            id: decisionNodeId,
+            type: "gatewayNode",
+            position: { x: msgboxNode.position.x, y: msgboxNode.position.y + 150 },
+            data: {
+              id: decisionNodeId,
+              activityId: uuidv4(),
+              type: "gateway",
+              subType: "xorGateway",
+              category: "Logic",
+              label: "Decision",
+              icon: "Split",
+              inputs: { condition: "{userResponse}" },
+              outputs: {},
+              properties: {
+                timeout: 30000,
+                retryCount: 3,
+                retryInterval: 2000,
+                continueOnError: true,
+                delayBefore: 0,
+                delayAfter: 0,
+                maxExecutionTime: 60,
+                memoryThreshold: 1024,
+                cpuThreshold: 80,
+                logLevel: "Info",
+                takeScreenshotOnError: false
+              },
+              execution: {},
+              branches: [
+                { name: "Yes", condition: "{userResponse} == 'Yes'", targetNode: "", priority: 1 },
+                { name: "No", condition: "{userResponse} == 'No'", targetNode: "", priority: 2 },
+                { name: "Cancel", condition: "{userResponse} == 'Cancel'", targetNode: "", priority: 3 }
+              ]
+            }
+          };
+
+          const newEdge = {
+            id: uuidv4(),
+            source: id,
+            target: decisionNodeId,
+            type: "studioEdge",
+            animated: true,
+            data: {
+              type: "sequence",
+              style: { stroke: DEFAULT_STUDIO_THEME.primary, strokeWidth: 2 }
+            }
+          };
+
+          appendNodes.push(decisionNode);
+          appendEdges.push(newEdge);
+        }
+      }
+
       const typePrefixes: Record<string, string> = {
         String: "str",
         Int32: "int",
@@ -641,13 +710,18 @@ function DesignerPage() {
       }
 
       // 2. Update nodes immediately
-      setNodes((nds) =>
-        nds.map((node) =>
+      setNodes((nds) => {
+        const updated = nds.map((node) =>
           node.id === id
             ? { ...node, data: { ...node.data, ...newData } }
             : node,
-        ),
-      );
+        );
+        return updated.concat(appendNodes);
+      });
+
+      if (appendEdges.length > 0) {
+        setEdges((eds) => eds.concat(appendEdges));
+      }
 
       // 3. Debounce auto-declare variables
       if (varDebounceRef.current) clearTimeout(varDebounceRef.current);
@@ -842,11 +916,14 @@ function DesignerPage() {
           timeout: 30000,
           retryCount: 3,
           retryInterval: 2000,
-          continueOnError: false,
+          continueOnError: true,
           delayBefore: 0,
           delayAfter: 0,
+          maxExecutionTime: 60,
+          memoryThreshold: 1024,
+          cpuThreshold: 80,
           logLevel: "Info",
-          takeScreenshotOnError: true,
+          takeScreenshotOnError: false,
         },
         execution: execution || {},
         risk: (() => {

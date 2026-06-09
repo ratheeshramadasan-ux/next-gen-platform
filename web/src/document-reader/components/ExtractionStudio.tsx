@@ -94,6 +94,12 @@ const hasMappedArea = (field: StudioField): field is MappedStudioField =>
 
 type SelectionBox = { x: number; y: number; width: number; height: number };
 type TraceLine = { id: string; path: string; color: string; active: boolean };
+type CalloutLabel = {
+  id: string; name: string; color: string; isAnchor: boolean; active: boolean;
+  side: "left" | "right";
+  chipX: number; chipY: number;   // workspace-relative top-left of chip
+  annEdgeX: number; annEdgeY: number; // workspace-relative point on annotation box edge
+};
 type RelationshipLine = {
   id: string;
   color: string;
@@ -190,6 +196,7 @@ export function ExtractionStudio() {
   const documentDesignsRef = React.useRef<Record<string, DocumentExtractionDesign>>({});
   const lastDesignDocIdRef = React.useRef<string | null>(activeDocument?.documentId || null);
   const workspaceRef = React.useRef<HTMLDivElement | null>(null);
+  const canvasPanelRef = React.useRef<HTMLDivElement | null>(null);
   const previewRowRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
   const reviewRowsRef = React.useRef<Array<StudioField & { id: string }>>([]);
   const activeTraceFieldIdRef = React.useRef<string | null>(null);
@@ -241,6 +248,8 @@ export function ExtractionStudio() {
   const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
   const [traceLines, setTraceLines] = useState<TraceLine[]>([]);
   const [relationshipLines, setRelationshipLines] = useState<RelationshipLine[]>([]);
+  const [calloutLabels, setCalloutLabels] = useState<CalloutLabel[]>([]);
+  const [hoveredCalloutId, setHoveredCalloutId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [documentViewMode, setDocumentViewMode] = useState<"enhanced" | "original">("enhanced");
   const [pendingAnnotation, setPendingAnnotation] = useState<{
@@ -272,10 +281,8 @@ export function ExtractionStudio() {
   const [darkenContent, setDarkenContent] = useState(true);
   const [ocrBoostEnabled, setOcrBoostEnabled] = useState(true);
   const [textEnhancementLevel, setTextEnhancementLevel] = useState(72);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(340);
-  const [rightPanelWidth, setRightPanelWidth] = useState(340);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(380);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
 
   const [customPrompt, setCustomPrompt] = useState<{
     title: string;
@@ -285,6 +292,8 @@ export function ExtractionStudio() {
     onConfirm: (value: string) => void;
     onCancel?: () => void;
   } | null>(null);
+
+  const [regexHelpFieldId, setRegexHelpFieldId] = useState<string | null>(null);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
@@ -299,7 +308,9 @@ export function ExtractionStudio() {
   const [anchors, setAnchors] = useState<StudioAnchor[]>([]);
   const [links, setLinks] = useState<StudioLink[]>([]);
 
-  const [currentDocId, setCurrentDocId] = useState<string | null>(activeDocument?.documentId || null);
+  // Must start null so the design-loading effect fires on first mount even when
+  // activeDocument is already set in the store (e.g. after back-navigation).
+  const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const nextId = (prefix: string) => {
     idCounterRef.current += 1;
     return `${prefix}_${idCounterRef.current}`;
@@ -993,7 +1004,7 @@ export function ExtractionStudio() {
         type: fieldTypeFromPrebuilt(field.type),
         required: field.required,
         enabled: true,
-        confidence: valueWords.length > 0 ? averageConfidence(valueWords) || model.confidenceThreshold : model.confidenceThreshold,
+        confidence: valueWords.length > 0 ? averageConfidence(valueWords) || model.confidenceThreshold : 0,
         value: valueText,
         categoryId: field.required ? requiredCategory.id : optionalCategory.id,
         ...(evidenceBox && field.coordinatesEnabled ? inferredFieldBox : {}),
@@ -1226,6 +1237,8 @@ export function ExtractionStudio() {
   React.useEffect(() => {
     if (!activeDocument?.documentId || activeDocument.documentId !== currentDocId) return;
     if (appliedPrebuiltRouteRef.current[activeDocument.documentId]) return;
+    // Skip if any field already has a mapped position: the saved design is valid.
+    if (fields.some(f => f.x !== undefined)) return;
 
     const route = getRouteForDocument(activeDocument);
     if (!route) return;
@@ -1239,12 +1252,16 @@ export function ExtractionStudio() {
     const model = PREBUILT_MODELS.find(item => item.code === route.modelCode);
     if (!model) return;
     const categoryExists = categories.some(category => category.name === `Prebuilt: ${model.name}`);
-    if (categoryExists) return;
+    // If categories exist but fields are empty, the user intentionally cleared them — skip.
+    // If categories exist AND fields exist without positions, it's a broken first-session state — re-apply.
+    if (categoryExists && fields.length === 0) return;
     applyPrebuiltRoutingModel(model, route.targetName);
-  }, [activeDocument, categories, currentDocId, getRouteForDocument]);
+  }, [activeDocument, categories, currentDocId, fields, getRouteForDocument]);
 
   React.useEffect(() => {
     if (!activeDocument?.documentId || activeDocument.documentId !== currentDocId || !activePrebuiltModel) return;
+    // Skip if any field already has a mapped position: the saved design is valid.
+    if (fields.some(f => f.x !== undefined)) return;
 
     const prebuiltCategories = categories.filter(category => category.name.startsWith("Prebuilt: "));
     const expectedCategoryName = `Prebuilt: ${activePrebuiltModel.name}`;
@@ -1256,7 +1273,7 @@ export function ExtractionStudio() {
 
     appliedPrebuiltRouteRef.current[activeDocument.documentId] = activePrebuiltModel.code;
     applyPrebuiltRoutingModel(activePrebuiltModel, activeDocument.classification?.className || activeDocument.name);
-  }, [activeDocument, activePrebuiltModel, categories, currentDocId]);
+  }, [activeDocument, activePrebuiltModel, categories, currentDocId, fields]);
 
   const enhanceCanvasForOcr = (canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");
@@ -2517,8 +2534,14 @@ export function ExtractionStudio() {
     });
 
     setCategories(prev => [...prev, ...templateCategories]);
-    setFields(prev => [...prev, ...newFields]);
-    setAnchors(prev => [...prev, ...newAnchors]);
+    setFields(prev => {
+      const combined = [...prev, ...newFields];
+      return combined.filter((f, i, a) => a.findIndex(x => x.id === f.id) === i);
+    });
+    setAnchors(prev => {
+      const combined = [...prev, ...newAnchors];
+      return combined.filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i);
+    });
     setLinks(prev => [...prev, ...newLinks]);
     setSelectedFieldId(newFields[0]?.id || null);
     setSelectedCategoryId(null);
@@ -2588,7 +2611,7 @@ export function ExtractionStudio() {
   // Weighted Confidence Engine
   const getFieldConfidence = (field: StudioField) => {
     const boundLinks = links.filter(l => l.fieldId === field.id);
-    if (boundLinks.length === 0) return field.confidence || 1.0;
+    if (boundLinks.length === 0) return field.confidence ?? 0;
     
     let totalWeight = 0;
     let weightedSum = 0;
@@ -2648,7 +2671,7 @@ export function ExtractionStudio() {
         label: anchor.value,
         value: anchor.value
       }))
-  ];
+  ].filter((ann, idx, arr) => arr.findIndex(a => a.id === ann.id) === idx);
   const reviewRows = [
     activeDocument?.classification?.className ? {
       id: "document_type",
@@ -2737,16 +2760,16 @@ export function ExtractionStudio() {
           const row = previewRowRefs.current[field.id];
           if (!row) return null;
           const rowRect = row.getBoundingClientRect();
-          const startX = documentRect.left - workspaceRect.left + ((field.x + field.width) / 100) * documentRect.width;
+          const startX = documentRect.left - workspaceRect.left + (field.x / 100) * documentRect.width;
           const startY = documentRect.top - workspaceRect.top + ((field.y + field.height / 2) / 100) * documentRect.height;
-          const endX = rowRect.left - workspaceRect.left + 5;
+          const endX = rowRect.right - workspaceRect.left - 5;
           const endY = rowRect.top - workspaceRect.top + rowRect.height / 2;
-          const distance = Math.max(70, Math.abs(endX - startX) * 0.42);
+          const distance = Math.max(70, Math.abs(startX - endX) * 0.42);
           return {
             id: field.id,
             color: getFieldColor(field, index),
             active: currentActiveFieldId === field.id,
-            path: `M ${startX} ${startY} C ${startX + distance} ${startY}, ${endX - distance} ${endY}, ${endX} ${endY}`
+            path: `M ${startX} ${startY} C ${startX - distance} ${startY}, ${endX + distance} ${endY}, ${endX} ${endY}`
           };
         })
         .filter(Boolean) as TraceLine[];
@@ -2852,6 +2875,78 @@ export function ExtractionStudio() {
         const nextSig = nextRelationships.map(line => `${line.id}:${line.path}:${line.active}`).join("|");
         return prevSig === nextSig ? prev : nextRelationships;
       });
+
+      // ── Callout labels: positioned in canvas margin, pointing to annotation boxes ──
+      const canvasPanel = canvasPanelRef.current;
+      if (canvasPanel) {
+        const panelRect = canvasPanel.getBoundingClientRect();
+        const docL  = documentRect.left  - workspaceRect.left;
+        const docT  = documentRect.top   - workspaceRect.top;
+        const docR  = documentRect.right - workspaceRect.left;
+        const docCX = docL + documentRect.width / 2;
+
+        const CHIP_W = 148; const CHIP_H = 26; const CHIP_GAP = 4; const MARGIN = 14;
+
+        // Positioned fields
+        const fieldItems = currentRows
+          .filter(f => f.id !== "document_type" && hasMappedArea(f))
+          .map((f, i) => {
+            const fx = f.x as number; const fy = f.y as number;
+            const fw = f.width as number; const fh = f.height as number;
+            return {
+              id: f.id, name: f.name, color: getFieldColor(f, i), isAnchor: false,
+              cx: docL + ((fx + fw / 2) / 100) * documentRect.width,
+              cy: docT + ((fy + fh / 2) / 100) * documentRect.height,
+              lx: docL + (fx / 100) * documentRect.width,
+              rx: docL + ((fx + fw) / 100) * documentRect.width,
+            };
+          });
+
+        // Visible anchors (linked to active field, or all when none selected)
+        const visibleAnchors = anchors.filter(a =>
+          a.x !== undefined &&
+          (currentActiveFieldId
+            ? links.some(l => l.anchorId === a.id && l.fieldId === currentActiveFieldId)
+            : false)
+        );
+        const anchorItems = visibleAnchors.map(a => ({
+          id: a.id, name: a.value || "Anchor", color: "#6b7280", isAnchor: true,
+          cx: docL + ((a.x! + a.width! / 2) / 100) * documentRect.width,
+          cy: docT + ((a.y! + a.height! / 2) / 100) * documentRect.height,
+          lx: docL + (a.x! / 100) * documentRect.width,
+          rx: docL + ((a.x! + a.width!) / 100) * documentRect.width,
+        }));
+
+        const allItems = [...fieldItems, ...anchorItems];
+        const leftItems  = allItems.filter(i => i.cx <= docCX).sort((a, b) => a.cy - b.cy);
+        const rightItems = allItems.filter(i => i.cx >  docCX).sort((a, b) => a.cy - b.cy);
+
+        const clampY = (y: number) => Math.max(docT, Math.min(docT + documentRect.height - CHIP_H, y));
+        const nextCallouts: CalloutLabel[] = [];
+
+        const sides: Array<[typeof leftItems, "left" | "right"]> = [[leftItems, "left"], [rightItems, "right"]];
+        for (const [items, side] of sides) {
+          let nextY = docT;
+          for (const item of items) {
+            const chipY = Math.max(nextY, clampY(item.cy - CHIP_H / 2));
+            nextY = chipY + CHIP_H + CHIP_GAP;
+            const chipX = side === "left" ? docL - MARGIN - CHIP_W : docR + MARGIN;
+            nextCallouts.push({
+              id: item.id, name: item.name, color: item.color, isAnchor: item.isAnchor,
+              active: currentActiveFieldId === item.id,
+              side,
+              chipX, chipY,
+              annEdgeX: side === "left" ? item.lx : item.rx,
+              annEdgeY: item.cy,
+            });
+          }
+        }
+
+        setCalloutLabels(prev => {
+          const sig = (c: CalloutLabel[]) => c.map(x => `${x.id}:${x.chipX.toFixed(1)}:${x.chipY.toFixed(1)}:${x.active}`).join("|");
+          return sig(prev) === sig(nextCallouts) ? prev : nextCallouts;
+        });
+      }
     };
   });
 
@@ -3017,9 +3112,9 @@ export function ExtractionStudio() {
 
           {/* Canvas Tools Group */}
           <div className="flex shrink-0 items-center gap-2">
-            <div className="flex flex-col select-none pr-1">
+            <div className="flex flex-col select-none pr-1 min-w-[72px]">
               <span className="text-[8px] font-black uppercase text-muted-foreground/80 tracking-wider">Active Tool</span>
-              <span className="text-[10px] font-bold text-foreground capitalize truncate max-w-[80px]">
+              <span className="text-[13px] font-bold text-foreground capitalize">
                 {tools.find(t => t.id === activeTool)?.label}
               </span>
             </div>
@@ -3035,14 +3130,14 @@ export function ExtractionStudio() {
                      }}
                      title={`${tool.label} (${tool.shortcut})`}
                      className={cn(
-                       "flex flex-col items-center justify-center gap-0.5 w-8 py-1 rounded-lg transition-all",
+                       "flex flex-col items-center justify-center gap-0.5 w-10 py-1.5 rounded-lg transition-all",
                        activeTool === tool.id
                         ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                         : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
                      )}
                    >
-                     <tool.icon size={12} />
-                     <span className="text-[6px] font-black uppercase tracking-wide leading-none">{tool.label}</span>
+                     <tool.icon size={15} />
+                     <span className="text-[7px] font-black uppercase tracking-wide leading-none">{tool.label}</span>
                    </button>
                    {/* Tooltip description on hover */}
                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-[9999] hidden group-hover/tool:block w-52 pointer-events-none">
@@ -3061,39 +3156,88 @@ export function ExtractionStudio() {
 
         <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
 
-          {/* Extract Values — reads text layer into all positioned fields */}
+          {/* Extract — reads OCR text layer into all positioned fields */}
           <button
             onClick={() => extractAllFieldValues(true)}
             disabled={isExtracting || isRefetchingOCR}
-            title="Read OCR text layer and populate values for all positioned fields"
-            className="h-9 px-3 rounded-xl bg-card border border-sky-200 text-[9px] font-black uppercase tracking-widest hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 transition-all flex items-center gap-2 group shadow-lg text-sky-600 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Populate all positioned fields from the current OCR text layer"
+            className="h-9 px-3 rounded-xl bg-card border border-sky-200 text-[9px] font-black uppercase tracking-widest hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 transition-all flex items-center gap-2 group shadow-sm text-sky-600 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isExtracting
               ? <RefreshCw size={13} className="animate-spin" />
               : <Zap size={13} className="group-hover:scale-110 transition-transform" />
             }
-            Extract Values
+            Extract
           </button>
 
-          {/* Re-fetch OCR — re-runs OCR engine then extracts */}
+          {/* Re-OCR — re-runs OCR engine then extracts */}
           <button
             onClick={handleRefetchOCR}
             disabled={isRefetchingOCR || isExtracting}
-            title="Re-run OCR on all pages, then refresh extracted field values"
-            className="h-9 px-3 rounded-xl bg-card border border-violet-200 text-[9px] font-black uppercase tracking-widest hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 transition-all flex items-center gap-2 group shadow-lg text-violet-600 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Re-run OCR on all pages, then refresh all field values"
+            className="h-9 px-3 rounded-xl bg-card border border-violet-200 text-[9px] font-black uppercase tracking-widest hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 transition-all flex items-center gap-2 group shadow-sm text-violet-600 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {isRefetchingOCR
-              ? <RefreshCw size={13} className="animate-spin" />
-              : <RefreshCw size={13} className="group-hover:rotate-180 transition-transform duration-500" />
-            }
-            {isRefetchingOCR ? "Running OCR…" : "Re-fetch OCR"}
+            <RefreshCw size={13} className={isRefetchingOCR ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"} />
+            {isRefetchingOCR ? "Running OCR…" : "Re-OCR"}
           </button>
 
+          {/* Enhance — toggles content enhancement */}
+          <button
+             onClick={() => {
+               const newMode = documentViewMode === "enhanced" ? "original" : "enhanced";
+               setDocumentViewMode(newMode);
+             }}
+             className={cn(
+               "h-9 px-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 group shadow-sm whitespace-nowrap",
+               documentViewMode === "enhanced"
+                 ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                 : "bg-card border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+             )}
+             title={documentViewMode === "enhanced" ? "Content Enhancer ON — click to disable" : "Enable Intelligent Content Enhancer"}
+          >
+             <Wand2 size={13} className="group-hover:scale-110 transition-transform" />
+             Enhance
+          </button>
+
+          {/* Apply Model — tries prebuilt first, then saved custom model */}
+          <button
+             onClick={() => {
+               if (activePrebuiltModel) {
+                 if (activeDocument?.documentId) {
+                   appliedPrebuiltRouteRef.current[activeDocument.documentId] = activePrebuiltModel.code;
+                 }
+                 applyPrebuiltRoutingModel(activePrebuiltModel, activeDocument?.classification?.className || activeDocument?.name);
+                 return;
+               }
+               const docClass = activeDocument?.classification?.className || activeDocument?.name || "";
+               const ocrText = activeDocument?.pages?.[0]?.ocrText || "";
+               const customModel = matchCustomModel(docClass, ocrText);
+               if (customModel) { applyCustomModelToDocument(customModel); return; }
+               toast.info("No model found for this document. Draw fields manually or train a custom model.");
+             }}
+             className="h-9 px-3 rounded-xl bg-card border border-blue-200 text-[9px] font-black uppercase tracking-widest hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all flex items-center gap-2 group shadow-sm text-foreground whitespace-nowrap"
+             title={activePrebuiltModel ? `Apply prebuilt: ${activePrebuiltModel.name}` : "Apply saved custom model for this document type"}
+          >
+             <Sparkles size={13} className="text-blue-500 group-hover:scale-110 transition-transform" />
+             {activePrebuiltModel ? activePrebuiltModel.name.replace(/\s*Extractor$/i, " Model") : "Apply Model"}
+          </button>
+
+          {/* Save Model */}
+          <button
+             onClick={saveAsCustomModel}
+             className="h-9 px-3 rounded-xl bg-card border border-violet-200 text-[9px] font-black uppercase tracking-widest hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 transition-all flex items-center gap-2 group shadow-sm text-foreground whitespace-nowrap"
+             title="Save current field layout as a reusable model that auto-applies to matching documents"
+          >
+             <BookMarked size={13} className="text-violet-500 group-hover:scale-110 transition-transform" />
+             Save Model
+          </button>
+
+          {/* Clear — destructive, last */}
           <button
              onClick={() => {
                 setConfirmDialog({
                   title: "Clear Mappings",
-                  message: "Are you sure you want to clear all data mappings and anchors from this document? The fields will remain in your schema, but their extracted values will be cleared. This cannot be undone.",
+                  message: "Clear all field positions, extracted values, and anchors from this document? The field schema is preserved.",
                   onConfirm: () => {
                     setFields(prev => prev.map(f => ({ ...f, value: undefined, x: undefined, y: undefined, width: undefined, height: undefined, page: undefined })));
                     setAnchors([]);
@@ -3101,75 +3245,18 @@ export function ExtractionStudio() {
                     setSelectedFieldId(null);
                     setPendingAnnotation(null);
                     setAnchorCaptureTargetFieldId(null);
-                    toast.success("All data mappings have been cleared.");
+                    toast.success("Mappings cleared.");
                     setConfirmDialog(null);
                   }
                 });
               }}
-             className="h-9 px-3 rounded-xl bg-card border border-rose-200 text-[9px] font-black uppercase tracking-widest hover:border-rose-400 hover:bg-rose-50 hover:text-rose-700 transition-all flex items-center gap-2 group shadow-lg text-rose-600 whitespace-nowrap"
-             title="Clear all extracted data and anchors"
+             className="h-9 px-3 rounded-xl bg-card border border-rose-200 text-[9px] font-black uppercase tracking-widest hover:border-rose-400 hover:bg-rose-50 hover:text-rose-700 transition-all flex items-center gap-2 group shadow-sm text-rose-600 whitespace-nowrap"
+             title="Clear all extracted data, positions, and anchors"
           >
-             <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
-             Clear Mappings
+             <Trash2 size={13} className="group-hover:scale-110 transition-transform" />
+             Clear
           </button>
 
-          <button 
-             onClick={() => {
-               const newMode = documentViewMode === "enhanced" ? "original" : "enhanced";
-               setDocumentViewMode(newMode);
-               toast.success(`Intelligent Content Enhancer ${newMode === "enhanced" ? "enabled" : "disabled"}.`);
-             }}
-             className={cn(
-               "h-9 px-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 group shadow-lg whitespace-nowrap",
-               documentViewMode === "enhanced" 
-                 ? "bg-emerald-50 border-emerald-300 text-emerald-700" 
-                 : "bg-card border-border/50 text-muted-foreground hover:bg-muted"
-             )}
-             title="Toggle Intelligent Content Enhancer"
-          >
-             <Wand2 size={14} className={documentViewMode === "enhanced" ? "text-emerald-600 group-hover:scale-110 transition-transform" : "text-muted-foreground group-hover:scale-110 transition-transform"} />
-             Content Enhancer
-          </button>
-          <button
-             onClick={() => {
-               if (!activePrebuiltModel) {
-                 toast.info("No matching prebuilt model detected for the selected document.");
-                 return;
-               }
-               if (activeDocument?.documentId) {
-                 appliedPrebuiltRouteRef.current[activeDocument.documentId] = activePrebuiltModel.code;
-               }
-               applyPrebuiltRoutingModel(activePrebuiltModel, activeDocument?.classification?.className || activeDocument?.name);
-             }}
-             className="h-9 px-3 rounded-xl bg-card border border-blue-200 text-[9px] font-black uppercase tracking-widest hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-all flex items-center gap-2 group shadow-lg text-foreground whitespace-nowrap"
-             title="Apply the selected document's prebuilt extraction model"
-          >
-             <Sparkles size={14} className="text-blue-500 group-hover:scale-110 transition-transform" />
-             {activeModelButtonLabel}
-          </button>
-          <button
-             onClick={saveAsCustomModel}
-             className="h-9 px-3 rounded-xl bg-card border border-violet-200 text-[9px] font-black uppercase tracking-widest hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 transition-all flex items-center gap-2 group shadow-lg text-foreground whitespace-nowrap"
-             title="Save current field design as a reusable model. It will auto-apply to all documents of this type."
-          >
-             <BookMarked size={14} className="text-violet-500 group-hover:scale-110 transition-transform" />
-             Save as Model
-          </button>
-          <button
-             onClick={() => {
-               const docClass = activeDocument?.classification?.className || activeDocument?.name || "";
-               const ocrText = activeDocument?.pages?.[0]?.ocrText || "";
-               const model = matchCustomModel(docClass, ocrText);
-               if (!model) { toast.warning("No saved model found for this document type."); return; }
-               applyCustomModelToDocument(model);
-             }}
-             className="h-9 px-3 rounded-xl bg-card border border-border/50 text-[9px] font-black uppercase tracking-widest hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all flex items-center gap-2 group shadow-lg text-foreground whitespace-nowrap"
-             title="Re-run the saved model against the current document, relocating all fields using anchors."
-          >
-             <RefreshCw size={14} className="text-emerald-500 group-hover:scale-110 transition-transform" />
-             Re-apply Model
-          </button>
-          
         </div>
       </div>
 
@@ -3178,11 +3265,11 @@ export function ExtractionStudio() {
         ref={workspaceRef}
         className="grid flex-1 min-h-0 overflow-hidden gap-4 px-4 py-3 relative z-10 transition-all duration-300"
         style={{
-          gridTemplateColumns: `${leftPanelCollapsed ? 44 : leftPanelWidth}px minmax(420px, 1fr) ${rightPanelCollapsed ? 44 : rightPanelWidth}px`,
+          gridTemplateColumns: `${leftPanelCollapsed ? 44 : leftPanelWidth}px minmax(420px, 1fr)`,
           gridTemplateRows: "minmax(0, 1fr)"
         }}
       >
-        <svg className="pointer-events-none absolute inset-0 z-30 h-full w-full overflow-visible">
+        <svg className="pointer-events-none absolute inset-0 z-50 h-full w-full overflow-visible">
           <defs>
             {traceLines.map(line => (
               <marker
@@ -3229,9 +3316,9 @@ export function ExtractionStudio() {
                 d={line.path}
                 fill="none"
                 stroke={line.color}
-                strokeDasharray={line.active ? "7 5" : "3 5"}
-                strokeOpacity={line.active ? 0.95 : 0.34}
-                strokeWidth={line.active ? 2.1 : 1.2}
+                strokeDasharray={line.active ? "7 5" : "4 4"}
+                strokeOpacity={line.active ? 0.95 : 0.72}
+                strokeWidth={line.active ? 2.1 : 1.6}
                 markerEnd={`url(#trace-arrow-${line.id})`}
                 className={line.active ? "animate-flow" : undefined}
               />
@@ -3286,31 +3373,172 @@ export function ExtractionStudio() {
               )}
             </g>
           ))}
+          {/* Callout leader lines — from callout chip edge to annotation box edge */}
+          <defs>
+            {calloutLabels.map(c => (
+              <marker key={`cm-${c.id}`} id={`callout-arr-${c.id}`}
+                viewBox="0 0 10 10" refX={c.side === "left" ? "2" : "8"} refY="5"
+                markerWidth="5" markerHeight="5" orient="auto">
+                <path d={c.side === "left" ? "M 8 1.5 L 0 5 L 8 8.5 z" : "M 0 1.5 L 8 5 L 0 8.5 z"} fill={c.color} />
+              </marker>
+            ))}
+          </defs>
+          {calloutLabels.map(c => {
+            const isHighlit = c.active || hoveredCalloutId === c.id;
+            const chipMidY  = c.chipY + 13; // vertical center of chip (CHIP_H/2)
+            // Chip attachment point — inner edge of chip
+            const fromX = c.side === "left" ? c.chipX + 148 : c.chipX;
+            const fromY = chipMidY;
+            const toX   = c.annEdgeX;
+            const toY   = c.annEdgeY;
+            const dx    = toX - fromX;
+            const ctrl  = Math.max(30, Math.abs(dx) * 0.45);
+            const path  = c.side === "left"
+              ? `M ${fromX} ${fromY} C ${fromX + ctrl} ${fromY}, ${toX - ctrl} ${toY}, ${toX} ${toY}`
+              : `M ${fromX} ${fromY} C ${fromX - ctrl} ${fromY}, ${toX + ctrl} ${toY}, ${toX} ${toY}`;
+            return (
+              <g key={`cl-${c.id}`}>
+                {isHighlit && (
+                  <path d={path} fill="none" stroke={c.color}
+                    strokeWidth="7" strokeOpacity="0.12" strokeLinecap="round" />
+                )}
+                <path d={path} fill="none" stroke={c.color}
+                  strokeWidth={isHighlit ? 1.8 : 1.3}
+                  strokeOpacity={isHighlit ? 0.9 : 0.55}
+                  strokeDasharray={isHighlit ? "none" : "4 4"}
+                  markerEnd={`url(#callout-arr-${c.id})`}
+                />
+              </g>
+            );
+          })}
         </svg>
-        
-        {/* LEFT PANEL: SCHEMA DESIGNER */}
+
+        {/* Callout label chips — positioned in canvas margin, outside the document surface */}
+        <div className="pointer-events-none absolute inset-0 z-[52]">
+          {calloutLabels.map(c => {
+            const isHighlit = c.active || hoveredCalloutId === c.id;
+            return (
+              <div
+                key={`chip-${c.id}`}
+                style={{ left: c.chipX, top: c.chipY, width: 148, height: 26 }}
+                className="pointer-events-auto absolute"
+                onMouseEnter={() => setHoveredCalloutId(c.id)}
+                onMouseLeave={() => setHoveredCalloutId(null)}
+                onClick={() => setSelectedFieldId(prev => prev === c.id ? null : c.id)}
+              >
+                {/* Chip */}
+                <div
+                  className="flex h-full w-full items-center gap-1.5 rounded-lg border px-2 shadow-md backdrop-blur-sm cursor-pointer select-none transition-all"
+                  style={{
+                    borderColor: isHighlit ? c.color : `${c.color}70`,
+                    backgroundColor: isHighlit ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.88)",
+                    boxShadow: isHighlit ? `0 0 0 2px ${c.color}30, 0 2px 8px rgba(0,0,0,0.12)` : "0 1px 4px rgba(0,0,0,0.08)",
+                  }}
+                >
+                  {c.isAnchor
+                    ? <Anchor size={9} style={{ color: c.color, flexShrink: 0 }} />
+                    : <Tag    size={9} style={{ color: c.color, flexShrink: 0 }} />
+                  }
+                  <span
+                    className="truncate text-[10px] font-black uppercase tracking-wide"
+                    style={{ color: c.color }}
+                  >
+                    {c.name}
+                  </span>
+                </div>
+
+                {/* Action menu — shown above chip when field is active */}
+                {c.active && !c.isAnchor && (activeTool === "select" || selectedFieldId !== null) && (
+                  <div
+                    className="absolute bottom-full left-0 mb-1.5 flex items-center gap-0.5 rounded-xl border border-border bg-white/97 p-1 shadow-2xl backdrop-blur-md whitespace-nowrap z-10"
+                    onClick={e => e.stopPropagation()}
+                    onMouseDown={e => e.stopPropagation()}
+                  >
+                    {([
+                      { action: "rename"    as const, title: "Rename field",        Icon: Edit3,     cls: "hover:bg-sky-50 hover:text-sky-700 text-sky-500" },
+                      { action: "addAnchor" as const, title: "Add anchor to field", Icon: Anchor,    cls: "hover:bg-emerald-50 hover:text-emerald-700 text-emerald-500" },
+                      { action: "changeType"as const, title: "Change field type",   Icon: Settings,  cls: "hover:bg-amber-50 hover:text-amber-700 text-amber-500" },
+                    ] as const).map(item => (
+                      <button key={item.action} title={item.title}
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (item.action === "rename") {
+                            const field = fields.find(f => f.id === c.id);
+                            const currentName = field?.name || "";
+                            setCustomPrompt({ title: "Rename Field", placeholder: "e.g. Passport Number", defaultValue: currentName,
+                              onConfirm: (value: string) => { if (value.trim()) { setFields(prev => prev.map(f => f.id === c.id ? { ...f, name: value.trim() } : f)); } setCustomPrompt(null); }
+                            });
+                          } else if (item.action === "addAnchor") {
+                            beginAnchorCaptureForField(c.id);
+                          } else if (item.action === "changeType") {
+                            const typeCycle = ["text","date","id","signature","table","checkbox"];
+                            setFields(prev => prev.map(f => { if (f.id !== c.id) return f; const ci = Math.max(0, typeCycle.indexOf(f.type)); const nt = typeCycle[(ci + 1) % typeCycle.length]; return { ...f, type: nt, ...(nt === "date" && !f.dateFormat ? { dateFormat: "DD/MM/YYYY" } : {}) }; }));
+                          }
+                        }}
+                        className={`flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors ${item.cls}`}
+                      >
+                        <item.Icon size={12} />
+                      </button>
+                    ))}
+                    <div className="w-px h-4 bg-border" />
+                    <button title="Delete field"
+                      onClick={e => { e.stopPropagation(); handleDeleteAnnotation(c.id, "field"); }}
+                      className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                    <div className="w-px h-4 bg-border" />
+                    <button title="Done — deselect"
+                      onClick={e => { e.stopPropagation(); setSelectedFieldId(null); }}
+                      className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
+                    >
+                      <CheckCircle2 size={12} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Anchor action menu */}
+                {c.active && c.isAnchor && (
+                  <div
+                    className="absolute bottom-full left-0 mb-1.5 flex items-center gap-0.5 rounded-xl border border-border bg-white/97 p-1 shadow-2xl backdrop-blur-md whitespace-nowrap z-10"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <button title="Delete anchor"
+                      onClick={e => { e.stopPropagation(); handleDeleteAnnotation(c.id, "anchor"); }}
+                      className="flex h-6 items-center gap-1.5 px-2 rounded-lg text-rose-600 hover:bg-rose-50 text-[9px] font-black uppercase tracking-wide transition-colors"
+                    >
+                      <Trash2 size={12} /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* LEFT PANEL: FIELD EXTRACTOR (schema + extraction results merged) */}
         <div className="relative z-40 flex min-h-0 flex-col rounded-lg border border-slate-300 bg-white shadow-[0_1px_6px_rgba(15,23,42,0.08)] overflow-hidden">
           {leftPanelCollapsed ? (
             <button
               onClick={() => setLeftPanelCollapsed(false)}
               className="flex h-full w-full items-center justify-center bg-slate-50 text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:bg-slate-100"
-              title="Expand schema panel"
+              title="Expand fields panel"
             >
-              <span className="-rotate-90 whitespace-nowrap">Schema</span>
+              <span className="-rotate-90 whitespace-nowrap">Fields</span>
             </button>
           ) : (
           <>
           <div className="flex items-center justify-between gap-3 border-b border-slate-300 bg-slate-50 px-4 py-2.5">
             <div className="min-w-0">
-              <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground">Schema Designer</h3>
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground">Field Extractor</h3>
               <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                Fields, format, regex, and categories
+                Schema, extracted values &amp; configuration
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <button onClick={() => setLeftPanelWidth(width => Math.max(280, width - 40))} className="h-6 w-6 rounded border border-slate-300 bg-white text-[11px] font-black text-muted-foreground hover:text-foreground" title="Narrow schema panel">-</button>
-              <button onClick={() => setLeftPanelWidth(width => Math.min(520, width + 40))} className="h-6 w-6 rounded border border-slate-300 bg-white text-[11px] font-black text-muted-foreground hover:text-foreground" title="Widen schema panel">+</button>
-              <button onClick={() => setLeftPanelCollapsed(true)} className="h-6 w-6 rounded border border-slate-300 bg-white text-muted-foreground hover:text-foreground" title="Collapse schema panel"><ChevronLeft size={13} className="mx-auto" /></button>
+              <button onClick={() => setLeftPanelWidth(width => Math.max(280, width - 40))} className="h-6 w-6 rounded border border-slate-300 bg-white text-[11px] font-black text-muted-foreground hover:text-foreground" title="Narrow panel">-</button>
+              <button onClick={() => setLeftPanelWidth(width => Math.min(560, width + 40))} className="h-6 w-6 rounded border border-slate-300 bg-white text-[11px] font-black text-muted-foreground hover:text-foreground" title="Widen panel">+</button>
+              <button onClick={() => setLeftPanelCollapsed(true)} className="h-6 w-6 rounded border border-slate-300 bg-white text-muted-foreground hover:text-foreground" title="Collapse panel"><ChevronLeft size={13} className="mx-auto" /></button>
             </div>
           </div>
 
@@ -3341,7 +3569,8 @@ export function ExtractionStudio() {
 
           <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50/80 px-4 py-1.5 text-[8px] font-black uppercase tracking-widest text-muted-foreground">
             <span className="w-10 shrink-0">Use</span>
-            <span className="min-w-0 flex-1">Field Details</span>
+            <span className="min-w-0 flex-1">Field / Extracted Value</span>
+            <span className="shrink-0">Status</span>
           </div>
 
           <div className="custom-scrollbar flex-1 min-h-0 overflow-y-auto">
@@ -3357,18 +3586,21 @@ export function ExtractionStudio() {
                 </div>
                 {group.fields.map((field, index) => {
                   const isActive = activeTraceFieldId === field.id;
+                  const isSelected = selectedFieldId === field.id;
                   return (
-                <div
+                <button
+                  ref={(node) => { previewRowRefs.current[field.id] = node; }}
                   key={field.id}
                   onMouseEnter={() => setHoveredFieldId(field.id)}
                   onMouseLeave={() => setHoveredFieldId(null)}
                   className={cn(
-                    "group/field flex flex-col min-h-9 w-full gap-2 border-b border-slate-200 px-4 py-2 text-left transition-all cursor-pointer",
+                    "group/field flex flex-col w-full gap-1.5 border-b border-slate-200 px-4 py-2.5 text-left transition-all cursor-pointer",
                     field.enabled === false && "opacity-45",
                     isActive ? "bg-emerald-50/70 shadow-[inset_3px_0_0_hsl(var(--primary))]" : "hover:bg-slate-50"
                   )}
-                  onClick={() => setSelectedFieldId(selectedFieldId === field.id ? null : field.id)}
+                  onClick={() => { setSelectedFieldId(selectedFieldId === field.id ? null : field.id); setRegexHelpFieldId(null); }}
                 >
+                  {/* Row 1: enable checkbox + color dot + field name + delete */}
                   <div className="flex w-full items-center gap-2">
                     <span className="flex w-10 shrink-0 items-center gap-1">
                       <input
@@ -3384,70 +3616,138 @@ export function ExtractionStudio() {
                     <span className="min-w-0 flex-1 whitespace-normal text-[10px] font-black uppercase tracking-wide text-foreground">
                       {field.name}
                     </span>
-                    {/* Delete button — visible on hover */}
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteField(field.id);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteField(field.id); }}
                       title="Delete field"
                       className="ml-auto shrink-0 h-5 w-5 rounded flex items-center justify-center opacity-0 group-hover/field:opacity-100 transition-opacity text-muted-foreground hover:bg-rose-50 hover:text-rose-600"
                     >
                       <Trash2 size={11} />
                     </button>
                   </div>
-                  <div className="flex w-full items-center gap-2 pl-12">
-                    <select
-                      value={field.type || "string"}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) => updateFieldConfig(field.id, { type: event.target.value, dateFormat: event.target.value === "date" ? field.dateFormat || "DD/MM/YYYY" : field.dateFormat })}
-                      className="h-6 w-20 shrink-0 rounded border border-slate-300 bg-slate-50 px-1 text-[8px] font-black uppercase text-muted-foreground outline-none"
-                    >
-                      {[
-                        ["text",      "Text — any plain text value"],
-                        ["number",    "Number — numeric / currency"],
-                        ["date",      "Date — use dateFormat field"],
-                        ["checkbox",  "Checkbox — checked / unchecked"],
-                        ["radio",     "Radio — one of multiple options"],
-                        ["table",     "Table — rows and columns"],
-                        ["barcode",   "Barcode / QR — decoded value"],
-                        ["signature", "Signature — presence detection"],
-                        ["image",     "Image — photo or visual region"],
-                        ["object",    "Object — structured sub-fields"],
-                      ].map(([val, label]) => (
-                        <option key={val} value={val}>{label}</option>
-                      ))}
-                    </select>
-                    {field.type === "date" ? (
-                      <input
-                        value={field.dateFormat || ""}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => updateFieldConfig(field.id, { dateFormat: event.target.value })}
-                        placeholder="DD/MM/YYYY"
-                        className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 text-[8px] font-bold text-foreground outline-none"
-                      />
-                    ) : (
-                      <select
-                        value={field.expansionMode || "line"}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => updateFieldConfig(field.id, { expansionMode: event.target.value as StudioField["expansionMode"] })}
-                        className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 text-[8px] font-bold text-foreground outline-none"
-                      >
-                        <option value="line">Single Line</option>
-                        <option value="multiline">Multiple Line</option>
-                        <option value="box">Box Format</option>
-                        <option value="until_next_label">Until Next Label</option>
-                      </select>
+
+                  {/* Row 2: extracted value */}
+                  <div className="pl-10 w-full">
+                    <span className={cn(
+                      "font-mono text-[10px] break-words whitespace-pre-wrap",
+                      field.value ? "font-bold text-foreground" : "font-medium italic text-muted-foreground/50"
+                    )}>
+                      {field.value ? formatFieldValue(field) : "No extraction found"}
+                    </span>
+                    {field.type === "date" && field.dateFormat && field.value && formatFieldValue(field) !== field.value && (
+                      <span className="block text-[8px] text-muted-foreground/60 font-mono mt-0.5">raw: {field.value}</span>
                     )}
-                    <input
-                      value={field.regex || ""}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) => updateFieldConfig(field.id, { regex: event.target.value })}
-                      placeholder="regex"
-                      className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 text-[8px] font-bold text-foreground outline-none"
-                    />
                   </div>
-                </div>
+
+                  {/* Row 3: confidence + status */}
+                  <div className="flex items-center justify-between gap-2 pl-10 w-full text-[8px] font-black uppercase text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <span>Conf:</span>
+                      <span className={cn("text-[9px]", field.value ? "text-emerald-600" : field.x !== undefined ? "text-amber-600" : "text-rose-600")}>
+                        {Math.round((field.confidence || 0) * 100)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 size={11} className={field.value ? "text-emerald-600" : "text-amber-500"} />
+                      <span>{getFieldStatus(field)}</span>
+                    </div>
+                  </div>
+
+                  {/* Row 4: type / format / regex — only visible when this field is selected */}
+                  {isSelected && (
+                    <div className="flex w-full items-center gap-2 pl-10 mt-0.5 pt-2 border-t border-slate-200">
+                      <select
+                        value={field.type || "text"}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => updateFieldConfig(field.id, { type: event.target.value, dateFormat: event.target.value === "date" ? field.dateFormat || "DD/MM/YYYY" : field.dateFormat })}
+                        className="h-6 w-20 shrink-0 rounded border border-slate-300 bg-slate-50 px-1 text-[8px] font-black uppercase text-muted-foreground outline-none"
+                      >
+                        {[
+                          ["text",      "Text"],
+                          ["number",    "Number"],
+                          ["date",      "Date"],
+                          ["checkbox",  "Checkbox"],
+                          ["radio",     "Radio"],
+                          ["table",     "Table"],
+                          ["barcode",   "Barcode"],
+                          ["signature", "Signature"],
+                          ["image",     "Image"],
+                          ["object",    "Object"],
+                        ].map(([val, label]) => (
+                          <option key={val} value={val}>{label}</option>
+                        ))}
+                      </select>
+                      {field.type === "date" ? (
+                        <input
+                          value={field.dateFormat || ""}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => updateFieldConfig(field.id, { dateFormat: event.target.value })}
+                          placeholder="DD/MM/YYYY"
+                          className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 text-[8px] font-bold text-foreground outline-none"
+                        />
+                      ) : (
+                        <select
+                          value={field.expansionMode || "line"}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => updateFieldConfig(field.id, { expansionMode: event.target.value as StudioField["expansionMode"] })}
+                          className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 text-[8px] font-bold text-foreground outline-none"
+                        >
+                          <option value="line">Single Line</option>
+                          <option value="multiline">Multi Line</option>
+                          <option value="box">Box Format</option>
+                          <option value="until_next_label">Until Next Label</option>
+                        </select>
+                      )}
+                      <div className="relative flex flex-1 min-w-0 items-center gap-1">
+                        <input
+                          value={field.regex || ""}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => updateFieldConfig(field.id, { regex: event.target.value })}
+                          placeholder="regex pattern"
+                          className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 text-[8px] font-bold text-foreground outline-none"
+                        />
+                        <button
+                          onClick={(event) => { event.stopPropagation(); setRegexHelpFieldId(prev => prev === field.id ? null : field.id); }}
+                          title="Guided regex patterns"
+                          className="shrink-0 h-6 w-6 flex items-center justify-center rounded border border-slate-300 bg-slate-50 text-[9px] font-black text-muted-foreground hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        >?</button>
+                        {regexHelpFieldId === field.id && (
+                          <div
+                            onClick={(event) => event.stopPropagation()}
+                            className="absolute bottom-8 right-0 z-[60] w-64 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden"
+                          >
+                            <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-[9px] font-black uppercase text-muted-foreground">Common Patterns</div>
+                            {[
+                              { label: "Numbers only",        pattern: "^\\d+$",                      hint: "e.g. 12345" },
+                              { label: "Decimal number",      pattern: "^\\d+(\\.\\d+)?$",            hint: "e.g. 12.34" },
+                              { label: "Date DD/MM/YYYY",     pattern: "^\\d{2}/\\d{2}/\\d{4}$",     hint: "e.g. 25/12/2024" },
+                              { label: "Date YYYY-MM-DD",     pattern: "^\\d{4}-\\d{2}-\\d{2}$",     hint: "e.g. 2024-12-25" },
+                              { label: "Passport No.",        pattern: "^[A-Z]{2}\\d{7}$",            hint: "e.g. AB1234567" },
+                              { label: "MRZ line 1",          pattern: "^[A-Z0-9<]{44}$",             hint: "44-char MRZ" },
+                              { label: "MRZ line 2",          pattern: "^[A-Z0-9<]{44}$",             hint: "44-char MRZ" },
+                              { label: "Uppercase letters",   pattern: "^[A-Z]+$",                    hint: "e.g. SMITH" },
+                              { label: "Alphanumeric",        pattern: "^[A-Z0-9]+$",                 hint: "e.g. A1B2C3" },
+                              { label: "Email address",       pattern: "^[\\w.-]+@[\\w.-]+\\.\\w+$", hint: "e.g. a@b.com" },
+                              { label: "Phone number",        pattern: "^\\+?[\\d\\s\\-()]{7,15}$",  hint: "e.g. +1 234 567" },
+                              { label: "Clear pattern",       pattern: "",                             hint: "Remove regex" },
+                            ].map(({ label, pattern, hint }) => (
+                              <button
+                                key={label}
+                                onClick={() => { updateFieldConfig(field.id, { regex: pattern }); setRegexHelpFieldId(null); }}
+                                className="w-full flex items-start justify-between gap-2 px-3 py-1.5 text-left hover:bg-blue-50 transition-colors group"
+                              >
+                                <div>
+                                  <div className="text-[9px] font-bold text-foreground group-hover:text-blue-700">{label}</div>
+                                  <div className="text-[8px] text-muted-foreground font-mono">{pattern || "—"}</div>
+                                </div>
+                                <span className="shrink-0 text-[8px] text-muted-foreground italic mt-0.5">{hint}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </button>
                   );
                 })}
               </div>
@@ -3471,7 +3771,7 @@ export function ExtractionStudio() {
         </div>
 
         {/* CENTER PANEL: DOCUMENT IMAGE */}
-        <div className="relative z-20 flex flex-col min-h-0 rounded-xl border border-border/50 bg-white shadow-sm overflow-hidden">
+        <div ref={canvasPanelRef} className="relative z-20 flex flex-col min-h-0 rounded-xl border border-border/50 bg-white shadow-sm overflow-hidden">
             <div className="absolute left-4 top-3 z-[75] rounded-lg bg-white/90 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-foreground shadow-sm backdrop-blur">
             Document Image
           </div>
@@ -3597,7 +3897,8 @@ export function ExtractionStudio() {
               activeAnnotationId={activeTraceFieldId}
               onAnnotationSelect={setSelectedFieldId}
               activeLayer={activeLayer}
-              showActionMenu={activeTool === "select" || selectedFieldId !== null}
+              showLabels={false}
+              showActionMenu={false}
               onDeleteAnnotation={handleDeleteAnnotation}
               onAnnotationAction={(action, ann) => {
                 if (action === "rename") {
@@ -3672,99 +3973,6 @@ export function ExtractionStudio() {
               }}
             />
           </ExtractionCanvas>
-        </div>
-
-        {/* RIGHT PANEL: EXTRACTION PREVIEW */}
-        <div className="relative z-40 flex min-h-0 flex-col rounded-lg border border-slate-300 bg-white shadow-[0_1px_6px_rgba(15,23,42,0.08)] overflow-hidden">
-          {rightPanelCollapsed ? (
-            <button
-              onClick={() => setRightPanelCollapsed(false)}
-              className="flex h-full w-full items-center justify-center bg-slate-50 text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:bg-slate-100"
-              title="Expand extraction preview"
-            >
-              <span className="rotate-90 whitespace-nowrap">Preview</span>
-            </button>
-          ) : (
-          <>
-          <div className="flex items-center justify-between gap-3 border-b border-slate-300 bg-slate-50 px-4 py-2.5">
-            <div className="min-w-0">
-              <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground">Extraction Preview</h3>
-              <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                AI trace with highlighted evidence
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <span className="rounded-md bg-primary/10 px-2 py-1 text-[9px] font-black text-primary">
-                0 errors
-              </span>
-              <button onClick={() => setRightPanelWidth(width => Math.max(280, width - 40))} className="h-6 w-6 rounded border border-slate-300 bg-white text-[11px] font-black text-muted-foreground hover:text-foreground" title="Narrow preview panel">-</button>
-              <button onClick={() => setRightPanelWidth(width => Math.min(560, width + 40))} className="h-6 w-6 rounded border border-slate-300 bg-white text-[11px] font-black text-muted-foreground hover:text-foreground" title="Widen preview panel">+</button>
-              <button onClick={() => setRightPanelCollapsed(true)} className="h-6 w-6 rounded border border-slate-300 bg-white text-muted-foreground hover:text-foreground" title="Collapse preview panel"><ChevronRight size={13} className="mx-auto" /></button>
-            </div>
-          </div>
-
-          <div className="custom-scrollbar flex-1 min-h-0 overflow-y-auto" onScroll={() => measureTraceLinesRef.current()}>
-            {previewRows.length === 0 ? (
-              <div className="m-4 rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-[10px] font-bold text-muted-foreground">
-                No data points available.
-              </div>
-            ) : previewRows.map((field, index) => {
-              const isActive = activeTraceFieldId === field.id;
-              const isDocumentType = field.id === "document_type";
-              return (
-                <button
-                  ref={(node) => {
-                    previewRowRefs.current[field.id] = node;
-                  }}
-                  key={field.id}
-                  onClick={() => !isDocumentType && setSelectedFieldId(selectedFieldId === field.id ? null : field.id)}
-                  onMouseEnter={() => !isDocumentType && setHoveredFieldId(field.id)}
-                  onMouseLeave={() => setHoveredFieldId(null)}
-                  className={cn(
-                    "flex flex-col w-full gap-1 border-b border-slate-200 px-3 py-2.5 text-left transition-all",
-                    isActive ? "bg-emerald-50/70 shadow-[inset_3px_0_0_hsl(var(--primary))]" : "hover:bg-slate-50"
-                  )}
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: getFieldColor(field, index) }} />
-                    <span className="min-w-0 truncate text-[10px] font-black uppercase tracking-wide text-foreground">
-                      {field.name}
-                    </span>
-                  </div>
-                  
-                  <div className="pl-4 w-full">
-                    <span className="font-mono text-[10px] font-bold text-foreground break-words whitespace-pre-wrap">
-                      {field.value ? formatFieldValue(field) : "No OCR value found"}
-                    </span>
-                    {/* Show raw value below formatted date so user can verify */}
-                    {field.type === "date" && field.dateFormat && field.value && formatFieldValue(field) !== field.value && (
-                      <span className="block text-[8px] text-muted-foreground/60 font-mono mt-0.5">
-                        raw: {field.value}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center justify-between gap-2 pl-4 mt-1 w-full text-[8px] font-black uppercase text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <span>Confidence:</span>
-                      <span className={cn(
-                        "text-[9px]",
-                        field.value ? "text-emerald-600" : field.x !== undefined ? "text-amber-600" : "text-rose-600"
-                      )}>
-                        {Math.round((field.confidence || 0) * 100)}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <CheckCircle2 size={11} className={field.value ? "text-emerald-600" : "text-amber-500"} />
-                      <span>{getFieldStatus(field)}</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          </>
-          )}
         </div>
 
       </div>
