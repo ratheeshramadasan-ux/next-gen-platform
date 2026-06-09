@@ -335,9 +335,10 @@ export function ExtractionStudio() {
 
     if (nextDocId && nextDocId !== currentDocId) {
       const savedDesign = documentDesignsRef.current[nextDocId] || activeDocument?.metadata?.extractionDesign;
-      setCategories(savedDesign?.categories || []);
-      setFields(savedDesign?.fields || []);
-      setAnchors(savedDesign?.anchors || []);
+      const dedup = <T extends { id: string }>(arr: T[]) => arr.filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
+      setCategories(dedup(savedDesign?.categories || []));
+      setFields(dedup(savedDesign?.fields || []));
+      setAnchors(dedup(savedDesign?.anchors || []));
       setLinks(savedDesign?.links || []);
       setSelectedFieldId(savedDesign?.selectedFieldId || null);
       setSelectedCategoryId(savedDesign?.selectedCategoryId || null);
@@ -1031,9 +1032,10 @@ export function ExtractionStudio() {
       }
     });
 
+    const dedup = <T extends { id: string }>(arr: T[]) => arr.filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
     setCategories([rootCategory, requiredCategory, optionalCategory]);
-    setFields(newFields);
-    setAnchors(newAnchors);
+    setFields(dedup(newFields));
+    setAnchors(dedup(newAnchors));
     setLinks(newLinks);
     setSelectedFieldId(newFields.find(field => field.value || field.x !== undefined)?.id || newFields[0]?.id || null);
     setSelectedCategoryId(rootCategory.id);
@@ -1154,9 +1156,10 @@ export function ExtractionStudio() {
       }
     });
 
+    const dedup = <T extends { id: string }>(arr: T[]) => arr.filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
     setCategories(model.categories);
-    setFields(newFields);
-    setAnchors(newAnchors);
+    setFields(dedup(newFields));
+    setAnchors(dedup(newAnchors));
     setLinks(newLinks);
     setSelectedFieldId(null);
     setSelectedCategoryId(null);
@@ -2751,7 +2754,8 @@ export function ExtractionStudio() {
 
       const workspaceRect = workspace.getBoundingClientRect();
       const documentRect = documentSurface.getBoundingClientRect();
-      const currentRows = reviewRowsRef.current;
+      const seenIds = new Set<string>();
+      const currentRows = reviewRowsRef.current.filter(r => seenIds.has(r.id) ? false : (seenIds.add(r.id), true));
       const currentActiveFieldId = activeTraceFieldIdRef.current;
 
       const nextLines = currentRows
