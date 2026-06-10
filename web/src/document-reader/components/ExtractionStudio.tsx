@@ -197,7 +197,7 @@ export function ExtractionStudio() {
   const lastDesignDocIdRef = React.useRef<string | null>(activeDocument?.documentId || null);
   const workspaceRef = React.useRef<HTMLDivElement | null>(null);
   const canvasPanelRef = React.useRef<HTMLDivElement | null>(null);
-  const previewRowRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
+  const previewRowRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
   const reviewRowsRef = React.useRef<Array<StudioField & { id: string }>>([]);
   const activeTraceFieldIdRef = React.useRef<string | null>(null);
   const measureTraceLinesRef = React.useRef<() => void>(() => {});
@@ -3593,9 +3593,11 @@ export function ExtractionStudio() {
                   const isActive = activeTraceFieldId === field.id;
                   const isSelected = selectedFieldId === field.id;
                   return (
-                <button
+                <div
                   ref={(node) => { previewRowRefs.current[field.id] = node; }}
                   key={field.id}
+                  role="button"
+                  tabIndex={0}
                   onMouseEnter={() => setHoveredFieldId(field.id)}
                   onMouseLeave={() => setHoveredFieldId(null)}
                   className={cn(
@@ -3604,6 +3606,13 @@ export function ExtractionStudio() {
                     isActive ? "bg-emerald-50/70 shadow-[inset_3px_0_0_hsl(var(--primary))]" : "hover:bg-slate-50"
                   )}
                   onClick={() => { setSelectedFieldId(selectedFieldId === field.id ? null : field.id); setRegexHelpFieldId(null); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedFieldId(selectedFieldId === field.id ? null : field.id);
+                      setRegexHelpFieldId(null);
+                    }
+                  }}
                 >
                   {/* Row 1: enable checkbox + color dot + field name + delete */}
                   <div className="flex w-full items-center gap-2">
@@ -3752,7 +3761,7 @@ export function ExtractionStudio() {
                       </div>
                     </div>
                   )}
-                </button>
+                </div>
                   );
                 })}
               </div>
