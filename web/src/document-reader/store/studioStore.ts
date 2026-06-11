@@ -104,6 +104,7 @@ interface PipelineStore {
   // Actions
   setTrainingDocuments: (docs: TrainingDocument[]) => void;
   updateTrainingDocument: (docId: string, updates: Partial<TrainingDocument>) => void;
+  replaceDocumentWithSegments: (docId: string, segments: TrainingDocument[]) => void;
   
   addClass: (cls: DocumentClass) => void;
   deleteClass: (id: string) => void;
@@ -1260,13 +1261,26 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
 
   updateTrainingDocument: (docId, updates) => {
     set((state) => ({
-      trainingDocuments: state.trainingDocuments.map(doc => 
+      trainingDocuments: state.trainingDocuments.map(doc =>
         doc.documentId === docId ? { ...doc, ...updates } : doc
       ),
-      activeDocument: state.activeDocument?.documentId === docId 
-        ? { ...state.activeDocument, ...updates } 
+      activeDocument: state.activeDocument?.documentId === docId
+        ? { ...state.activeDocument, ...updates }
         : state.activeDocument
     }));
+    get().saveProject();
+  },
+
+  replaceDocumentWithSegments: (docId, segments) => {
+    set((state) => {
+      const otherDocs = state.trainingDocuments.filter(d => d.documentId !== docId);
+      const wasActive = state.activeDocument?.documentId === docId;
+      return {
+        trainingDocuments: [...otherDocs, ...segments],
+        activeDocument: wasActive ? (segments[0] || state.activeDocument) : state.activeDocument,
+        activePage: wasActive ? (segments[0]?.pages[0] || state.activePage) : state.activePage,
+      };
+    });
     get().saveProject();
   },
 

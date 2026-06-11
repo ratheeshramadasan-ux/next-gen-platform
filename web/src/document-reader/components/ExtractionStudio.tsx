@@ -6,7 +6,7 @@ import {
   Layers, Settings, Info, Trash2, Edit3, Filter, Sparkles, AlertTriangle,
   MousePointer2, Box, Anchor, Table, Type, Eye, Save, Wand2,
   Activity, Grid2X2, FolderTree, ChevronDown, Zap, ShieldCheck, CheckSquare, ScanLine, Baseline, Hand, Circle,
-  BookMarked, RefreshCw
+  BookMarked, RefreshCw, GripVertical
 } from "lucide-react";
 import { usePipelineStore } from "../store/studioStore";
 import { useDocumentReader } from "../store/documentReaderContext";
@@ -303,6 +303,8 @@ export function ExtractionStudio() {
   } | null>(null);
 
   const [categories, setCategories] = useState<StudioCategory[]>([]);
+  const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
 
   const [fields, setFields] = useState<StudioField[]>([]);
   const [anchors, setAnchors] = useState<StudioAnchor[]>([]);
@@ -316,14 +318,25 @@ export function ExtractionStudio() {
     return `${prefix}_${idCounterRef.current}`;
   };
 
-  const captureCurrentDesign = React.useCallback((): DocumentExtractionDesign => ({
-    categories,
-    fields,
-    anchors,
-    links,
-    selectedFieldId,
-    selectedCategoryId
-  }), [anchors, categories, fields, links, selectedCategoryId, selectedFieldId]);
+  const isDuplicateFieldName = (name: string, excludeId?: string) => {
+    const normalized = name.trim().toLowerCase();
+    return fields.some(f => f.id !== excludeId && f.name.trim().toLowerCase() === normalized);
+  };
+
+  const captureCurrentDesign = React.useCallback((): DocumentExtractionDesign => {
+    // Keep the LAST entry for any colliding ids (most recent edit wins) so a
+    // stale id-counter that produced a duplicate id doesn't silently hide
+    // newly-added/edited fields once this design is read elsewhere (e.g. Validation Studio).
+    const dedupLast = <T extends { id: string }>(arr: T[]) => arr.filter((x, i, a) => a.findLastIndex(y => y.id === x.id) === i);
+    return {
+      categories: dedupLast(categories),
+      fields: dedupLast(fields),
+      anchors: dedupLast(anchors),
+      links,
+      selectedFieldId,
+      selectedCategoryId
+    };
+  }, [anchors, categories, fields, links, selectedCategoryId, selectedFieldId]);
 
   React.useEffect(() => {
     const nextDocId = activeDocument?.documentId || null;
@@ -336,10 +349,23 @@ export function ExtractionStudio() {
     if (nextDocId && nextDocId !== currentDocId) {
       const savedDesign = documentDesignsRef.current[nextDocId] || activeDocument?.metadata?.extractionDesign;
       const dedup = <T extends { id: string }>(arr: T[]) => arr.filter((x, i, a) => a.findIndex(y => y.id === x.id) === i);
-      setCategories(dedup(savedDesign?.categories || []));
-      setFields(dedup(savedDesign?.fields || []));
-      setAnchors(dedup(savedDesign?.anchors || []));
+      const dedupedCategories = dedup(savedDesign?.categories || []);
+      const dedupedFields = dedup(savedDesign?.fields || []);
+      const dedupedAnchors = dedup(savedDesign?.anchors || []);
+      setCategories(dedupedCategories);
+      setFields(dedupedFields);
+      setAnchors(dedupedAnchors);
       setLinks(savedDesign?.links || []);
+
+      // Re-sync the ID counter past any numeric suffix already used in the
+      // loaded design, so newly created fields/anchors/categories never
+      // collide with (and get silently deduped against) existing ones.
+      let maxId = 0;
+      [...dedupedCategories, ...dedupedFields, ...dedupedAnchors].forEach(item => {
+        const match = /_(\d+)$/.exec(item.id);
+        if (match) maxId = Math.max(maxId, parseInt(match[1], 10));
+      });
+      idCounterRef.current = Math.max(idCounterRef.current, maxId);
       setSelectedFieldId(savedDesign?.selectedFieldId || null);
       setSelectedCategoryId(savedDesign?.selectedCategoryId || null);
       setAnchorCaptureTargetFieldId(null);
@@ -1741,6 +1767,11 @@ export function ExtractionStudio() {
   const createFieldFromSelection = (name: string, type?: string, options?: { keepPending?: boolean }) => {
     if (!pendingAnnotation) return null;
 
+    if (isDuplicateFieldName(name)) {
+      toast.error(`A field named "${name.trim()}" already exists`);
+      return null;
+    }
+
     // Sanitise value — never save the loading placeholder as a real value
     const rawValue = pendingAnnotation.extractedText || "";
     const value = /reading selected area|no ocr text/i.test(rawValue) ? "" : rawValue;
@@ -2257,6 +2288,10 @@ export function ExtractionStudio() {
       defaultValue: "",
       onConfirm: (name: string) => {
         if (name.trim()) {
+          if (isDuplicateFieldName(name)) {
+            toast.error(`A field named "${name.trim()}" already exists`);
+            return;
+          }
           const newField: StudioField = {
             id: nextId("field"),
             name: name.trim(),
@@ -2301,6 +2336,14 @@ export function ExtractionStudio() {
 
   const updateFieldConfig = (id: string, updates: Partial<StudioField>) => {
     setFields(prev => prev.map(field => field.id === id ? { ...field, ...updates } : field));
+  };
+
+  const moveFieldToCategory = (fieldId: string, categoryId: string | null) => {
+    const field = fields.find(f => f.id === fieldId);
+    if (!field || field.categoryId === categoryId) return;
+    updateFieldConfig(fieldId, { categoryId });
+    const categoryName = categoryId ? categories.find(c => c.id === categoryId)?.name : "Uncategorized";
+    toast.success(`Moved "${field.name}" to ${categoryName || "Uncategorized"}`);
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -3471,7 +3514,14 @@ export function ExtractionStudio() {
                             const field = fields.find(f => f.id === c.id);
                             const currentName = field?.name || "";
                             setCustomPrompt({ title: "Rename Field", placeholder: "e.g. Passport Number", defaultValue: currentName,
-                              onConfirm: (value: string) => { if (value.trim()) { setFields(prev => prev.map(f => f.id === c.id ? { ...f, name: value.trim() } : f)); } setCustomPrompt(null); }
+                              onConfirm: (value: string) => {
+                                if (!value.trim()) return;
+                                if (isDuplicateFieldName(value, c.id)) {
+                                  toast.error(`A field named "${value.trim()}" already exists`);
+                                  return;
+                                }
+                                setFields(prev => prev.map(f => f.id === c.id ? { ...f, name: value.trim() } : f));
+                              }
                             });
                           } else if (item.action === "addAnchor") {
                             beginAnchorCaptureForField(c.id);
@@ -3585,7 +3635,21 @@ export function ExtractionStudio() {
               </div>
             ) : visibleSchemaGroups.map(group => (
               <div key={group.id}>
-                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-1 text-[8px] font-black uppercase tracking-widest text-slate-500">
+                <div
+                  onDragOver={(event) => { if (draggedFieldId) { event.preventDefault(); setDragOverGroupId(group.id); } }}
+                  onDragLeave={() => setDragOverGroupId(prev => prev === group.id ? null : prev)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const fieldId = event.dataTransfer.getData("text/plain") || draggedFieldId;
+                    if (fieldId) moveFieldToCategory(fieldId, group.id === "uncategorized" ? null : group.id);
+                    setDragOverGroupId(null);
+                    setDraggedFieldId(null);
+                  }}
+                  className={cn(
+                    "flex items-center justify-between border-b px-4 py-1 text-[8px] font-black uppercase tracking-widest transition-colors",
+                    dragOverGroupId === group.id ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-500"
+                  )}
+                >
                   <span className="truncate">{group.name}</span>
                   <span>{group.fields.length}</span>
                 </div>
@@ -3598,11 +3662,19 @@ export function ExtractionStudio() {
                   key={field.id}
                   role="button"
                   tabIndex={0}
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData("text/plain", field.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    setDraggedFieldId(field.id);
+                  }}
+                  onDragEnd={() => { setDraggedFieldId(null); setDragOverGroupId(null); }}
                   onMouseEnter={() => setHoveredFieldId(field.id)}
                   onMouseLeave={() => setHoveredFieldId(null)}
                   className={cn(
                     "group/field flex flex-col w-full gap-1.5 border-b border-slate-200 px-4 py-2.5 text-left transition-all cursor-pointer",
                     field.enabled === false && "opacity-45",
+                    draggedFieldId === field.id && "opacity-40",
                     isActive ? "bg-emerald-50/70 shadow-[inset_3px_0_0_hsl(var(--primary))]" : "hover:bg-slate-50"
                   )}
                   onClick={() => { setSelectedFieldId(selectedFieldId === field.id ? null : field.id); setRegexHelpFieldId(null); }}
@@ -3614,8 +3686,9 @@ export function ExtractionStudio() {
                     }
                   }}
                 >
-                  {/* Row 1: enable checkbox + color dot + field name + delete */}
+                  {/* Row 1: drag handle + enable checkbox + color dot + field name + delete */}
                   <div className="flex w-full items-center gap-2">
+                    <GripVertical size={12} className="shrink-0 text-muted-foreground/40 cursor-grab active:cursor-grabbing" />
                     <span className="flex w-10 shrink-0 items-center gap-1">
                       <input
                         type="checkbox"
@@ -3665,6 +3738,38 @@ export function ExtractionStudio() {
                       <span>{getFieldStatus(field)}</span>
                     </div>
                   </div>
+
+                  {/* Row 3.5: category + required — only visible when this field is selected */}
+                  {isSelected && (
+                    <div className="flex w-full items-center gap-2 pl-10 mt-0.5">
+                      <select
+                        value={field.categoryId || ""}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => moveFieldToCategory(field.id, event.target.value || null)}
+                        className="h-6 flex-1 min-w-0 rounded border border-slate-300 bg-slate-50 px-1 text-[8px] font-bold text-muted-foreground outline-none"
+                        title="Category"
+                      >
+                        <option value="">Uncategorized</option>
+                        {categories.map(category => (
+                          <option key={category.id} value={category.id}>
+                            {category.parentId ? " - " : ""}{category.name}
+                          </option>
+                        ))}
+                      </select>
+                      <label
+                        className="flex h-6 shrink-0 items-center gap-1 rounded border border-slate-300 bg-slate-50 px-2 text-[8px] font-black uppercase text-muted-foreground"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={field.required}
+                          onChange={(event) => updateFieldConfig(field.id, { required: event.target.checked })}
+                          className="h-3 w-3 accent-emerald-600"
+                        />
+                        Required
+                      </label>
+                    </div>
+                  )}
 
                   {/* Row 4: type / format / regex — only visible when this field is selected */}
                   {isSelected && (

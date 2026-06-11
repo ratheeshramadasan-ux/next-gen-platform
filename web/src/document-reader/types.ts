@@ -665,4 +665,161 @@ export interface IngestionBatch {
   status: "PROCESSING" | "COMPLETED" | "FAILED";
   createdAt: string;
 }
+
+// ─── VALIDATION & CONTINUOUS LEARNING STUDIO ──────────────────────────────────
+
+/** R_d weighted components — 3.1 Dynamic Document Risk Score */
+export interface RiskScoreBreakdown {
+  classificationConfidence: number; // C_c  [0,1]
+  meanExtractionConfidence: number; // C_e_bar [0,1]
+  structuralVariationPenalty: number; // V_d [0,1]
+  businessCriticality: number; // B_d [0,1]
+  weights: { wc: number; we: number; wv: number; wb: number };
+  riskScore: number; // R_d [0,1]
+}
+
+/** C_doc weighted components — 3.2 Overall Document Confidence */
+export interface DocumentConfidenceBreakdown {
+  classificationConfidence: number; // C_c
+  geometricFieldConfidence: number; // (prod C_fi)^(1/n)
+  ocrConfidence: number; // C_ocr
+  businessRulesPass: boolean; // C_biz_rules
+  weights: { w1: number; w2: number; w3: number; w4: number };
+  overallConfidence: number; // C_doc [0,1]
+}
+
+export type ValidationQueueType =
+  | "highest_learning_value"
+  | "confidence_review"
+  | "manual_escalation"
+  | "straight_through";
+
+export interface BusinessRuleCheckResult {
+  ruleId: string;
+  label: string;
+  passed: boolean;
+  delta: number;
+  expression: string;
+}
+
+export interface FieldExplanation {
+  fieldId: string;
+  fieldName: string;
+  confidence: number;
+  status: "high" | "medium" | "low";
+  ocrAmbiguity?: { observed: string; alternatives: string[] };
+  reasons: string[];
+}
+
+export interface ValidationDocumentSummary {
+  documentId: string;
+  name: string;
+  className: string;
+  riskScore: RiskScoreBreakdown;
+  confidence: DocumentConfidenceBreakdown;
+  queue: ValidationQueueType;
+  businessRules: BusinessRuleCheckResult[];
+  fieldExplanations: FieldExplanation[];
+  classificationExplanation: {
+    matchedKeywords: string[];
+    vendorFingerprintMatch: string | null;
+  };
+}
+
+/** 6.1 Unified Transaction Log Schema */
+export interface ValidationTransactionLog {
+  transaction_id: string;
+  batch_id: string;
+  document_id: string;
+  model_context: {
+    classification_model_version: string;
+    extraction_model_id: string;
+  };
+  explainability_data: {
+    ocr_ambiguity_detected: boolean;
+  };
+  business_rules: {
+    mathematical_reconciliation_pass: boolean;
+    delta_amount: number;
+  };
+  timestamp: string;
+}
+
+/** 4.8 Training Dataset Governance Ledger */
+export interface TrainingLedgerEntry {
+  training_sample_id: string;
+  document_id: string;
+  field_id: string;
+  field_name: string;
+  predicted_value: string;
+  corrected_value: string;
+  predicted_confidence: number;
+  provenance_metadata: {
+    source_user_id: string;
+    approval_timestamp: string;
+    origin_batch_id: string;
+    approver_id: string;
+    base_model_version_used: string;
+  };
+}
+
+/** 4.6 Model Promotion Pipeline lifecycle stages */
+export type ModelLifecycleStage =
+  | "retained_local"
+  | "internal_validation"
+  | "shadow_deployment"
+  | "canary_staging"
+  | "ab_test"
+  | "production";
+
+export interface ModelVersionRecord {
+  version: string;
+  stage: ModelLifecycleStage;
+  accuracy: number;
+  goldenSetScore: number;
+  abTrafficPercent?: number;
+  promotedAt?: string;
+  isActive: boolean;
+  isStable: boolean;
+}
+
+/** 4.4 Model Health Center & Drift Analytics */
+export interface DriftDataPoint {
+  date: string;
+  accuracy: number;
+}
+
+export interface VendorPerformance {
+  vendor: string;
+  accuracy: number;
+  documentCount: number;
+  trend: "up" | "down" | "stable";
+}
+
+export interface FieldDecayProfile {
+  fieldName: string;
+  history: number[]; // last N accuracy samples, 0-100
+  current: number;
+  status: "stable" | "decaying" | "critical";
+}
+
+/** 4.5 Human Performance & Quality Analytics */
+export interface AnalystTelemetry {
+  analystName: string;
+  secondsPerField: number;
+  secondsPerDocument: number;
+  fieldsReviewed: number;
+  documentsReviewed: number;
+}
+
+/** 10. Golden Dataset Testing Bench */
+export interface GoldenDatasetResult {
+  modelVersion: string;
+  totalDocuments: number;
+  passedDocuments: number;
+  score: number; // 0-100
+  baselineScore: number; // active production version's score
+  ranAt: string;
+  passesGate: boolean;
+}
 // Force re-index
