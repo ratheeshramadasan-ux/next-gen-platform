@@ -108,6 +108,8 @@ interface PipelineStore {
   
   addClass: (cls: DocumentClass) => void;
   deleteClass: (id: string) => void;
+  updateClassConfig: (id: string, updates: Partial<DocumentClass>) => void;
+  recordClassConfidenceSnapshot: (id: string, snapshot: { count: number; overall: number; classification: number; extraction: number }) => void;
   updateDocumentClass: (docId: string, id: string, method?: "manual" | "system", modelName?: string, ocrEngineName?: string) => void;
   updatePageClass: (pageId: string, id: string, method?: "manual" | "system", modelName?: string, ocrEngineName?: string) => void;
   deleteTrainingDocument: (docId: string) => void;
@@ -1296,8 +1298,40 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   },
   
   deleteClass: (id) => {
-    set((state) => ({ 
-      documentClasses: state.documentClasses.filter(c => c.classId !== id) 
+    set((state) => ({
+      documentClasses: state.documentClasses.filter(c => c.classId !== id)
+    }));
+    get().saveProject();
+  },
+
+  updateClassConfig: (id, updates) => {
+    set((state) => ({
+      documentClasses: state.documentClasses.map(c => c.classId === id ? { ...c, ...updates } : c)
+    }));
+    get().saveProject();
+  },
+
+  recordClassConfidenceSnapshot: (id, snapshot) => {
+    const state = get();
+    const cls = state.documentClasses.find(c => c.classId === id);
+    if (!cls) return;
+    const history = cls.confidenceHistory || [];
+    const last = history[history.length - 1];
+    const roughly = (a: number, b: number) => Math.abs(a - b) < 0.0005;
+    if (last && last.count === snapshot.count && roughly(last.overall, snapshot.overall)
+      && roughly(last.classification, snapshot.classification) && roughly(last.extraction, snapshot.extraction)) {
+      return;
+    }
+    set((state) => ({
+      documentClasses: state.documentClasses.map(c => {
+        if (c.classId !== id) return c;
+        const history = c.confidenceHistory || [];
+        const last = history[history.length - 1];
+        const next = last && last.count === snapshot.count
+          ? [...history.slice(0, -1), snapshot]
+          : [...history, snapshot].slice(-20);
+        return { ...c, confidenceHistory: next };
+      })
     }));
     get().saveProject();
   },

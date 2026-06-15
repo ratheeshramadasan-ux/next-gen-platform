@@ -39,6 +39,11 @@ const TIER_STYLES: Record<string, { border: string; bg: string; dot: string; lab
   low: { border: "border-rose-500/80", bg: "bg-rose-500/20", dot: "bg-rose-500", label: "Low Confidence" },
 };
 
+// A field with a non-empty extracted value is shown as "done" (green), independent of
+// its confidence tier — confidence still drives the tooltip/legend, but the at-a-glance
+// box color answers "did extraction find something here?" rather than "how sure is it?".
+const EXTRACTED_STYLE = { border: "border-emerald-500/70", bg: "bg-emerald-500/10", dot: "bg-emerald-500", label: "Extracted" };
+
 export function ConfidenceHeatmapCanvas({
   page,
   fields,
@@ -87,7 +92,7 @@ export function ConfidenceHeatmapCanvas({
         {positionedFields.map(field => {
           const confidence = norm(field.confidence);
           const tier = confidenceTier(confidence);
-          const styles = TIER_STYLES[tier];
+          const styles = field.value ? EXTRACTED_STYLE : TIER_STYLES[tier];
           const explanation = explanationByField.get(field.id);
           const isSelected = selectedFieldId === field.id;
 

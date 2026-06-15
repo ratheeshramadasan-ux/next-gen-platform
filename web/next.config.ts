@@ -5,9 +5,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  serverActions: {
-    bodySizeLimit: '100mb',
-  },
   experimental: {
     optimizePackageImports: ['lucide-react'],
     serverActions: {

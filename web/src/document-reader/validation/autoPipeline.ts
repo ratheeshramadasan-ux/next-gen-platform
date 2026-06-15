@@ -1,180 +1,191 @@
-import { TrainingDocument, DocumentClass } from "../types";
-import { seededRandom } from "./engine";
+import { TrainingDocument, DocumentClass, TrainingPage } from "../types";
+import { OCREngine } from "../services/ocrEngine";
+import { locateField, computeDocumentOffset, ExtractionAnchor, ExtractionFieldSpec } from "./fieldExtraction";
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 export type AutoPipelineStage = "classifying" | "extracting";
 
-const NAME_SAMPLES = ["Alex Morgan", "Priya Nair", "Daniel Cho", "Maria Santos", "James Carter"];
-const ADDRESS_SAMPLES = [
-  "482 Riverside Drive, Austin, TX 78701",
-  "129 Maple Avenue, Columbus, OH 43215",
-  "77 Harbor View Rd, Seattle, WA 98101",
-];
-const TEXT_SAMPLES = ["Acme Holdings Inc.", "Northwind Logistics", "Global Crest Partners", "Summit Health Group"];
+const OCR_START_MARKER = "-- START OF EXTRACTED DOCUMENT DATA --";
+const OCR_END_MARKER = "-- END OF EXTRACTED DOCUMENT DATA --";
 
-/** Deterministic mock value generator for a freshly-extracted field, seeded by document + field id. */
-export function generateFieldValue(field: { id: string; name: string; type: string }, seed: string): string {
-  const r = seededRandom(seed);
-  const nameLower = field.name.toLowerCase();
-
-  switch (field.type) {
-    case "date": {
-      const month = 1 + Math.floor(seededRandom(`${seed}_m`) * 12);
-      const day = 1 + Math.floor(seededRandom(`${seed}_d`) * 28);
-      const year = 2023 + Math.floor(seededRandom(`${seed}_y`) * 3);
-      return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}/${year}`;
-    }
-    case "amount": {
-      const amount = (50 + r * 9950).toFixed(2);
-      return `$${amount}`;
-    }
-    case "number": {
-      return String(Math.floor(100000 + r * 900000));
-    }
-    case "address":
-      return ADDRESS_SAMPLES[Math.floor(r * ADDRESS_SAMPLES.length)];
-    default: {
-      if (nameLower.includes("email")) return `${["alex.morgan", "priya.nair", "d.cho", "m.santos"][Math.floor(r * 4)]}@example.com`;
-      if (nameLower.includes("phone")) return `(${100 + Math.floor(r * 900)}) 555-${1000 + Math.floor(seededRandom(`${seed}_p`) * 9000)}`;
-      if (nameLower.includes("name")) return NAME_SAMPLES[Math.floor(r * NAME_SAMPLES.length)];
-      if (nameLower.includes("address")) return ADDRESS_SAMPLES[Math.floor(r * ADDRESS_SAMPLES.length)];
-      if (nameLower.includes("id") || nameLower.includes("number") || nameLower.includes("ref") || nameLower.includes("code")) {
-        return `REF-${String(Math.floor(r * 900000) + 100000)}`;
-      }
-      return TEXT_SAMPLES[Math.floor(r * TEXT_SAMPLES.length)];
-    }
+/** Strips the OCR engine's report wrapper, returning the raw recognized text. */
+function getRawOcrText(page: TrainingPage): string {
+  const text = page.ocrText || "";
+  const startIdx = text.indexOf(OCR_START_MARKER);
+  const endIdx = text.indexOf(OCR_END_MARKER);
+  if (startIdx >= 0 && endIdx > startIdx) {
+    return text.slice(startIdx + OCR_START_MARKER.length, endIdx).trim();
   }
+  return text;
+}
+
+/** Runs real OCR on every page of a document that doesn't already have a populated text layer. */
+export async function runOcrOnDocument(doc: TrainingDocument, engineId = "tesseract-ocr-v5"): Promise<TrainingDocument> {
+  const pages = await Promise.all(
+    doc.pages.map(async page => {
+      if (page.textLayer && page.textLayer.length > 0) return page;
+      const processed = await OCREngine.processPage(page, engineId);
+      return processed as TrainingPage;
+    })
+  );
+  return { ...doc, pages };
 }
 
 /**
- * Classifies a freshly-uploaded document by matching its filename against the
- * keywords/anchor phrases of each configured document class. Falls back to a
- * deterministic pick among active classes so every upload leaves the queue
- * with a routable classification.
+ * Classifies a document by matching its OCR text (plus filename) against the
+ * keywords/anchor phrases of each configured, active document class. The class
+ * with the most matched terms wins; confidence is the fraction of that class's
+ * terms found in the document. Returns undefined if no class has any match —
+ * the document is left Unclassified rather than assigned a random class.
  */
-export function classifyDocument(doc: TrainingDocument, documentClasses: DocumentClass[]): TrainingDocument["classification"] | undefined {
+export function classifyDocumentFromOcr(doc: TrainingDocument, documentClasses: DocumentClass[]): TrainingDocument["classification"] | undefined {
   const candidates = documentClasses.filter(c => c.isActive !== false);
   if (candidates.length === 0) return undefined;
 
-  const haystack = doc.name.toLowerCase();
+  const ocrText = doc.pages.map(getRawOcrText).join("\n").toLowerCase();
+  const haystack = `${doc.name.toLowerCase()}\n${ocrText}`;
+
+  // A multi-word/bilingual term (e.g. "Passport No./No du passeport") rarely appears
+  // verbatim in OCR text — instead check what fraction of its significant words
+  // (length > 2) appear anywhere in the document.
+  const termMatches = (term: string): boolean => {
+    const tokens = term.split(/[^a-z0-9]+/).filter(t => t.length > 2);
+    if (tokens.length === 0) return haystack.includes(term);
+    const hits = tokens.filter(t => haystack.includes(t)).length;
+    return hits / tokens.length >= 0.5;
+  };
+
   let bestClass: DocumentClass | null = null;
+  let bestRatio = 0;
   let bestScore = 0;
+  let bestTotal = 1;
 
-  candidates.forEach(cls => {
-    const terms = [cls.name, ...cls.keywords, ...cls.anchorPhrases].map(t => t.toLowerCase()).filter(Boolean);
-    const score = terms.filter(t => haystack.includes(t)).length;
-    if (score > 0 && (!bestClass || score > bestScore)) {
+  for (const cls of candidates) {
+    const terms = [cls.name, ...cls.keywords, ...cls.anchorPhrases].map(t => t.toLowerCase().trim()).filter(Boolean);
+    if (terms.length === 0) continue;
+    const matched = terms.filter(termMatches).length;
+    if (matched === 0) continue;
+    const ratio = matched / terms.length;
+    // Prefer the class whose terms match the largest fraction (most specific fit
+    // — e.g. a custom "Canadian Passport" class over a broad "Government ID" class
+    // that happens to share a few generic keywords). Break ties on raw match count.
+    if (ratio > bestRatio || (ratio === bestRatio && matched > bestScore)) {
       bestClass = cls;
-      bestScore = score;
+      bestRatio = ratio;
+      bestScore = matched;
+      bestTotal = terms.length;
     }
-  });
+  }
 
-  const chosen = bestClass ? bestClass : candidates[Math.floor(seededRandom(doc.documentId) * candidates.length)];
-  const matchScore = bestScore;
-  const confidence = clamp01(0.82 + matchScore * 0.04 + seededRandom(`${doc.documentId}_conf`) * 0.05);
+  if (!bestClass) return undefined;
 
   return {
-    classId: chosen.classId,
-    className: chosen.name,
-    confidence: Math.min(confidence, 0.995),
+    classId: bestClass.classId,
+    className: bestClass.name,
+    confidence: clamp01(bestScore / bestTotal),
     method: "system",
     modelName: "auto-classifier-v2.1",
-    ocrEngineName: "tesseract-v5",
+    ocrEngineName: "tesseract-ocr-v5",
   };
-}
-
-export interface DocumentSegmentClassification {
-  classification: NonNullable<TrainingDocument["classification"]>;
-  pageIndices: number[];
-}
-
-/**
- * Splits a freshly-uploaded document into one or more classified segments. Most
- * uploads resolve to a single segment spanning every page, but a multi-page file
- * may bundle several distinct documents — in that case each segment gets its own
- * classification and page range so the bundle can be split into separate records.
- */
-export function classifyDocumentSegments(doc: TrainingDocument, documentClasses: DocumentClass[]): DocumentSegmentClassification[] {
-  const candidates = documentClasses.filter(c => c.isActive !== false);
-  const totalPages = doc.pages.length;
-  if (candidates.length === 0 || totalPages === 0) return [];
-
-  const primary = classifyDocument(doc, documentClasses);
-  if (!primary) return [];
-
-  const allPageIndices = doc.pages.map((_, i) => i);
-  if (totalPages === 1 || candidates.length === 1) {
-    return [{ classification: primary, pageIndices: allPageIndices }];
-  }
-
-  const maxSegments = Math.min(candidates.length, totalPages, 3);
-  const segmentCount = 1 + Math.floor(seededRandom(`${doc.documentId}_segments`) * maxSegments);
-  if (segmentCount <= 1) {
-    return [{ classification: primary, pageIndices: allPageIndices }];
-  }
-
-  const basePages = Math.floor(totalPages / segmentCount);
-  let remainder = totalPages % segmentCount;
-  const usedClassIds = new Set<string>([primary.classId]);
-  const segments: DocumentSegmentClassification[] = [];
-  let cursor = 0;
-
-  for (let i = 0; i < segmentCount; i++) {
-    let count = basePages;
-    if (remainder > 0) {
-      count += 1;
-      remainder -= 1;
-    }
-    if (count <= 0) continue;
-
-    const pageIndices = allPageIndices.slice(cursor, cursor + count);
-    cursor += count;
-
-    let classification: NonNullable<TrainingDocument["classification"]>;
-    if (i === 0) {
-      classification = primary;
-    } else {
-      const altCandidates = candidates.filter(c => !usedClassIds.has(c.classId));
-      const pool = altCandidates.length > 0 ? altCandidates : candidates;
-      const pick = pool[Math.floor(seededRandom(`${doc.documentId}_seg${i}`) * pool.length)];
-      usedClassIds.add(pick.classId);
-      classification = {
-        classId: pick.classId,
-        className: pick.name,
-        confidence: clamp01(0.80 + seededRandom(`${doc.documentId}_seg${i}_conf`) * 0.18),
-        method: "system",
-        modelName: "auto-classifier-v2.1",
-        ocrEngineName: "tesseract-v5",
-      };
-    }
-
-    segments.push({ classification, pageIndices });
-  }
-
-  return segments;
 }
 
 /**
  * Builds an extraction design for a freshly-classified document by cloning the
  * field/category/anchor schema from another document of the same class that
- * already has a configured extraction design, then populating mock values
- * and confidences for each field.
+ * already has a configured extraction design, then locating each field's value
+ * in this document's OCR text layer via anchor-relative positioning.
  */
-export function buildExtractionDesign(doc: TrainingDocument, classId: string, trainingDocuments: TrainingDocument[]): Record<string, any> | null {
-  const template = trainingDocuments.find(d =>
+export interface ExtractionDesignResult {
+  categories: unknown[];
+  fields: (ExtractionFieldSpec & { id: string; value: string; confidence: number; [key: string]: unknown })[];
+  anchors: ExtractionAnchor[];
+  links: { fieldId: string; anchorId: string; [key: string]: unknown }[];
+  selectedFieldId: null;
+  selectedCategoryId: null;
+}
+
+interface ExtractionTemplate {
+  categories: unknown[];
+  fields: (ExtractionFieldSpec & { id: string; [key: string]: unknown })[];
+  anchors: ExtractionAnchor[];
+  links: { fieldId: string; anchorId: string }[];
+}
+
+interface CustomReusableModel extends ExtractionTemplate {
+  id: string;
+  name: string;
+  documentClasses: string[];
+  createdAt: string;
+}
+
+const CUSTOM_MODELS_KEY = "documentReader.customModels";
+
+const normalizeModelKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+function loadCustomModels(): CustomReusableModel[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(CUSTOM_MODELS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Finds a reusable extraction model saved from the AI Document Designer / Extraction
+ * Studio for this document's class — either by exact class name, or (if no class
+ * name match) by fuzzy-matching the model's anchor labels against the OCR text.
+ */
+function matchCustomModel(documentClassName: string, ocrText: string): CustomReusableModel | null {
+  const models = loadCustomModels();
+  const docNorm = normalizeModelKey(documentClassName);
+  const byClass = models.find(m => m.documentClasses.some(c => normalizeModelKey(c) === docNorm));
+  if (byClass) return byClass;
+
+  const ocrNorm = normalizeModelKey(ocrText);
+  return models.find(m => {
+    if (m.anchors.length === 0) return false;
+    const hits = m.anchors.filter(a => ocrNorm.includes(normalizeModelKey(a.value)));
+    return hits.length / m.anchors.length >= 0.6;
+  }) || null;
+}
+
+export function buildExtractionDesignFromOcr(doc: TrainingDocument, classId: string, trainingDocuments: TrainingDocument[]): ExtractionDesignResult | null {
+  const ocrText = doc.pages.map(getRawOcrText).join("\n");
+  const customModel = matchCustomModel(doc.classification?.className || "", ocrText);
+
+  const design: ExtractionTemplate | null = customModel || (trainingDocuments.find(d =>
     d.documentId !== doc.documentId &&
     d.classification?.classId === classId &&
     ((d.metadata?.extractionDesign?.fields || []).length > 0)
-  );
-  if (!template) return null;
+  )?.metadata?.extractionDesign as ExtractionTemplate | undefined) || null;
 
-  const design = template.metadata!.extractionDesign as Record<string, any>;
-  const fields = (design.fields || []).map((f: any) => ({
-    ...f,
-    value: generateFieldValue(f, `${doc.documentId}_${f.id}`),
-    confidence: clamp01(0.80 + seededRandom(`${doc.documentId}_${f.id}_conf`) * 0.19),
-  }));
+  if (!design) return null;
+
+  const page = doc.pages[0];
+  const textLayer = page?.textLayer || [];
+  const pageWidth = page?.width || 0;
+  const pageHeight = page?.height || 0;
+
+  // The shift shared by most of the document's anchors — used to relocate fields whose
+  // own anchor moved independently or couldn't be re-found in this document's OCR.
+  const documentOffset = computeDocumentOffset(textLayer, pageWidth, pageHeight, design.anchors || []);
+
+  const fields = (design.fields || []).map(f => {
+    const fieldAnchors = (design.links || [])
+      .filter(l => l.fieldId === f.id)
+      .map(l => (design.anchors || []).find(a => a.id === l.anchorId))
+      .filter(Boolean) as ExtractionAnchor[];
+
+    const located = locateField(textLayer, pageWidth, pageHeight, f, fieldAnchors, documentOffset, design.anchors || []);
+
+    return {
+      ...f,
+      value: located?.value || "",
+      confidence: located?.confidence || 0,
+    };
+  });
 
   return {
     categories: design.categories || [],

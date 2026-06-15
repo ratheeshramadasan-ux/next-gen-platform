@@ -180,7 +180,9 @@ export function ExtractionStudio() {
     executeOCR,
     updateTrainingDocument,
     infrastructure,
-    saveState
+    saveState,
+    documentClasses,
+    addClass
   } = usePipelineStore();
   
   const { updateStepStatus, setActiveStage } = useDocumentReader();
@@ -644,8 +646,12 @@ export function ExtractionStudio() {
         .filter(w => {
           const cx = w.x + w.width / 2;
           const cy = w.y + w.height / 2;
-          return cx >= box.x && cx <= box.x + box.width &&
+          const inBox = cx >= box.x && cx <= box.x + box.width &&
                  cy >= box.y && cy <= box.y + box.height;
+          if (!inBox) return false;
+          // Anchors mark constant/label text — never include anchor-covered words
+          // in a field's extracted value, even if they fall inside the field's box.
+          return !anchors.some(a => wordInsideBox(w, a));
         });
 
       const rawText = words
@@ -673,7 +679,7 @@ export function ExtractionStudio() {
     toast.success(updated > 0
       ? `Extracted values for ${updated} field${updated !== 1 ? "s" : ""}.`
       : "All positioned fields already have values. Use Re-fetch OCR to re-read.");
-  }, [activePage, normalizeBilingualValue]);
+  }, [activePage, normalizeBilingualValue, anchors]);
 
   // ─── Re-fetch OCR then extract ────────────────────────────────────────────────
   const handleRefetchOCR = React.useCallback(async () => {
@@ -707,8 +713,27 @@ export function ExtractionStudio() {
     };
   };
 
-  const getWordsInSelection = (box: SelectionBox, excludeLabels = false): OCRWord[] => {
-    const normalizedWords = (activePage?.textLayer || []).map(normalizeWordBox);
+  // True if a word sits on top of (or mostly inside) a region marked as an anchor —
+  // i.e. constant/label text. Anchors are never dynamic field values, so words
+  // matching this must be excluded from any field's captured value, even if they
+  // fall inside that field's own drawn box.
+  const ANCHOR_EXCLUDE_OVERLAP = 0.4;
+  const wordInsideBox = (word: OCRWord, box: SelectionBox): boolean => {
+    const cx = word.x + word.width / 2;
+    const cy = word.y + word.height / 2;
+    if (cx >= box.x && cx <= box.x + box.width && cy >= box.y && cy <= box.y + box.height) return true;
+    const left = Math.max(word.x, box.x);
+    const right = Math.min(word.x + word.width, box.x + box.width);
+    const top = Math.max(word.y, box.y);
+    const bottom = Math.min(word.y + word.height, box.y + box.height);
+    const area = Math.max(0, right - left) * Math.max(0, bottom - top);
+    return area / Math.max(0.01, word.width * word.height) >= ANCHOR_EXCLUDE_OVERLAP;
+  };
+
+  const getWordsInSelection = (box: SelectionBox, excludeLabels = false, excludeBoxes: SelectionBox[] = []): OCRWord[] => {
+    const normalizedWords = (activePage?.textLayer || [])
+      .map(normalizeWordBox)
+      .filter(w => !(excludeLabels && excludeBoxes.length > 0 && excludeBoxes.some(b => wordInsideBox(w, b))));
 
     const readingOrder = (a: OCRWord, b: OCRWord) => {
       const sameLine = Math.abs(a.y - b.y) < Math.max(a.height, b.height, 1.2);
@@ -735,7 +760,10 @@ export function ExtractionStudio() {
       ];
       return tokens.some(token =>
         labelTokens.includes(token) ||
-        labelTokens.some(bt => bt.length > 2 && (token.includes(bt) || bt.includes(token)))
+        // Fuzzy substring match only for tokens long enough that a containment match is
+        // meaningful — otherwise short field values like "M"/"F" (sex) or "15" (a date)
+        // get flagged as labels just because their characters appear inside a label word.
+        (token.length > 2 && labelTokens.some(bt => bt.length > 2 && (token.includes(bt) || bt.includes(token))))
       );
     };
 
@@ -792,17 +820,41 @@ export function ExtractionStudio() {
 
     // Step 1: find seed words inside the drawn box.
     // ≥ 35% word-area overlap, OR centre inside the box (handles narrow value cells).
-    const seeds = normalizedWords.filter(w => {
+    const overlapping = normalizedWords.filter(w => {
       if (isStrikethrough(w)) return false;
       const cov = wordOverlap(w, box);
       const cx = w.x + w.width / 2;
       const cy = w.y + w.height / 2;
       const centreInside = cx >= box.x && cx <= box.x + box.width && cy >= box.y && cy <= box.y + box.height;
       const notTooTall = w.height <= Math.max(1.8, box.height * 2.0);
-      return notTooTall && !isLabel(w.text) && (cov >= 0.35 || (centreInside && cov >= 0.15));
-    }).sort(readingOrder);
+      return notTooTall && (cov >= 0.35 || (centreInside && cov >= 0.15));
+    });
 
-    if (seeds.length === 0) return [];
+    const seeds = overlapping.filter(w => !isLabel(w.text)).sort(readingOrder);
+
+    if (seeds.length === 0) {
+      if (overlapping.length === 0) return [];
+
+      // The drawn box sits on label text (e.g. "Date of birth/Date de naissance") rather
+      // than its value — printed forms commonly place the value on the line directly
+      // below its label. Search the band just below the label for it.
+      const labelBottom = Math.max(...overlapping.map(w => w.y + w.height));
+      const labelH = Math.max(...overlapping.map(w => w.height), 1.5);
+      const belowWords = normalizedWords.filter(w => {
+        if (isStrikethrough(w)) return false;
+        if (isLabel(w.text || "")) return false;
+        const cy = w.y + w.height / 2;
+        const inBelowZone = cy > labelBottom && cy <= labelBottom + labelH * 2.5;
+        const inHorizontalRange = w.x + w.width >= box.x - 0.5 && w.x <= box.x + box.width + 5;
+        return inBelowZone && inHorizontalRange;
+      }).sort(readingOrder);
+
+      if (belowWords.length === 0) return [];
+
+      const belowMinY = Math.min(...belowWords.map(w => w.y));
+      const belowLineH = Math.max(...belowWords.map(w => w.height), 1.5);
+      return belowWords.filter(w => Math.abs(w.y - belowMinY) <= belowLineH * 0.9);
+    }
 
     // Step 2: establish the primary line band from seeds.
     const seedMinY = Math.min(...seeds.map(w => w.y));
@@ -834,13 +886,16 @@ export function ExtractionStudio() {
       primaryResult.push(word);
     }
 
-    // Step 4: capture handwritten text written ABOVE the value area.
-    // This covers manual corrections / amendments on handwritten or counter-signed documents.
-    // Search within a 2-line-height window above the seed top, within the horizontal span of the
-    // drawn box extended by the rightmost captured word.
-    const capturedRight = primaryResult.length > 0
-      ? Math.max(...primaryResult.map(w => w.x + w.width))
-      : seedRight;
+    // Step 4: the primary line already produced a value — use it as-is. Only look
+    // above for handwritten overflow when the line yielded nothing; otherwise OCR
+    // noise from an adjacent label row (which can slip past isLabel() when garbled)
+    // gets prepended to a perfectly good value.
+    if (primaryResult.length > 0) return primaryResult;
+
+    // Capture handwritten text written ABOVE the value area. This covers manual
+    // corrections / amendments on handwritten or counter-signed documents.
+    // Search within a 2-line-height window above the seed top, within the horizontal
+    // span of the drawn box.
     const aboveWords = normalizedWords.filter(w => {
       if (isStrikethrough(w)) return false;
       if (isLabel(w.text || "")) return false;
@@ -848,13 +903,11 @@ export function ExtractionStudio() {
       // Must be in the vertical window above the seed line
       const inAboveZone = cy < seedMinY - 0.2 && cy >= seedMinY - lineH * 2.5;
       // Must fall within the horizontal extent of the selection + captured value
-      const inHorizontalRange = w.x + w.width >= box.x - 0.5 && w.x <= capturedRight + 1;
+      const inHorizontalRange = w.x + w.width >= box.x - 0.5 && w.x <= seedRight + 1;
       return inAboveZone && inHorizontalRange;
     }).sort(readingOrder);
 
-    // Combine: above-field handwritten words first (top-to-bottom reading order), then primary line
-    const combined = [...aboveWords, ...primaryResult];
-    return combined.length > 0 ? combined : seeds;
+    return aboveWords.length > 0 ? aboveWords : seeds;
   };
 
   const averageConfidence = (words: OCRWord[]) => {
@@ -886,6 +939,15 @@ export function ExtractionStudio() {
     const strongestToken = [...labelTokens].sort((a, b) => b.length - a.length)[0];
     const fallbackIndex = wordTokens.findIndex(token => token.length > 2 && (token.includes(strongestToken) || strongestToken.includes(token)));
     return fallbackIndex >= 0 ? [normalizedWords[fallbackIndex]] : [];
+  };
+
+  /** Fraction of an anchor label's tokens (length > 2) that appear in the candidate words' text. */
+  const labelMatchScore = (label: string, words: OCRWord[]) => {
+    const labelTokens = label.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(token => token.length > 2);
+    if (labelTokens.length === 0) return 0;
+    const wordText = words.map(w => (w.text || "").toLowerCase().replace(/[^a-z0-9]/g, "")).join("");
+    const hits = labelTokens.filter(token => wordText.includes(token)).length;
+    return hits / labelTokens.length;
   };
 
   const boxFromWords = (words: OCRWord[]): SelectionBox | null => {
@@ -1092,8 +1154,34 @@ export function ExtractionStudio() {
     };
     if (idx >= 0) existing[idx] = model; else existing.push(model);
     saveCustomModels(existing);
+
+    // Register a matching document class (if one doesn't already exist) so that
+    // future uploads of similar documents are classified as this type — rather
+    // than left Unclassified or routed to a generic prebuilt model — using the
+    // saved model's anchor labels and field names as keywords/anchor phrases.
+    const existingClass = documentClasses.find(c => c.name.toLowerCase() === docClass.toLowerCase());
+    if (!existingClass) {
+      const anchorPhrases = Array.from(new Set(anchors.map(a => a.value.trim()).filter(Boolean)));
+      const fieldNames = fields.map(f => f.name).filter(Boolean);
+      const keywords = Array.from(new Set([docClass, ...fieldNames]));
+      addClass({
+        classId: `class_${Date.now()}`,
+        name: docClass,
+        description: `Auto-created from "${modelName}" saved in the AI Document Designer.`,
+        sampleCount: 1,
+        minConfidence: 0.5,
+        requiredFields: fieldNames,
+        optionalFields: [],
+        keywords,
+        anchorPhrases,
+        layoutPatterns: [],
+        isActive: true,
+        color: "#6366f1"
+      });
+    }
+
     toast.success(`"${modelName}" saved as reusable model. It will auto-apply to all ${docClass} documents.`);
-  }, [fields, anchors, links, categories, activeDocument]);
+  }, [fields, anchors, links, categories, activeDocument, documentClasses, addClass]);
 
   // ─── Apply a custom model to the current document ────────────────────────────
   // Re-locates every field using anchor-relative positioning. Fields whose
@@ -1102,6 +1190,48 @@ export function ExtractionStudio() {
     const newFields: StudioField[] = [];
     const newAnchors: StudioAnchor[] = [];
     const newLinks: StudioLink[] = [];
+
+    // The shift shared by most of the model's anchors when re-found in this document's
+    // OCR — used to relocate fields whose own anchor moved independently or couldn't be
+    // re-found at all, so a field can still "move with" the rest of a shifted/cropped scan.
+    const MIN_CONSENSUS_MATCH = 0.6;
+    const anchorOffsets: { dx: number; dy: number }[] = [];
+    for (const anchor of model.anchors) {
+      const anchorWords = findWordsByLabel(anchor.value);
+      if (anchorWords.length === 0) continue;
+      if (labelMatchScore(anchor.value, anchorWords) < MIN_CONSENSUS_MATCH) continue;
+      const anchorBox = boxFromWords(anchorWords);
+      if (!anchorBox) continue;
+      anchorOffsets.push({ dx: anchorBox.x - anchor.x, dy: anchorBox.y - anchor.y });
+    }
+    const median = (values: number[]): number => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    };
+    const documentOffset = anchorOffsets.length > 0
+      ? { dx: median(anchorOffsets.map(o => o.dx)), dy: median(anchorOffsets.map(o => o.dy)) }
+      : null;
+
+    // Anchors mark constant/label text (e.g. "Given names/Prénoms") — wherever an
+    // anchor currently sits in this document's OCR, that text must never be captured
+    // as a field's dynamic value, even if it falls inside another field's box. Re-find
+    // each anchor in the fresh OCR; if it can't be confidently re-found, fall back to
+    // its trained position shifted by the document's overall offset.
+    const MIN_ANCHOR_MATCH_GLOBAL = 0.6;
+    const anchorExcludeBoxes: SelectionBox[] = model.anchors.map(anchor => {
+      const anchorWords = findWordsByLabel(anchor.value);
+      if (anchorWords.length > 0 && labelMatchScore(anchor.value, anchorWords) >= MIN_ANCHOR_MATCH_GLOBAL) {
+        const box = boxFromWords(anchorWords);
+        if (box) return box;
+      }
+      return {
+        x: anchor.x + (documentOffset?.dx ?? 0),
+        y: anchor.y + (documentOffset?.dy ?? 0),
+        width: anchor.width,
+        height: anchor.height,
+      };
+    });
 
     model.fields.forEach(field => {
       const fieldLinks = model.links.filter(l => l.fieldId === field.id);
@@ -1113,10 +1243,17 @@ export function ExtractionStudio() {
       let foundAnchorBox: { x: number; y: number; width: number; height: number } | null = null;
       let foundAnchorId: string | null = null;
 
-      // Try each linked anchor — find it in the current page's OCR
+      // Try every linked anchor — find it in the current page's OCR. Anchors whose
+      // trained label text barely resembles anything in the fresh OCR (only a weak
+      // fallback match) are skipped, and among the remaining anchor-relocated
+      // candidates the highest-confidence one wins.
+      const MIN_ANCHOR_MATCH = 0.6;
+      const candidates: Array<{ box: { x: number; y: number; width: number; height: number }; value: string; confidence: number; anchorBox: SelectionBox }> = [];
+
       for (const anchor of fieldAnchors) {
         const anchorWords = findWordsByLabel(anchor.value);
         if (anchorWords.length === 0) continue;
+        if (labelMatchScore(anchor.value, anchorWords) < MIN_ANCHOR_MATCH) continue;
         const anchorBox = boxFromWords(anchorWords);
         if (!anchorBox) continue;
 
@@ -1131,19 +1268,41 @@ export function ExtractionStudio() {
           height: field.height ?? 3
         };
 
-        const words = getWordsInSelection(predictedBox, true);
-        located = {
-          ...predictedBox,
-          value: normalizeBilingualValue(words.map(w => w.text).join(" ").trim())
-        };
-        foundAnchorBox = anchorBox;
-        foundAnchorId = nextId("anchor");
-        break; // first matching anchor wins
+        const words = getWordsInSelection(predictedBox, true, anchorExcludeBoxes);
+        const value = normalizeBilingualValue(words.map(w => w.text).join(" ").trim());
+        if (!value) continue;
+
+        candidates.push({ box: predictedBox, value, confidence: averageConfidence(words), anchorBox });
       }
 
-      // If no anchor found, try coordinate-based fallback (field may still be valid if scan is aligned)
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.confidence - a.confidence);
+        const best = candidates[0];
+        located = { ...best.box, value: best.value };
+        foundAnchorBox = best.anchorBox;
+        foundAnchorId = nextId("anchor");
+      }
+
+      // This field's own anchor(s) couldn't be re-found (or matched too weakly), but most
+      // of the rest of the document shifted by a consistent (dx, dy) — e.g. a re-scan
+      // that's cropped or nudged differently. Apply that shared shift to the field's
+      // trained position before falling back to its raw, un-shifted position.
+      if (!located && documentOffset && field.x !== undefined) {
+        const shiftedBox = {
+          x: Math.max(0, Math.min(95, field.x + documentOffset.dx)),
+          y: Math.max(0, Math.min(95, (field.y ?? 0) + documentOffset.dy)),
+          width: field.width ?? 10,
+          height: field.height ?? 3
+        };
+        const words = getWordsInSelection(shiftedBox, true, anchorExcludeBoxes);
+        const value = normalizeBilingualValue(words.map(w => w.text).join(" ").trim());
+        if (value) located = { ...shiftedBox, value };
+      }
+
+      // If no anchor produced a usable value, fall back to the field's own trained
+      // position — the box the user sees highlighted — rather than a weak anchor guess.
       if (!located && field.x !== undefined) {
-        const words = getWordsInSelection({ x: field.x, y: field.y ?? 0, width: field.width ?? 10, height: field.height ?? 3 }, true);
+        const words = getWordsInSelection({ x: field.x, y: field.y ?? 0, width: field.width ?? 10, height: field.height ?? 3 }, true, anchorExcludeBoxes);
         located = {
           x: field.x, y: field.y ?? 0, width: field.width ?? 10, height: field.height ?? 3,
           value: normalizeBilingualValue(words.map(w => w.text).join(" ").trim())
@@ -1257,6 +1416,12 @@ export function ExtractionStudio() {
     const ocrText = activeDocument.pages?.[0]?.ocrText || "";
     const model = matchCustomModel(docClass, ocrText);
     if (!model) return;
+
+    // Wait for OCR to populate the text layer before relocating anchors/fields —
+    // applying against an empty text layer would relocate nothing, leave every
+    // field blank, and then permanently lock that blank result in via the ref guard.
+    const hasTextLayer = (activeDocument.pages?.[0]?.textLayer?.length || 0) > 0;
+    if (!hasTextLayer && model.anchors.length > 0) return;
 
     appliedCustomModelRef.current[activeDocument.documentId] = model.id;
     appliedPrebuiltRouteRef.current[activeDocument.documentId] = "custom";
@@ -1680,13 +1845,53 @@ export function ExtractionStudio() {
     return /date|birth|place|issue|expiry|passport|number|name|surname|given|sex|nationality|country|type|code|signature/i.test(cleaned);
   };
 
+  // Finds the field's currently-linked "Primary Anchor" anchor, if any.
+  const getPrimaryAnchorForField = (fieldId: string): StudioAnchor | null => {
+    const link = links.find(l => l.fieldId === fieldId && /primary/i.test(l.relationship || ""));
+    if (!link) return null;
+    return anchors.find(a => a.id === link.anchorId) || null;
+  };
+
   // Finds the nearest label text AND its bounding box — used for auto-anchor creation.
-  // Searches left of the selection first (most forms), then above (column headers).
-  const findNearestLabel = (valueBox: SelectionBox): { text: string; wordBox: SelectionBox } | null => {
+  // If `previousField` (the field drawn immediately before this one) has its own
+  // Primary Anchor, the offset between that field's value box and its anchor is
+  // checked first at this field's position — templated/tabular forms tend to repeat
+  // the same label-to-value offset for every row/field, so this often pinpoints the
+  // right label even in dense multi-column layouts where left/above proximity alone
+  // would pick up a neighbouring field's label instead.
+  // Otherwise searches left of the selection first (most forms), then above (column headers).
+  const findNearestLabel = (valueBox: SelectionBox, previousField?: StudioField | null): { text: string; wordBox: SelectionBox } | null => {
     const normalizedWords = (activePage?.textLayer || []).map(normalizeWordBox);
     if (normalizedWords.length === 0) return null;
 
     const isGenericOrValue = (text: string) => /^\d|^[A-Z]{2,}\d|reading|selected/i.test(text.trim());
+
+    // Predicted-position candidate: reuse the previous field's anchor offset.
+    if (previousField?.x !== undefined && previousField?.y !== undefined) {
+      const prevAnchor = getPrimaryAnchorForField(previousField.id);
+      if (prevAnchor) {
+        const dx = prevAnchor.x - previousField.x;
+        const dy = prevAnchor.y - previousField.y;
+        const predicted = {
+          x: valueBox.x + dx, y: valueBox.y + dy,
+          width: prevAnchor.width, height: prevAnchor.height
+        };
+        const hits = normalizedWords.filter(w => {
+          const cx = w.x + w.width / 2;
+          const cy = w.y + w.height / 2;
+          return cx >= predicted.x - 2 && cx <= predicted.x + predicted.width + 2
+            && cy >= predicted.y - 1.5 && cy <= predicted.y + predicted.height + 1.5
+            && !isGenericOrValue(w.text || "");
+        });
+        if (hits.length > 0) {
+          const baseline = hits[0].y;
+          const sameLine = hits.filter(w => Math.abs(w.y - baseline) < Math.max(w.height, 1.5)).sort((a, b) => a.x - b.x);
+          const text = cleanHeaderCandidate(sameLine.map(w => w.text).join(" "));
+          const box = boxFromWords(sameLine);
+          if (text.length > 1 && box) return { text, wordBox: box };
+        }
+      }
+    }
 
     // Left-side candidates: words ending just before the value box, on the same line
     const leftWords = normalizedWords.filter(w => {
@@ -1946,7 +2151,7 @@ export function ExtractionStudio() {
 
     // ── Checkbox / Radio: image-based mark detection ──────────────────────────
     if ((activeTool === "checkbox" || activeTool === "radio") && !anchorCaptureTargetFieldId) {
-      const nearestLabel = findNearestLabel(box);
+      const nearestLabel = findNearestLabel(box, fields[fields.length - 1]);
       const groupLabel   = nearestLabel?.text || getNearbyHeaderText(box);
 
       setPendingAnnotation({
@@ -2043,7 +2248,7 @@ export function ExtractionStudio() {
     textLayerText = normalizeBilingualValue(textLayerText);
 
     const headerText = getNearbyHeaderText(box);
-    const nearestLabel = findNearestLabel(box); // better label + its bounding box
+    const nearestLabel = findNearestLabel(box, fields[fields.length - 1]); // better label + its bounding box
 
     if (textLayerText) {
       const confidence = averageConfidence(intersecting) * 100;
@@ -3873,16 +4078,36 @@ export function ExtractionStudio() {
             ))}
           </div>
 
-          <div className="border-t border-border/50 p-4">
-            <div className="mb-2 flex items-center justify-between text-[9px] font-black uppercase text-muted-foreground">
-              <span>Document Quality</span>
-              <span>{activePage?.confidence ? Math.round(activePage.confidence * 100) : 0}%</span>
+          <div className="border-t border-border/50 p-4 space-y-3">
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-[9px] font-black uppercase text-muted-foreground">
+                <span>OCR Status</span>
+                <span className={cn(
+                  "rounded px-1.5 py-0.5 font-black",
+                  (activePage?.textLayer?.length || 0) > 0
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-red-50 text-red-700"
+                )}>
+                  {(activePage?.textLayer?.length || 0) > 0 ? "Success" : "Failed"}
+                </span>
+              </div>
+              <div className="text-[9px] text-muted-foreground">
+                {(activePage?.textLayer?.length || 0) > 0
+                  ? `${activePage?.textLayer?.length} word${activePage?.textLayer?.length === 1 ? "" : "s"} recognized`
+                  : "No text recognized — use Re-fetch OCR"}
+              </div>
             </div>
-            <div className="h-1.5 rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-emerald-500"
-                style={{ width: `${activePage?.confidence ? Math.round(activePage.confidence * 100) : 0}%` }}
-              />
+            <div>
+              <div className="mb-2 flex items-center justify-between text-[9px] font-black uppercase text-muted-foreground">
+                <span>Document Quality</span>
+                <span>{activePage?.confidence ? Math.round(activePage.confidence * 100) : 0}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-emerald-500"
+                  style={{ width: `${activePage?.confidence ? Math.round(activePage.confidence * 100) : 0}%` }}
+                />
+              </div>
             </div>
           </div>
           </>

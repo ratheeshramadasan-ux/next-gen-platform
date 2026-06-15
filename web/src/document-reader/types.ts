@@ -132,6 +132,10 @@ export interface DocumentClass {
   layoutPatterns: string[];
   isActive: boolean;
   color: string;
+  /** Snapshots of this class's average training confidence, recorded each time
+   *  its enabled-document count changes — lets the UI show whether confidence
+   *  is improving or degrading as more documents are trained. */
+  confidenceHistory?: { count: number; overall: number; classification: number; extraction: number }[];
 }
 
 export interface PageMetadata {

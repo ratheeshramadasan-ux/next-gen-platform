@@ -4,7 +4,8 @@ import React from "react";
 import {
   ChevronRight, FileCheck, Activity, Download, Filter, FolderTree,
   Eye, EyeOff, Database, RotateCcw, GitBranch,
-  CheckCircle2, AlertCircle, ShieldCheck, Layers, FileText, Inbox,
+  CheckCircle2, AlertCircle, Layers, Inbox,
+  ClipboardCheck, UploadCloud, Rocket,
 } from "lucide-react";
 import { useDocumentReader } from "../store/documentReaderContext";
 import { TrainingStage } from "../types";
@@ -12,7 +13,7 @@ import { usePipelineStore, TrainingDocument } from "../store/studioStore";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-import { summarizeDocument, generateTransactionLog, generateAnalystTelemetry, seededRandom } from "../validation/engine";
+import { summarizeDocument, generateTransactionLog, generateAnalystTelemetry } from "../validation/engine";
 import { QUEUE_LABELS } from "../validation/engine";
 import { ValidationQueueType, ValidationDocumentSummary } from "../types";
 import { ConfidenceHeatmapCanvas, ConfidenceHeatmapLegend, HeatmapField, confidenceTier } from "../validation/ConfidenceHeatmapCanvas";
@@ -22,7 +23,7 @@ import { SystemLifecycle } from "../validation/SystemLifecycle";
 import { BatchOverview } from "../validation/BatchOverview";
 import { appendTrainingLedgerEntry } from "../validation/ledger";
 import { DocumentNormalizer } from "../services/documentNormalizer";
-import { classifyDocumentSegments, buildExtractionDesign, AutoPipelineStage } from "../validation/autoPipeline";
+import { runOcrOnDocument, classifyDocumentFromOcr, buildExtractionDesignFromOcr, AutoPipelineStage } from "../validation/autoPipeline";
 
 const CURRENT_USER = "Sarah Jenkins";
 
@@ -42,14 +43,17 @@ const QUEUE_TONE: Record<ValidationQueueType, string> = {
   straight_through: "text-emerald-500 border-emerald-500/30 bg-emerald-500/5",
 };
 
+type WorkspaceTab = "queue" | "validation";
+
 export function ValidationStudio() {
   const { updateStepStatus, setActiveStage, projectId } = useDocumentReader();
   const {
     trainingDocuments, documentClasses, activeDocument, activePage,
     setActiveDocument, setActivePage, updateTrainingDocument, setTrainingDocuments, addIngestionBatch,
-    deleteTrainingDocument, replaceDocumentWithSegments,
+    deleteTrainingDocument, updateClassConfig, recordClassConfidenceSnapshot,
   } = usePipelineStore();
 
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState<WorkspaceTab>("queue");
   const [selectedQueue, setSelectedQueue] = React.useState<ValidationQueueType | "all">("all");
   const [selectedFieldId, setSelectedFieldId] = React.useState<string | null>(null);
   const [showOcrWords, setShowOcrWords] = React.useState(false);
@@ -60,6 +64,7 @@ export function ValidationStudio() {
   const [isUploading, setIsUploading] = React.useState(false);
   const [processingDocs, setProcessingDocs] = React.useState<Record<string, AutoPipelineStage>>({});
   const sessionStartRef = React.useRef(Date.now());
+  const lateExtractionRef = React.useRef<Set<string>>(new Set());
 
   const batchId = `BATCH_${(projectId || "DEFAULT").toUpperCase()}`;
 
@@ -94,6 +99,23 @@ export function ValidationStudio() {
   const stpRate = summaries.length > 0
     ? Math.round((queueCounts.straight_through / summaries.length) * 1000) / 10
     : 0;
+
+  const unclassifiedCount = React.useMemo(
+    () => trainingDocuments.filter(doc => !doc.classification?.classId).length,
+    [trainingDocuments]
+  );
+
+  const processedCount = React.useMemo(
+    () => trainingDocuments.filter(doc =>
+      !!doc.metadata?.reviewCompleted || summaryByDoc.get(doc.documentId)?.queue === "straight_through"
+    ).length,
+    [trainingDocuments, summaryByDoc]
+  );
+
+  const reviewQueueCount = React.useMemo(
+    () => summaries.filter(s => s.queue !== "straight_through").length,
+    [summaries]
+  );
 
   const queueDocuments = React.useMemo(() => {
     if (selectedQueue === "all") return trainingDocuments;
@@ -204,13 +226,14 @@ export function ValidationStudio() {
     }
   }, [activeDocument, updateTrainingDocument, batchId, transactionLog]);
 
-  const handleSelectDocument = (docId: string) => {
+  const handleSelectDocument = React.useCallback((docId: string) => {
     const doc = trainingDocuments.find(d => d.documentId === docId);
     if (!doc) return;
     setActiveDocument(doc);
     setActivePage(doc.pages[0]);
     setSelectedFieldId(null);
-  };
+    setActiveWorkspaceTab("validation");
+  }, [trainingDocuments, setActiveDocument, setActivePage]);
 
   const handleDeleteDocument = React.useCallback((docId: string) => {
     const doc = trainingDocuments.find(d => d.documentId === docId);
@@ -239,8 +262,19 @@ export function ValidationStudio() {
 
   const handleReclassifyDocument = React.useCallback((docId: string, classId: string) => {
     const doc = trainingDocuments.find(d => d.documentId === docId);
+    if (!doc) return;
+
+    if (!classId) {
+      updateTrainingDocument(docId, {
+        classification: undefined,
+        metadata: { ...doc.metadata, extractionDesign: undefined, autoExtractAttempted: false },
+      });
+      toast.success(`"${doc.name}" moved to Unclassified.`);
+      return;
+    }
+
     const cls = documentClasses.find(c => c.classId === classId);
-    if (!doc || !cls) return;
+    if (!cls) return;
     updateTrainingDocument(docId, {
       classification: {
         classId: cls.classId,
@@ -248,98 +282,137 @@ export function ValidationStudio() {
         confidence: 1,
         method: "manual",
       },
+      metadata: { ...doc.metadata, extractionDesign: undefined, autoExtractAttempted: false },
     });
-    toast.success(`"${doc.name}" reclassified as ${cls.name}.`);
+    toast.success(`"${doc.name}" reclassified as ${cls.name} — re-running extraction.`);
   }, [trainingDocuments, documentClasses, updateTrainingDocument]);
 
-  const runAutoPipeline = React.useCallback(async (doc: TrainingDocument, priorDocuments: TrainingDocument[]) => {
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  /** Documents that are classified but whose extraction design is missing or
+   *  still holds the empty placeholder schema (every field blank, 0% confidence). */
+  const needsExtraction = React.useCallback((doc: TrainingDocument) => {
+    if (!doc.classification?.classId) return false;
+    if (doc.metadata?.autoExtractAttempted) return false;
+    const fields = doc.metadata?.extractionDesign?.fields as Array<{ value?: string; confidence?: number }> | undefined;
+    if (!fields || fields.length === 0) return true;
+    return fields.every(f => !f.value && (f.confidence ?? 0) === 0);
+  }, []);
 
-    setProcessingDocs(prev => ({ ...prev, [doc.documentId]: "classifying" }));
-    await delay(900 + seededRandom(doc.documentId) * 700);
+  // Auto-extract field values for any classified document that hasn't been
+  // through the extraction pipeline yet (e.g. seeded/reclassified documents).
+  React.useEffect(() => {
+    const candidate = trainingDocuments.find(doc => needsExtraction(doc) && !lateExtractionRef.current.has(doc.documentId));
+    if (!candidate) return;
 
-    const segments = classifyDocumentSegments(doc, documentClasses);
+    lateExtractionRef.current.add(candidate.documentId);
+    setProcessingDocs(prev => ({ ...prev, [candidate.documentId]: "extracting" }));
 
-    if (segments.length <= 1) {
-      const classification = segments[0]?.classification;
-      if (classification) {
-        updateTrainingDocument(doc.documentId, { classification });
+    (async () => {
+      let workingDoc = candidate;
+      const hasOcr = (candidate.pages[0]?.textLayer?.length || 0) > 0;
+      if (!hasOcr) {
+        workingDoc = await runOcrOnDocument(candidate);
+        updateTrainingDocument(candidate.documentId, { pages: workingDoc.pages });
       }
 
-      setProcessingDocs(prev => ({ ...prev, [doc.documentId]: "extracting" }));
-      await delay(900 + seededRandom(`${doc.documentId}_x`) * 700);
-
-      if (classification) {
-        const extractionDesign = buildExtractionDesign(doc, classification.classId, priorDocuments);
-        if (extractionDesign) {
-          updateTrainingDocument(doc.documentId, {
-            metadata: { ...doc.metadata, extractionDesign },
-          });
-        }
+      const design = buildExtractionDesignFromOcr(workingDoc, candidate.classification!.classId, trainingDocuments);
+      updateTrainingDocument(candidate.documentId, {
+        metadata: {
+          ...candidate.metadata,
+          ...(design ? { extractionDesign: design } : {}),
+          autoExtractAttempted: true,
+        },
+      });
+      if (design) {
+        toast.success(`"${candidate.name}" extraction complete — ${design.fields.length} fields ready for review.`);
       }
-
       setProcessingDocs(prev => {
         const next = { ...prev };
-        delete next[doc.documentId];
+        delete next[candidate.documentId];
         return next;
       });
+      lateExtractionRef.current.delete(candidate.documentId);
+    })();
+  }, [trainingDocuments, needsExtraction, updateTrainingDocument]);
 
-      toast.success(
-        classification
-          ? `"${doc.name}" classified as ${classification.className} — extraction complete.`
-          : `"${doc.name}" processed — no document classes configured to classify against.`
-      );
+  /** Manually (re)run extraction for a single classified document on demand. */
+  const handleRunExtraction = React.useCallback((docId: string) => {
+    const doc = trainingDocuments.find(d => d.documentId === docId);
+    if (!doc) return;
+    if (!doc.classification?.classId) {
+      toast.error(`Classify "${doc.name}" before running extraction.`);
       return;
     }
+    if (processingDocs[docId] || lateExtractionRef.current.has(docId)) return;
 
-    // Multi-document bundle — split into one record per detected document.
-    const sourceName = doc.metadata?.sourceFileName || doc.name;
-    const splitDocs: TrainingDocument[] = segments.map((seg, idx) => ({
-      ...doc,
-      documentId: `${doc.documentId}_seg${idx + 1}`,
-      name: `${sourceName} — ${seg.classification.className} (p.${seg.pageIndices[0] + 1}-${seg.pageIndices[seg.pageIndices.length - 1] + 1})`,
-      pages: seg.pageIndices.map(i => doc.pages[i]),
-      classification: seg.classification,
-      metadata: {
-        ...doc.metadata,
-        sourceFileName: sourceName,
-        sourceDocumentId: doc.documentId,
-        segmentIndex: idx + 1,
-        segmentCount: segments.length,
-      },
-    }));
+    lateExtractionRef.current.add(docId);
+    setProcessingDocs(prev => ({ ...prev, [docId]: "extracting" }));
 
-    replaceDocumentWithSegments(doc.documentId, splitDocs);
+    (async () => {
+      let workingDoc = doc;
+      const hasOcr = (doc.pages[0]?.textLayer?.length || 0) > 0;
+      if (!hasOcr) {
+        workingDoc = await runOcrOnDocument(doc);
+        updateTrainingDocument(docId, { pages: workingDoc.pages });
+      }
+
+      const design = buildExtractionDesignFromOcr(workingDoc, doc.classification!.classId, trainingDocuments);
+      updateTrainingDocument(docId, {
+        metadata: {
+          ...doc.metadata,
+          ...(design ? { extractionDesign: design } : {}),
+          autoExtractAttempted: true,
+        },
+      });
+      toast.success(
+        design
+          ? `"${doc.name}" extraction complete — ${design.fields.length} fields ready for review.`
+          : `No extraction template available yet for "${doc.classification!.className}" — configure fields in the AI Document Designer first.`
+      );
+      setProcessingDocs(prev => {
+        const next = { ...prev };
+        delete next[docId];
+        return next;
+      });
+      lateExtractionRef.current.delete(docId);
+    })();
+  }, [trainingDocuments, processingDocs, updateTrainingDocument]);
+
+  const runAutoPipeline = React.useCallback(async (doc: TrainingDocument, priorDocuments: TrainingDocument[]) => {
+    setProcessingDocs(prev => ({ ...prev, [doc.documentId]: "classifying" }));
+
+    const ocrDoc = await runOcrOnDocument(doc);
+    updateTrainingDocument(doc.documentId, { pages: ocrDoc.pages });
+
+    const classification = classifyDocumentFromOcr(ocrDoc, documentClasses);
+    if (classification) {
+      updateTrainingDocument(doc.documentId, { classification });
+    }
+
+    setProcessingDocs(prev => ({ ...prev, [doc.documentId]: "extracting" }));
+
+    if (classification) {
+      const extractionDesign = buildExtractionDesignFromOcr({ ...ocrDoc, classification }, classification.classId, priorDocuments);
+      updateTrainingDocument(doc.documentId, {
+        metadata: {
+          ...doc.metadata,
+          ...(extractionDesign ? { extractionDesign } : {}),
+          autoExtractAttempted: true,
+        },
+      });
+    }
 
     setProcessingDocs(prev => {
       const next = { ...prev };
       delete next[doc.documentId];
-      splitDocs.forEach(d => { next[d.documentId] = "extracting"; });
-      return next;
-    });
-
-    await delay(900 + seededRandom(`${doc.documentId}_x`) * 700);
-
-    const allPriors = [...priorDocuments, ...splitDocs];
-    splitDocs.forEach(d => {
-      const extractionDesign = buildExtractionDesign(d, d.classification!.classId, allPriors);
-      if (extractionDesign) {
-        updateTrainingDocument(d.documentId, {
-          metadata: { ...d.metadata, extractionDesign },
-        });
-      }
-    });
-
-    setProcessingDocs(prev => {
-      const next = { ...prev };
-      splitDocs.forEach(d => { delete next[d.documentId]; });
       return next;
     });
 
     toast.success(
-      `"${sourceName}" contained ${segments.length} documents — split into ${splitDocs.map(d => d.classification!.className).join(", ")}.`
+      classification
+        ? `"${doc.name}" classified as ${classification.className} — extraction complete.`
+        : `"${doc.name}" added to the Unclassified section — no document class matched yet.`
     );
-  }, [documentClasses, updateTrainingDocument, replaceDocumentWithSegments]);
+  }, [documentClasses, updateTrainingDocument]);
 
   const handleUploadFiles = React.useCallback(async (files: FileList) => {
     setIsUploading(true);
@@ -381,7 +454,7 @@ export function ValidationStudio() {
         createdAt: new Date().toISOString(),
       });
 
-      toast.success(`${newDocs.length} document${newDocs.length === 1 ? "" : "s"} added — running classification & extraction…`);
+      toast.success(`${newDocs.length} document${newDocs.length === 1 ? "" : "s"} added to Unclassified — running auto-classification & extraction…`);
 
       newDocs.forEach(doc => { void runAutoPipeline(doc, trainingDocuments); });
     } finally {
@@ -389,220 +462,290 @@ export function ValidationStudio() {
     }
   }, [trainingDocuments, setTrainingDocuments, setActiveDocument, setActivePage, addIngestionBatch, runAutoPipeline]);
 
+  const handleMarkProcessed = React.useCallback(() => {
+    if (!activeDocument) return;
+    updateTrainingDocument(activeDocument.documentId, {
+      metadata: {
+        ...activeDocument.metadata,
+        reviewCompleted: true,
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: CURRENT_USER,
+      },
+    });
+    toast.success(`"${activeDocument.name}" marked as processed.`);
+
+    const idx = queueDocuments.findIndex(d => d.documentId === activeDocument.documentId);
+    const next = queueDocuments[idx + 1];
+    if (next) {
+      setActiveDocument(next);
+      setActivePage(next.pages[0]);
+      setSelectedFieldId(null);
+    }
+  }, [activeDocument, updateTrainingDocument, queueDocuments, setActiveDocument, setActivePage]);
+
   const openLifecycle = (tab: "health" | "promotion" | "rollback" | "golden") => {
     setLifecycleTab(tab);
     setLifecycleOpen(true);
   };
 
-  if (trainingDocuments.length === 0) {
-    return (
-      <div className="w-full h-full flex flex-col gap-6 animate-in fade-in duration-500 p-4">
-        <Header batchId={batchId} stpRate={stpRate} />
-        <BatchOverview
-          trainingDocuments={trainingDocuments}
-          summaryByDoc={summaryByDoc}
-          documentClasses={documentClasses}
-          activeDocumentId={activeDocument?.documentId}
-          isUploading={isUploading}
-          processingDocs={processingDocs}
-          onSelectDocument={handleSelectDocument}
-          onUploadFiles={handleUploadFiles}
-          onDeleteDocument={handleDeleteDocument}
-          onToggleTrainingInclusion={handleToggleTrainingInclusion}
-          onReclassifyDocument={handleReclassifyDocument}
-        />
-        <div className="flex-1 bg-card rounded-[9px] border border-border shadow-sm flex flex-col items-center justify-center text-center p-12 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, var(--primary) 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
-          <div className="w-20 h-20 rounded-[9px] bg-primary/5 border border-primary/10 flex items-center justify-center text-primary mb-6 animate-pulse">
-            <FileCheck size={40} strokeWidth={1} />
-          </div>
-          <h3 className="text-xl font-black text-foreground uppercase tracking-tight mb-2">Queue Fully Validated</h3>
-          <p className="text-[11px] text-muted-foreground max-w-sm uppercase font-bold tracking-wider leading-relaxed opacity-60">All document extractions have passed the spatial confidence threshold. No human-in-the-loop intervention is required for this batch.</p>
-        </div>
-        <Footer onFinalize={() => { updateStepStatus(TrainingStage.VALIDATION, "completed"); setActiveStage(TrainingStage.TRAINING_REVIEW); }} />
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full h-full flex flex-col gap-3 animate-in fade-in duration-500 p-4 relative">
-      <Header batchId={batchId} stpRate={stpRate} />
-
-      <BatchOverview
-        trainingDocuments={trainingDocuments}
-        summaryByDoc={summaryByDoc}
-        documentClasses={documentClasses}
-        activeDocumentId={activeDocument?.documentId}
-        isUploading={isUploading}
-        processingDocs={processingDocs}
-        onSelectDocument={handleSelectDocument}
-        onUploadFiles={handleUploadFiles}
-        onDeleteDocument={handleDeleteDocument}
-        onToggleTrainingInclusion={handleToggleTrainingInclusion}
-        onReclassifyDocument={handleReclassifyDocument}
+    <div className="w-full h-full flex flex-col overflow-hidden" style={{ background: "var(--background)" }}>
+      <ValidationHeader
+        batchId={batchId}
+        stpRate={stpRate}
+        processedCount={processedCount}
+        totalCount={summaries.length}
       />
 
-      <div className="flex-1 flex gap-3 min-h-0">
-        {/* LEFT PANEL — Taxonomy & Queues */}
-        <aside className="w-64 shrink-0 bg-card rounded-[9px] border border-border/50 shadow-sm flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
-            <div>
-              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 px-1">Validation Queues</p>
-              <div className="space-y-1.5">
-                <QueueButton
-                  label="All Documents"
-                  icon={Layers}
-                  count={summaries.length}
-                  active={selectedQueue === "all"}
-                  tone="text-foreground border-border"
-                  onClick={() => setSelectedQueue("all")}
-                />
-                {QUEUE_ORDER.map(q => (
-                  <QueueButton
-                    key={q}
-                    label={QUEUE_LABELS[q]}
-                    icon={QUEUE_ICONS[q]}
-                    count={queueCounts[q]}
-                    active={selectedQueue === q}
-                    tone={QUEUE_TONE[q]}
-                    onClick={() => setSelectedQueue(q)}
-                  />
-                ))}
-              </div>
-            </div>
+      <WorkspaceTabBar
+        activeTab={activeWorkspaceTab}
+        onChange={setActiveWorkspaceTab}
+        queueCount={trainingDocuments.length}
+        unclassifiedCount={unclassifiedCount}
+        validationCount={reviewQueueCount}
+      />
 
-            <div>
-              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 px-1 flex items-center gap-1.5">
-                <FolderTree size={11} /> Taxonomy
-              </p>
-              <div className="space-y-1">
-                {relevantDocumentClasses.length === 0 && (
-                  <p className="text-[9px] text-muted-foreground italic px-1">No document classes associated with this batch yet.</p>
-                )}
-                {relevantDocumentClasses.map(cls => (
-                  <div key={cls.classId} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
-                    <span className="text-[9px] font-black uppercase tracking-tight text-foreground truncate">{cls.name}</span>
-                    <span className="text-[8px] font-black text-muted-foreground">{(cls.minConfidence * 100).toFixed(0)}%</span>
-                  </div>
-                ))}
-              </div>
+      <div className="flex-1 min-h-0 flex flex-col gap-3 p-4 overflow-hidden">
+        {activeWorkspaceTab === "queue" ? (
+          <div className="flex-1 flex flex-col gap-3 min-h-0">
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <Pill icon={Layers} label="Total Documents" value={String(trainingDocuments.length)} />
+              <Pill icon={AlertCircle} label="Unclassified" value={String(unclassifiedCount)} tone={unclassifiedCount > 0 ? "warn" : undefined} />
+              <Pill icon={Activity} label="Processing" value={String(Object.keys(processingDocs).length)} />
+              <Pill icon={CheckCircle2} label="Processed" value={`${processedCount}/${summaries.length}`} tone={processedCount === summaries.length && summaries.length > 0 ? "good" : undefined} />
             </div>
-
-            <div>
-              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 px-1">System Lifecycle</p>
-              <div className="space-y-1.5">
-                <LifecycleButton icon={Activity} label="Model Health Center" onClick={() => openLifecycle("health")} />
-                <LifecycleButton icon={GitBranch} label="Promotion Pipeline" onClick={() => openLifecycle("promotion")} />
-                <LifecycleButton icon={RotateCcw} label="Rollback Manager" onClick={() => openLifecycle("rollback")} />
-                <LifecycleButton icon={Database} label="Golden Test Center" onClick={() => openLifecycle("golden")} />
-              </div>
-            </div>
+            <BatchOverview
+              variant="full"
+              trainingDocuments={trainingDocuments}
+              summaryByDoc={summaryByDoc}
+              documentClasses={relevantDocumentClasses}
+              activeDocumentId={activeDocument?.documentId}
+              isUploading={isUploading}
+              processingDocs={processingDocs}
+              onSelectDocument={handleSelectDocument}
+              onUploadFiles={handleUploadFiles}
+              onDeleteDocument={handleDeleteDocument}
+              onToggleTrainingInclusion={handleToggleTrainingInclusion}
+              onReclassifyDocument={handleReclassifyDocument}
+              onRunExtraction={handleRunExtraction}
+              onUpdateMinConfidence={(classId, minConfidence) => updateClassConfig(classId, { minConfidence })}
+              onRecordConfidenceSnapshot={recordClassConfidenceSnapshot}
+            />
           </div>
-        </aside>
-
-        {/* CENTER PANEL — Document Queue + Heatmap Canvas */}
-        <div className="flex-1 flex flex-col gap-3 min-h-0">
-          {queueDocuments.length === 0 ? (
-            <div className="flex-1 bg-card rounded-[9px] border border-dashed border-border flex flex-col items-center justify-center text-center p-10">
-              <Inbox size={32} className="text-muted-foreground/40 mb-3" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">No documents in this queue</p>
-            </div>
-          ) : (
-            <>
-              <div className="shrink-0 bg-card rounded-[9px] border border-border/50 shadow-sm p-2 flex items-center gap-2 overflow-x-auto custom-scrollbar">
-                {queueDocuments.map(doc => {
-                  const summary = summaryByDoc.get(doc.documentId);
-                  const tier = summary ? confidenceTier(summary.confidence.overallConfidence) : "high";
-                  const isActive = activeDocument?.documentId === doc.documentId;
-                  return (
-                    <button
-                      key={doc.documentId}
-                      onClick={() => handleSelectDocument(doc.documentId)}
-                      className={cn(
-                        "shrink-0 flex items-center gap-2 px-3 h-10 rounded-[7px] border text-left transition-all",
-                        isActive ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 hover:border-border bg-background"
-                      )}
-                    >
-                      <span className={cn(
-                        "w-2 h-2 rounded-full shrink-0",
-                        tier === "high" && "bg-emerald-500",
-                        tier === "medium" && "bg-amber-500",
-                        tier === "low" && "bg-rose-500"
-                      )} />
-                      <div className="leading-tight">
-                        <p className="text-[9px] font-black uppercase tracking-tight text-foreground max-w-[140px] truncate">{doc.name}</p>
-                        <p className="text-[8px] font-bold text-muted-foreground uppercase">
-                          {summary ? `${(summary.confidence.overallConfidence * 100).toFixed(1)}% C_doc` : "—"}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="shrink-0 flex items-center justify-between px-1">
-                <ConfidenceHeatmapLegend />
+        ) : (
+          <>
+            {trainingDocuments.length === 0 ? (
+              <div className="flex-1 bg-card rounded-[9px] border border-dashed border-border flex flex-col items-center justify-center text-center p-12">
+                <FileCheck size={40} strokeWidth={1} className="text-muted-foreground/30 mb-4" />
+                <h3 className="text-sm font-black text-foreground uppercase tracking-tight mb-1">No Documents To Validate</h3>
+                <p className="text-[10px] text-muted-foreground max-w-sm uppercase font-bold tracking-wider leading-relaxed opacity-60 mb-4">
+                  Upload files in the Upload &amp; Queue tab — they&apos;ll be auto-classified and extracted before landing here for review.
+                </p>
                 <button
-                  onClick={() => setShowOcrWords(v => !v)}
-                  className="h-7 px-3 rounded-[7px] border border-border bg-card text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5"
+                  onClick={() => setActiveWorkspaceTab("queue")}
+                  className="h-9 px-4 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[10px] font-black uppercase tracking-widest hover:bg-primary/10 transition-all flex items-center gap-2"
                 >
-                  {showOcrWords ? <EyeOff size={11} /> : <Eye size={11} />}
-                  OCR Word Heatmap
+                  <UploadCloud size={13} />
+                  Go to Upload &amp; Queue
                 </button>
               </div>
+            ) : (
+              <div className="flex-1 flex gap-3 min-h-0">
+                {/* LEFT PANEL — Taxonomy & Queues */}
+                <aside className="w-64 shrink-0 bg-card rounded-[9px] border border-border/50 shadow-sm flex flex-col overflow-hidden">
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
+                    <div>
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 px-1">Validation Queues</p>
+                      <div className="space-y-1.5">
+                        <QueueButton
+                          label="All Documents"
+                          icon={Layers}
+                          count={summaries.length}
+                          active={selectedQueue === "all"}
+                          tone="text-foreground border-border"
+                          onClick={() => setSelectedQueue("all")}
+                        />
+                        {QUEUE_ORDER.map(q => (
+                          <QueueButton
+                            key={q}
+                            label={QUEUE_LABELS[q]}
+                            icon={QUEUE_ICONS[q]}
+                            count={queueCounts[q]}
+                            active={selectedQueue === q}
+                            tone={QUEUE_TONE[q]}
+                            onClick={() => setSelectedQueue(q)}
+                          />
+                        ))}
+                      </div>
+                    </div>
 
-              <ConfidenceHeatmapCanvas
-                page={activePage}
-                fields={heatmapFields}
-                fieldExplanations={activeSummary?.fieldExplanations || []}
-                selectedFieldId={selectedFieldId}
-                onSelectField={handleSelectField}
-                showOcrWords={showOcrWords}
-              />
+                    <div>
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 px-1 flex items-center gap-1.5">
+                        <FolderTree size={11} /> Taxonomy
+                      </p>
+                      <div className="space-y-1">
+                        {relevantDocumentClasses.length === 0 && (
+                          <p className="text-[9px] text-muted-foreground italic px-1">No document classes associated with this batch yet.</p>
+                        )}
+                        {relevantDocumentClasses.map(cls => {
+                          const history = cls.confidenceHistory || [];
+                          const latest = history[history.length - 1];
+                          const meetsTarget = latest ? latest.overall >= cls.minConfidence : null;
+                          return (
+                            <div key={cls.classId} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-muted/40 transition-colors">
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[9px] font-black uppercase tracking-tight text-foreground truncate block">{cls.name}</span>
+                                {latest && (
+                                  <span className={cn("text-[8px] font-bold uppercase tracking-widest", meetsTarget ? "text-emerald-500" : "text-rose-500")}>
+                                    Training {Math.round(latest.overall * 100)}% · {latest.count} {latest.count === 1 ? "doc" : "docs"}
+                                  </span>
+                                )}
+                              </div>
+                              <label className="flex items-center gap-1 shrink-0" title="Target confidence — minimum average training confidence required for this document type">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  value={Math.round(cls.minConfidence * 100)}
+                                  onChange={(e) => {
+                                    const pct = Math.max(0, Math.min(100, Number(e.target.value)));
+                                    updateClassConfig(cls.classId, { minConfidence: pct / 100 });
+                                  }}
+                                  className="w-9 bg-transparent border border-border/40 rounded px-1 py-0.5 text-[8px] font-mono font-black text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 text-right"
+                                />
+                                <span className="text-[8px] font-black text-muted-foreground">%</span>
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-              {activeDocument && activeDocument.pages.length > 1 && (
-                <div className="shrink-0 flex items-center gap-1.5 overflow-x-auto custom-scrollbar px-1">
-                  {activeDocument.pages.map(page => (
-                    <button
-                      key={page.pageId}
-                      onClick={() => setActivePage(page)}
-                      className={cn(
-                        "shrink-0 h-7 px-3 rounded-[7px] border text-[9px] font-black uppercase tracking-widest transition-all",
-                        activePage?.pageId === page.pageId ? "border-primary text-primary bg-primary/5" : "border-border text-muted-foreground hover:text-foreground"
+                    <div>
+                      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-2 px-1">System Lifecycle</p>
+                      <div className="space-y-1.5">
+                        <LifecycleButton icon={Activity} label="Model Health Center" onClick={() => openLifecycle("health")} />
+                        <LifecycleButton icon={GitBranch} label="Promotion Pipeline" onClick={() => openLifecycle("promotion")} />
+                        <LifecycleButton icon={RotateCcw} label="Rollback Manager" onClick={() => openLifecycle("rollback")} />
+                        <LifecycleButton icon={Database} label="Golden Test Center" onClick={() => openLifecycle("golden")} />
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+
+                {/* CENTER PANEL — Document Queue + Heatmap Canvas */}
+                <div className="flex-1 flex flex-col gap-3 min-h-0">
+                  {queueDocuments.length === 0 ? (
+                    <div className="flex-1 bg-card rounded-[9px] border border-dashed border-border flex flex-col items-center justify-center text-center p-10">
+                      <Inbox size={32} className="text-muted-foreground/40 mb-3" />
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">No documents in this queue</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="shrink-0 bg-card rounded-[9px] border border-border/50 shadow-sm p-2 flex items-center gap-2 overflow-x-auto custom-scrollbar">
+                        {queueDocuments.map(doc => {
+                          const summary = summaryByDoc.get(doc.documentId);
+                          const tier = summary ? confidenceTier(summary.confidence.overallConfidence) : "high";
+                          const isActive = activeDocument?.documentId === doc.documentId;
+                          return (
+                            <button
+                              key={doc.documentId}
+                              onClick={() => handleSelectDocument(doc.documentId)}
+                              className={cn(
+                                "shrink-0 flex items-center gap-2 px-3 h-10 rounded-[7px] border text-left transition-all",
+                                isActive ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 hover:border-border bg-background"
+                              )}
+                            >
+                              <span className={cn(
+                                "w-2 h-2 rounded-full shrink-0",
+                                tier === "high" && "bg-emerald-500",
+                                tier === "medium" && "bg-amber-500",
+                                tier === "low" && "bg-rose-500"
+                              )} />
+                              <div className="leading-tight">
+                                <p className="text-[9px] font-black uppercase tracking-tight text-foreground max-w-[140px] truncate">{doc.name}</p>
+                                <p className="text-[8px] font-bold text-muted-foreground uppercase">
+                                  {summary ? `${(summary.confidence.overallConfidence * 100).toFixed(1)}% C_doc` : "—"}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="shrink-0 flex items-center justify-between px-1">
+                        <ConfidenceHeatmapLegend />
+                        <button
+                          onClick={() => setShowOcrWords(v => !v)}
+                          className="h-7 px-3 rounded-[7px] border border-border bg-card text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5"
+                        >
+                          {showOcrWords ? <EyeOff size={11} /> : <Eye size={11} />}
+                          OCR Word Heatmap
+                        </button>
+                      </div>
+
+                      <ConfidenceHeatmapCanvas
+                        page={activePage}
+                        fields={heatmapFields}
+                        fieldExplanations={activeSummary?.fieldExplanations || []}
+                        selectedFieldId={selectedFieldId}
+                        onSelectField={handleSelectField}
+                        showOcrWords={showOcrWords}
+                      />
+
+                      {activeDocument && activeDocument.pages.length > 1 && (
+                        <div className="shrink-0 flex items-center gap-1.5 overflow-x-auto custom-scrollbar px-1">
+                          {activeDocument.pages.map(page => (
+                            <button
+                              key={page.pageId}
+                              onClick={() => setActivePage(page)}
+                              className={cn(
+                                "shrink-0 h-7 px-3 rounded-[7px] border text-[9px] font-black uppercase tracking-widest transition-all",
+                                activePage?.pageId === page.pageId ? "border-primary text-primary bg-primary/5" : "border-border text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              Page {page.pageNumber}
+                            </button>
+                          ))}
+                        </div>
                       )}
-                    >
-                      Page {page.pageNumber}
-                    </button>
-                  ))}
+                    </>
+                  )}
                 </div>
-              )}
-            </>
-          )}
-        </div>
 
-        {/* RIGHT PANEL — Explainability */}
-        <aside className="w-80 shrink-0">
-          {activeSummary ? (
-            <ExplainabilityPanel
-              summary={activeSummary}
-              fields={heatmapFields}
-              categories={extractionCategories}
-              selectedFieldId={selectedFieldId}
-              onSelectField={handleSelectField}
-              onFieldAction={handleFieldAction}
-            />
-          ) : (
-            <div className="w-full h-full bg-card rounded-[9px] border border-dashed border-border flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 p-6 text-center">
-              Select a document to view explainability data
-            </div>
-          )}
-        </aside>
+                {/* RIGHT PANEL — Explainability */}
+                <aside className="w-80 shrink-0">
+                  {activeSummary ? (
+                    <ExplainabilityPanel
+                      summary={activeSummary}
+                      fields={heatmapFields}
+                      categories={extractionCategories}
+                      selectedFieldId={selectedFieldId}
+                      onSelectField={handleSelectField}
+                      onFieldAction={handleFieldAction}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-card rounded-[9px] border border-dashed border-border flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 p-6 text-center">
+                      Select a document to view explainability data
+                    </div>
+                  )}
+                </aside>
+              </div>
+            )}
+
+            {/* BOTTOM DRAWER — Analyst Telemetry */}
+            <AnalystTelemetryDrawer telemetry={analystTelemetry} isOpen={drawerOpen} onToggle={() => setDrawerOpen(v => !v)} />
+          </>
+        )}
+
+        <Footer
+          activeDocumentName={activeDocument?.name}
+          onMarkProcessed={handleMarkProcessed}
+          markProcessedDisabled={!activeDocument || activeWorkspaceTab !== "validation"}
+          onFinalize={() => { updateStepStatus(TrainingStage.VALIDATION, "completed"); setActiveStage(TrainingStage.TRAINING_REVIEW); }}
+        />
       </div>
-
-      {/* BOTTOM DRAWER — Analyst Telemetry */}
-      <AnalystTelemetryDrawer telemetry={analystTelemetry} isOpen={drawerOpen} onToggle={() => setDrawerOpen(v => !v)} />
-
-      <Footer onFinalize={() => { updateStepStatus(TrainingStage.VALIDATION, "completed"); setActiveStage(TrainingStage.TRAINING_REVIEW); }} />
 
       <SystemLifecycle
         isOpen={lifecycleOpen}
@@ -616,20 +759,124 @@ export function ValidationStudio() {
   );
 }
 
-function Header({ batchId, stpRate }: { batchId: string; stpRate: number }) {
+function ValidationHeader({ batchId, stpRate, processedCount, totalCount }: { batchId: string; stpRate: number; processedCount: number; totalCount: number }) {
   return (
-    <div className="flex items-center justify-between px-2 flex-wrap gap-3">
-      <div>
-        <h2 className="text-3xl font-black tracking-tight text-foreground uppercase">Validation Studio</h2>
-        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest opacity-80 italic mt-1">Human-in-the-loop review &amp; continuous learning pipeline</p>
+    <header
+      className="h-20 px-6 flex items-center justify-between shrink-0 z-30"
+      style={{
+        background: "var(--studio-surface-raised)",
+        borderBottom: "1.5px solid var(--studio-border)",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.10), 0 1px 0 0 var(--studio-border)",
+      }}
+    >
+      {/* Left: Brand + Identity */}
+      <div className="flex items-center gap-4 min-w-0">
+        <div className="w-12 h-12 rounded-[14px] bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center text-primary-foreground shadow-[0_8px_20px_-6px_rgba(var(--primary),0.4)] border border-white/20 shrink-0">
+          <ClipboardCheck size={22} strokeWidth={2.5} />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-lg font-black tracking-tight text-foreground/80 uppercase whitespace-nowrap">Validation Studio</h1>
+            <div className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-xs font-black text-primary uppercase tracking-widest whitespace-nowrap">
+              Continuous Learning
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <span className="text-xs font-black text-foreground uppercase tracking-wide bg-muted px-2 py-0.5 rounded-lg border border-border truncate max-w-[200px]">
+              {batchId}
+            </span>
+            <div className="w-1 h-1 rounded-full bg-border" />
+            <span className="text-xs font-black text-primary/60 uppercase tracking-[0.15em] opacity-80">Human-in-the-loop Review</span>
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <Pill icon={Layers} label="Batch" value={batchId} />
-        <Pill icon={ShieldCheck} label="STP Rate" value={`${stpRate}%`} tone={stpRate >= 80 ? "good" : "warn"} />
-        <button className="h-10 px-6 rounded-[9px] border border-border bg-card text-muted-foreground font-black text-[10px] uppercase tracking-widest hover:border-primary/50 transition-all flex items-center gap-2">
-          <Download size={14} />
-          Export Validation Report
+
+      {/* Right: Stats + Export */}
+      <div className="flex items-center gap-5 shrink-0">
+        <div className="flex flex-col items-end">
+          <span className="text-xs font-black text-muted-foreground/50 uppercase tracking-[0.15em]">STP Rate</span>
+          <span className={cn("text-xs font-bold", stpRate >= 80 ? "text-emerald-500" : "text-amber-500")}>{stpRate}%</span>
+        </div>
+
+        <div className="h-10 w-px bg-border/50" />
+
+        <div className="flex flex-col items-end">
+          <span className="text-xs font-black text-muted-foreground/50 uppercase tracking-[0.15em]">Processed</span>
+          <span className={cn("text-xs font-bold", processedCount === totalCount && totalCount > 0 ? "text-emerald-500" : "text-foreground")}>
+            {processedCount}/{totalCount}
+          </span>
+        </div>
+
+        <div className="h-10 w-px bg-border/50" />
+
+        <button
+          className="h-9 gap-2 border border-border/60 bg-background/40 hover:bg-accent text-xs font-semibold uppercase tracking-wide px-3 rounded-xl shadow-sm flex items-center transition-colors"
+          title="Export validation report"
+        >
+          <Download size={13} />
+          <span className="hidden lg:block">Export</span>
         </button>
+      </div>
+    </header>
+  );
+}
+
+function WorkspaceTabBar({
+  activeTab, onChange, queueCount, unclassifiedCount, validationCount,
+}: {
+  activeTab: WorkspaceTab;
+  onChange: (tab: WorkspaceTab) => void;
+  queueCount: number;
+  unclassifiedCount: number;
+  validationCount: number;
+}) {
+  const tabs: Array<{ id: WorkspaceTab; label: string; icon: React.ElementType; count: number; badge?: number }> = [
+    { id: "queue", label: "Upload & Queue", icon: UploadCloud, count: queueCount, badge: unclassifiedCount > 0 ? unclassifiedCount : undefined },
+    { id: "validation", label: "Validation Workspace", icon: ClipboardCheck, count: validationCount },
+  ];
+
+  return (
+    <div
+      className="h-10 px-6 flex items-center shrink-0 z-20"
+      style={{
+        background: "var(--studio-surface)",
+        borderBottom: "1px solid var(--studio-border)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+      }}
+    >
+      <div className="flex items-center gap-0">
+        {tabs.map(tab => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onChange(tab.id)}
+              className="px-4 py-1.5 h-10 font-semibold uppercase tracking-wide transition-colors flex items-center gap-1.5 shrink-0 text-xs relative"
+              style={{
+                color: isActive ? "var(--primary)" : "var(--muted-foreground)",
+                background: isActive ? "var(--background)" : "transparent",
+                borderBottom: isActive ? "2px solid var(--primary)" : "2px solid transparent",
+                boxShadow: isActive ? "inset 0 -1px 0 0 var(--primary)" : "none",
+              }}
+              onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "var(--studio-surface-raised)"; }}
+              onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              <tab.icon size={13} style={{ color: isActive ? "var(--primary)" : "var(--muted-foreground)", opacity: isActive ? 1 : 0.6 }} />
+              <span>{tab.label}</span>
+              <span className={cn(
+                "ml-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-black",
+                isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+              )}>
+                {tab.count}
+              </span>
+              {!!tab.badge && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  {tab.badge} new
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -683,17 +930,35 @@ function LifecycleButton({ icon: Icon, label, onClick }: { icon: React.ElementTy
   );
 }
 
-function Footer({ onFinalize }: { onFinalize: () => void }) {
+function Footer({ activeDocumentName, onMarkProcessed, markProcessedDisabled, onFinalize }: {
+  activeDocumentName?: string;
+  onMarkProcessed: () => void;
+  markProcessedDisabled: boolean;
+  onFinalize: () => void;
+}) {
   return (
-    <footer className="pt-3 border-t border-border flex items-center justify-end shrink-0">
+    <footer className="pt-3 border-t border-border flex items-center justify-end gap-2 shrink-0">
+      {activeDocumentName && (
+        <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest mr-auto truncate max-w-[40%]">
+          Reviewing: <span className="text-foreground">{activeDocumentName}</span>
+        </span>
+      )}
+      <button
+        onClick={onMarkProcessed}
+        disabled={markProcessedDisabled}
+        title="Mark the active document as processed and advance to the next item in the queue"
+        className="h-9 gap-2 border border-border/60 bg-background/40 hover:bg-accent text-xs font-semibold uppercase tracking-wide px-4 rounded-xl shadow-sm flex items-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <CheckCircle2 size={13} className="text-emerald-500" />
+        Processed
+      </button>
       <button
         onClick={onFinalize}
-        className={cn(
-          "h-12 px-10 rounded-[9px] font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center gap-3 group border border-border shadow-2xl bg-card text-foreground hover:border-primary/50 hover:bg-muted/30"
-        )}
+        className="h-9 gap-2 bg-primary text-primary-foreground hover:opacity-90 text-xs font-semibold uppercase tracking-wide px-5 rounded-xl shadow-lg shadow-primary/20 flex items-center transition-all group"
       >
-        Finalize Validation & Proceed
-        <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform text-primary" />
+        <Rocket size={13} />
+        Finalize Validation &amp; Proceed
+        <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
       </button>
     </footer>
   );
