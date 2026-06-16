@@ -27,6 +27,8 @@
 16. [In-App Documentation](#16-in-app-documentation)
 17. [Infrastructure Registry](#17-infrastructure-registry)
 18. [Audit & Governance](#18-audit--governance)
+19. [Image Enhancement Pipeline](#19-image-enhancement-pipeline)
+20. [Structural Element Detector](#20-structural-element-detector)
 
 ---
 
@@ -38,7 +40,7 @@ The platform implements the **DIE-OS (Document Intelligence Engine Operating Sys
 
 | Phase | Name | Description |
 |-------|------|-------------|
-| I | **Pre-Processing** | Document intake, IQA, OCR routing, normalization |
+| I | **Pre-Processing** | Document intake, IQA, image enhancement (shadow/staple/hole-punch), OCR routing, normalization |
 | II | **Processing** | Multi-engine OCR with confidence voting, page segmentation |
 | III | **Post-Processing** | AI classification, anchor-relative extraction, bilingual normalization |
 | IV | **Auto-Learning** | Continuous retraining, drift analytics, sample optimization |
@@ -51,6 +53,8 @@ The platform implements the **DIE-OS (Document Intelligence Engine Operating Sys
 - **Anchor Exclusion Guard**: OCR words covered by any anchor bounding box are excluded from all field extraction, preventing garbled label text from contaminating values
 - **Zero-Trust PII**: Governance rules enforced at export time; original values never leave the system unredacted
 - **Deterministic Fingerprinting**: Every document produces 3 independent hashes for deduplication and tamper detection
+- **Hardware Artifact Sanitization**: Staples, hole punches, and shadow gradients are digitally erased before OCR to prevent misreads and scanner damage
+- **Structural Element Exclusion**: Headers, footers, and page numbers detected from OCR layer and fed back as extraction exclusion zones
 
 ---
 
@@ -630,8 +634,162 @@ Each source has: `configuration`, `status`, `retryCount`, `enabled` flag, and he
 | OCR | Tesseract.js v5 (local), Google Vision / AWS Textract / Azure (cloud) |
 | Hashing | Web Crypto API (SHA-256), custom djb2 fallback |
 | Fingerprinting | Browser canvas + DCT-based pHash |
+| Image Enhancement | Canvas `getImageData` + separable Gaussian blur + inpainting |
 | Export | Blob API + URL.createObjectURL |
 | Animation | Framer Motion |
 | Icons | Lucide React |
 | Styling | Tailwind CSS v4 with CSS variables |
 | Storage | localStorage (model persistence), sessionStorage (telemetry ring buffer) |
+
+---
+
+## 19. Image Enhancement Pipeline
+
+**File**: `services/imageEnhancementService.ts`
+
+The Image Enhancement Pipeline runs as part of Phase I Pre-Processing, correcting physical document artifacts before OCR to maximise text recognition accuracy.
+
+### 19.1 Shadow Removal — Adaptive Background Illumination Estimation
+
+**Algorithm:**
+1. Convert page pixels to greyscale: `g = 0.299R + 0.587G + 0.114B`
+2. Apply large-kernel (σ=40) separable Gaussian blur → illumination background map `B(x,y)`
+3. Normalised pixel: `clamp(pixel / B × 220, 0, 255)`
+
+This preserves text strokes (high-frequency) while eliminating low-frequency illumination variation from scanner lid shadows, hand shadows, and surface creases.
+
+**Metric**: Shadow Uniformity (0–100) = `100 − stddev(grey) × 1.25`. Score jump from e.g. 58% → 89% indicates successful normalisation.
+
+**TypeScript interface:**
+```typescript
+interface EnhancementReport {
+  applied: string[];
+  artifacts: ArtifactDetection[];
+  metrics: {
+    shadow_uniformity_before: number;  // 0–100
+    shadow_uniformity_after: number;
+    artifacts_removed: number;
+  };
+  processing_ms: number;
+}
+```
+
+### 19.2 Staple Detection — Corner ROI + Gradient Heuristic
+
+Staples appear in extreme corners (typically top-left or top-right). Detection is restricted to **4 corner ROIs** (each ~16% page width × 8% page height) to avoid false positives in document body.
+
+**Detection criteria:**
+- Row has horizontal gradient magnitude > 30 (metallic edge contrast)
+- ≥35% of ROI-width pixels in that row are below intensity 80 (dark metallic strip)
+- 2–12 consecutive qualifying rows → staple bounding box
+
+**Confidence formula**: `min(0.97, run_height/6 + row_gradient/120)`
+
+### 19.3 Digital Staple Erasure — Inverse Distance Weighted Inpainting
+
+For each pixel `(px, py)` inside the staple bounding box:
+
+```
+weight(sample) = 1 / distance²(px, py → sample)
+output_pixel   = Σ(weight × sample_RGB) / Σ(weight)
+```
+
+Samples are drawn from a ±6px boundary ring outside the bounding box. This smoothly patches background texture, approximating the Fast Marching Method (FMM) used in full CV stacks.
+
+### 19.4 Hole Punch Detection & Removal
+
+**Zone**: Left margin (x = 0 to 6% of width) and right margin (x = 94% to 100%).
+
+**Detection**: Vertical scan for consecutive dark rows (≥40% pixels < intensity 80) with blob height in range 16–80px.
+
+**Removal**: Same inverse-distance inpainting as staple erasure.
+
+### 19.5 ArtifactDetection Type
+
+```typescript
+interface ArtifactDetection {
+  type: "staple" | "hole_punch" | "shadow_region" | "crease";
+  bbox: { x: number; y: number; width: number; height: number };
+  confidence: number;   // 0–1
+  corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "margin-left" | "margin-right";
+  severity: "low" | "medium" | "high";
+}
+```
+
+### 19.6 Public API
+
+```typescript
+// Full pipeline on a canvas element (mutates in-place)
+runEnhancementPipeline(canvas: HTMLCanvasElement, opts?: EnhancementOptions): EnhancementResult
+
+// From an HTMLImageElement
+enhanceFromImage(img: HTMLImageElement, opts?: EnhancementOptions): EnhancementResult
+
+// Mock result for PDF-only / SSR contexts
+mockEnhancementResult(): EnhancementReport
+```
+
+---
+
+## 20. Structural Element Detector
+
+**File**: `services/structuralElementDetector.ts`
+
+Analyses the OCR text layer to identify persistent structural regions (headers, footers, page numbers, running titles) that must be excluded from field extraction.
+
+### 20.1 Zone Definitions
+
+| Zone | Y-Position | Purpose |
+|------|-----------|---------|
+| Header | Top 8% of page height | Organisation/document name |
+| Footer | Bottom 8% of page height | Legal notices, continuation notes |
+| Page Number | Within footer zone | Isolated digit cluster |
+
+### 20.2 Detection Algorithm
+
+**Header & Footer:**
+1. Filter OCR words to zone by Y-coordinate midpoint
+2. Cluster words into text lines (within 0.8× line-height Y tolerance)
+3. Lines with ≥3 words and >15 chars → `running_title`; shorter lines → `header` / `footer`
+
+**Page Number patterns matched:**
+```
+/^\d{1,4}$/          → bare number: "2", "12"
+/^page\s+\d+$/i      → "Page 3"
+/^\d+\s*\/\s*\d+$/   → "3/12"
+/^-\s*\d+\s*-$/      → "- 3 -"
+/^\[\s*\d+\s*\]$/    → "[3]"
+```
+
+### 20.3 Multi-Page Cross-Correlation
+
+When `analyseDocumentStructure()` processes multiple pages, text elements appearing on ≥50% of pages receive a **+25% confidence boost** — confirming them as persistent structural elements rather than coincidental data fields.
+
+### 20.4 Output — Exclusion Zones
+
+```typescript
+interface StructuralAnalysis {
+  headers: StructuralElement[];
+  footers: StructuralElement[];
+  page_numbers: StructuralElement[];
+  running_titles: StructuralElement[];
+  all_exclusion_zones: StructuralElement[];  // Feed into Anchor Exclusion Guard
+  header_height_px: number;
+  footer_height_px: number;
+}
+```
+
+`all_exclusion_zones` feeds back into the **Anchor Exclusion Guard** (`autoPipeline.ts`) — bounding boxes added to the exclusion list so the extraction engine never picks up header/footer text as field values.
+
+### 20.5 Public API
+
+```typescript
+// Single page analysis
+analysePageStructure(words: OCRWord[], pageWidth: number, pageHeight: number): StructuralAnalysis
+
+// Multi-page with cross-correlation confidence boosting
+analyseDocumentStructure(pageWordSets: Array<{ words: OCRWord[]; pageWidth: number; pageHeight: number }>): StructuralAnalysis[]
+
+// Mock data for development / SSR
+mockStructuralAnalysis(): StructuralAnalysis
+```

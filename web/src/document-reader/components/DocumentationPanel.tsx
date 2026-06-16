@@ -6,7 +6,7 @@ import {
   Shield, Download, BarChart3, Fingerprint, Activity, Brain,
   Zap, ScanLine, FileSearch, FlaskConical, GitBranch, Layers,
   CheckCircle2, Clock, AlertCircle, BrainCircuit, Rocket, FileText,
-  Globe, Network, ClipboardCheck, ShieldCheck, Server
+  Globe, Network, ClipboardCheck, ShieldCheck, Server, Wand2, Sun, Scissors, Layout
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -293,6 +293,94 @@ Given target accuracy T:
 - estimated_days_to_target: samples_remaining / throughput (default 20 samples/day)
 
 **Where to use:** Validation Studio → System Lifecycle → Training Optimization panel.`,
+      },
+    ],
+  },
+  {
+    id: "image-enhancement",
+    title: "Image Enhancement",
+    icon: <Wand2 size={14} />,
+    color: "text-violet-500",
+    articles: [
+      {
+        title: "Shadow Removal Engine",
+        tags: ["shadow", "illumination", "Gaussian", "Phase I"],
+        content: `The Shadow Removal Engine neutralises uneven illumination caused by scanner lid positioning, hand shadows, paper creases, or uneven lighting.
+
+**Algorithm — Adaptive Background Illumination Estimation:**
+
+1. Convert page to greyscale
+2. Apply large-kernel Gaussian blur (σ=40) → produces illumination background map B(x,y)
+3. Normalised pixel = clamp(pixel / B × 220, 0, 255)
+
+This preserves text stroke intensity (high-frequency) while removing low-frequency illumination variation.
+
+**Before / After metric:** Shadow Uniformity score (0–100) measures the std-dev of the grey distribution. A score jump from 58% → 89% indicates successful shadow neutralisation.
+
+**Parameters:** \`shadowSigma\` (default 40) controls the kernel size. Increase for documents with very gradual shadows; decrease for localised shadows.
+
+**Service:** \`imageEnhancementService.ts → removeShadows()\``,
+      },
+      {
+        title: "Staple Detection & Digital Removal",
+        tags: ["staple", "inpainting", "corner ROI", "Navier-Stokes"],
+        content: `Metallic staples cause OCR misreads, scanner hardware damage, and local shadow artifacts. The pipeline detects and digitally erases them.
+
+**Detection — Corner ROI + Gradient Heuristic:**
+
+- Search restricted to 4 corner ROIs (each ~16% width × 8% height)
+- Horizontal gradient scan per row: identifies rows with high-gradient contrast and ≥35% dark pixels
+- Consecutive qualifying rows (2–12px tall) classified as staple bounding box
+- Confidence = gradient magnitude + row count heuristic
+
+**Digital Erasure — Inverse Distance Weighted Inpainting:**
+
+For each pixel inside the staple bounding box:
+1. Sample ring of pixels on bounding box boundary (±6px padding)
+2. Weight each sample by 1/d² where d = distance to current pixel
+3. Write weighted RGB average → smoothly patches background texture
+
+This is a simplified approximation of the Fast Marching Method (FMM) / Navier-Stokes inpainting used in full computer vision stacks.
+
+**Typical result:** 1 staple detected in top-left corner, confidence 0.91, inpainted in ~300ms.
+
+**Service:** \`imageEnhancementService.ts → detectStaples() + inpaintRegion()\``,
+      },
+      {
+        title: "Hole Punch Removal",
+        tags: ["hole punch", "morphology", "margin", "Phase I"],
+        content: `Hole-punched documents have dark near-circular blobs in the left or right margin that confuse OCR engines and break column detection.
+
+**Detection — Margin Blob Scan:**
+
+- Left and right margin zones: 6% of page width each
+- Vertical scan: find consecutive dark rows where ≥40% of margin pixels are below threshold 80
+- Blob height 16–80px → classified as hole punch
+
+**Removal:** Same inverse-distance inpainting as staple removal — fills with weighted background texture.
+
+**Service:** \`imageEnhancementService.ts → detectHolePunches() + inpaintRegion()\``,
+      },
+      {
+        title: "Page Structure Detection",
+        tags: ["header", "footer", "page number", "exclusion zones"],
+        content: `The Structural Element Detector analyses the OCR text layer to identify repeating structural zones that must be excluded from field extraction.
+
+**Header Detection (top 8% of page height):**
+- Words in top zone are clustered into lines
+- Lines with ≥3 words and >15 chars → classified as Running Title
+- Short lines → classified as Header
+
+**Footer Detection (bottom 8%):**
+- Same clustering applied to bottom zone
+- Page number patterns matched first: \`/^\\d{1,4}$/\`, \`/^page \\d+$/i\`, \`/^\\d+\\/\\d+$/\`
+
+**Multi-page Cross-Correlation:**
+When multiple pages are processed together, text elements that appear on ≥50% of pages receive a +25% confidence boost — confirming them as persistent structural elements rather than data fields.
+
+**Output:** All detected elements are returned as \`all_exclusion_zones\` — bounding boxes fed back into the Anchor Exclusion Guard to prevent header/footer text from polluting extracted field values.
+
+**Service:** \`structuralElementDetector.ts → analysePageStructure() / analyseDocumentStructure()\``,
       },
     ],
   },

@@ -892,4 +892,54 @@ export interface PiiRedactionResult {
   handling_mode: "redact" | "mask" | "hash";
 }
 
+export interface ArtifactBBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type ArtifactType = "staple" | "hole_punch" | "shadow_region" | "crease";
+export type ArtifactCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right" | "margin-left" | "margin-right";
+
+export interface ArtifactDetection {
+  type: ArtifactType;
+  bbox: ArtifactBBox;
+  confidence: number;
+  corner?: ArtifactCorner;
+  severity: "low" | "medium" | "high";
+}
+
+export interface ImageEnhancementReport {
+  applied: string[];
+  artifacts: ArtifactDetection[];
+  metrics: {
+    shadow_uniformity_before: number;
+    shadow_uniformity_after: number;
+    artifacts_removed: number;
+  };
+  processing_ms: number;
+}
+
+export type StructuralElementType = "header" | "footer" | "page_number" | "running_title";
+
+export interface StructuralElement {
+  type: StructuralElementType;
+  text: string;
+  bbox: ArtifactBBox;
+  confidence: number;
+  page_number_value?: number;
+  zone: "top" | "bottom";
+}
+
+export interface StructuralAnalysis {
+  headers: StructuralElement[];
+  footers: StructuralElement[];
+  page_numbers: StructuralElement[];
+  running_titles: StructuralElement[];
+  all_exclusion_zones: StructuralElement[];
+  header_height_px: number;
+  footer_height_px: number;
+}
+
 // Force re-index

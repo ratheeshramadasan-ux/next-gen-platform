@@ -34,6 +34,8 @@ import {
 } from "../types";
 import { DocumentNormalizer } from "../services/documentNormalizer";
 import { mockIQAScore } from "../services/iqaService";
+import { mockEnhancementResult } from "../services/imageEnhancementService";
+import { mockStructuralAnalysis } from "../services/structuralElementDetector";
 import { usePipelineStore } from "../store/studioStore";
 import { 
   IngestionSource, 
@@ -671,6 +673,116 @@ export function DocumentIntake() {
                   );
                 })() : (
                   <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center italic opacity-30">Select a document to assess quality</p>
+                )}
+             </section>
+
+             {/* ── Image Enhancement Pipeline ── */}
+             <section>
+                <div className="flex items-center justify-between mb-6">
+                   <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+                      <Wand2 size={14} className="text-violet-500" />
+                      Enhancement Pipeline
+                   </h4>
+                   {activeDocument && (() => {
+                     const enh = mockEnhancementResult();
+                     const allClear = enh.artifacts.length === 0;
+                     return (
+                       <span className={cn(
+                         "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
+                         allClear ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" : "text-violet-500 bg-violet-500/10 border-violet-500/20"
+                       )}>
+                         {allClear ? "Clean" : `${enh.metrics.artifacts_removed} Fixed`}
+                       </span>
+                     );
+                   })()}
+                </div>
+                {activeDocument ? (() => {
+                  const enh = mockEnhancementResult();
+                  const struct = mockStructuralAnalysis();
+                  return (
+                    <div className="space-y-3">
+                      {/* Shadow removal metric */}
+                      <div className="p-4 rounded-md bg-card border border-border/40">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                            <Sun size={10} className="text-amber-400" />
+                            Shadow Uniformity
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-muted-foreground tabular-nums">{enh.metrics.shadow_uniformity_before}%</span>
+                            <ArrowRight size={9} className="text-muted-foreground/50" />
+                            <span className={cn("text-[11px] font-black tabular-nums",
+                              enh.metrics.shadow_uniformity_after >= 80 ? "text-emerald-500" : enh.metrics.shadow_uniformity_after >= 60 ? "text-cyan-500" : "text-amber-500"
+                            )}>{enh.metrics.shadow_uniformity_after}%</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={cn("h-full rounded-full transition-all",
+                              enh.metrics.shadow_uniformity_after >= 80 ? "bg-emerald-500" : "bg-amber-500"
+                            )}
+                            style={{ width: `${enh.metrics.shadow_uniformity_after}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Artifact detection list */}
+                      {enh.artifacts.length > 0 && (
+                        <div className="space-y-2">
+                          {enh.artifacts.map((a, i) => (
+                            <div key={i} className={cn(
+                              "flex items-center justify-between text-[9px] rounded-md px-3 py-2 border font-black uppercase tracking-widest",
+                              a.severity === "high" ? "bg-rose-500/5 border-rose-500/20 text-rose-500" :
+                              a.severity === "medium" ? "bg-amber-500/5 border-amber-500/20 text-amber-600" :
+                              "bg-muted/40 border-border/40 text-muted-foreground"
+                            )}>
+                              <span className="flex items-center gap-1.5">
+                                <Scissors size={10} />
+                                {a.type === "staple" ? "Staple" : a.type === "hole_punch" ? "Hole Punch" : "Shadow"} · {a.corner ?? ""}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                {Math.round(a.confidence * 100)}%
+                                <CheckIcon size={9} className="text-emerald-500" />
+                                Inpainted
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Structural elements */}
+                      <div className="p-4 rounded-md bg-card border border-border/40 space-y-2">
+                        <div className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                          <Layout size={10} className="text-primary" />
+                          Page Structure Detected
+                        </div>
+                        {[
+                          { label: "Headers", count: struct.headers.length + struct.running_titles.filter(r => r.zone === "top").length, color: "text-cyan-500" },
+                          { label: "Footers", count: struct.footers.length + struct.running_titles.filter(r => r.zone === "bottom").length, color: "text-indigo-500" },
+                          { label: "Page Nos.", count: struct.page_numbers.length, color: "text-violet-500" },
+                        ].map(item => (
+                          <div key={item.label} className="flex items-center justify-between text-[9px]">
+                            <span className="text-muted-foreground font-black uppercase tracking-widest">{item.label}</span>
+                            <span className={cn("font-black tabular-nums", item.count > 0 ? item.color : "text-muted-foreground/40")}>
+                              {item.count > 0 ? `${item.count} found` : "None"}
+                            </span>
+                          </div>
+                        ))}
+                        {struct.headers[0] && (
+                          <div className="mt-2 pt-2 border-t border-border/40 text-[8px] text-muted-foreground/70 font-medium truncate">
+                            &ldquo;{struct.headers[0].text}&rdquo;
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[9px] text-violet-600 font-bold bg-violet-500/5 rounded-md px-3 py-2 border border-violet-500/20">
+                        <Wand2 size={10} />
+                        Processed in {enh.processing_ms}ms · {enh.applied.length} algorithms applied
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center italic opacity-30">Select a document to enhance</p>
                 )}
              </section>
 
