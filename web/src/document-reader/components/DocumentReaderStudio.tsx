@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { DocumentReaderProvider, useDocumentReader } from "../store/documentReaderContext";
 import { TrainingStage } from "../types";
 import {
@@ -32,13 +33,15 @@ import {
   ChevronRight,
   Download,
   BookOpen,
+  ExternalLink,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { ClassificationStudio } from "./ClassificationStudio";
 import { ExtractionStudio } from "./ExtractionStudio";
 import { ValidationStudio } from "./ValidationStudio";
-import { DocumentIntake, InfrastructureRegistry, TrainingReview } from "./WorkflowStages";
+import { DocumentIntake, TrainingReview } from "./WorkflowStages";
 import OCRConfiguration from "./ocr/OCRConfiguration";
 import PageSegregation from "./segregation/PageSegregation";
 import DocumentTypeResolution from "./DocumentTypeResolution";
@@ -56,10 +59,15 @@ function StudioContent({
   projectName: string;
   onBack?: () => void;
 }) {
+  const router = useRouter();
   const { activeStage, setActiveStage, steps, canNavigateTo, setProjectId: setContextProjectId } = useDocumentReader();
-  const { trainingDocuments, setProjectId: setStoreProjectId, loadState } = usePipelineStore();
+  const { trainingDocuments, setProjectId: setStoreProjectId, loadState, infrastructure } = usePipelineStore();
   const [isSidebarCompact, setIsSidebarCompact] = React.useState(true);
   const [isDocsOpen, setIsDocsOpen] = React.useState(false);
+
+  const activeEngineCount = infrastructure.engines.filter(
+    e => e.status === "active"
+  ).length;
 
   React.useEffect(() => {
     if (projectId) {
@@ -79,7 +87,6 @@ function StudioContent({
       case TrainingStage.PAGE_SEGREGATION: return <PageSegregation />;
       case TrainingStage.DOCUMENT_TYPE_RESOLUTION: return <DocumentTypeResolution />;
       case TrainingStage.EXTRACTION: return <ExtractionStudio />;
-      case TrainingStage.INFRASTRUCTURE: return <InfrastructureRegistry />;
       case TrainingStage.OCR_CONFIGURATION: return <OCRConfiguration />;
       case TrainingStage.VALIDATION: return <ValidationStudio />;
       case TrainingStage.TRAINING_REVIEW: return <TrainingReview />;
@@ -125,7 +132,6 @@ function StudioContent({
       case TrainingStage.TRAINING_REVIEW: return ShieldCheck;
       case TrainingStage.PUBLISH: return Rocket;
       case TrainingStage.EXPORT: return Download;
-      case TrainingStage.INFRASTRUCTURE: return Server;
       default: return Layers;
     }
   };
@@ -164,28 +170,52 @@ function StudioContent({
           </div>
         </div>
 
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-6">
+           {/* Platform Readiness — model workflow progress only */}
            <div className="flex flex-col items-end">
               <div className="flex items-center gap-2 mb-1.5">
                  <Sparkles size={12} className="text-primary animate-pulse" />
-                 <p className="text-[10px] font-black text-foreground/80 uppercase tracking-[0.2em]">Platform Readiness</p>
+                 <p className="text-[10px] font-black text-foreground/80 uppercase tracking-[0.2em]">Model Progress</p>
               </div>
               <div className="flex items-center gap-1.5">
-                 {Object.values(TrainingStage).filter(s => s !== TrainingStage.CLASSIFICATION).map((s, idx) => (
-                    <div 
-                      key={s} 
+                 {Object.values(TrainingStage).filter(s =>
+                   s !== TrainingStage.CLASSIFICATION &&
+                   s !== TrainingStage.INFRASTRUCTURE &&
+                   s !== TrainingStage.DOCUMENT_TYPE_RESOLUTION
+                 ).map((s) => (
+                    <div
+                      key={s}
                       className={cn(
                         "h-1.5 w-6 rounded-full transition-all duration-500",
                         steps[s].status === "completed" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" :
                         s === activeStage ? "bg-primary w-12 shadow-[0_0_12px_rgba(var(--primary),0.3)]" :
                         "bg-muted/40"
-                      )} 
+                      )}
                     />
                  ))}
               </div>
            </div>
-          
-          <div className="h-10 w-px bg-border/50 mx-2" />
+
+           {/* Admin Infrastructure read-only badge */}
+           <button
+             onClick={() => router.push("/next-gen/admin/document-intelligence")}
+             className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border/60 bg-card hover:border-primary/30 hover:bg-primary/5 transition-all group shadow-sm"
+             title="Manage infrastructure in Admin"
+           >
+             <Server size={13} className="text-muted-foreground group-hover:text-primary transition-colors" />
+             <div className="flex flex-col items-start">
+               <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest leading-none mb-0.5">Infrastructure</span>
+               <span className={cn(
+                 "text-[10px] font-black uppercase leading-none",
+                 activeEngineCount > 0 ? "text-emerald-500" : "text-rose-500"
+               )}>
+                 {activeEngineCount} Engines Active
+               </span>
+             </div>
+             <ExternalLink size={10} className="text-muted-foreground/40 group-hover:text-primary/60 transition-colors ml-1" />
+           </button>
+
+          <div className="h-10 w-px bg-border/50 mx-1" />
           
           <div className="flex items-center gap-3">
              <button className="w-10 h-10 rounded-full border border-border/50 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
@@ -230,7 +260,10 @@ function StudioContent({
                   </div>
                   
                   <div className="space-y-3">
-                     {Object.values(TrainingStage).filter(stageId => stageId !== TrainingStage.CLASSIFICATION).map((stageId, idx) => {
+                     {Object.values(TrainingStage).filter(stageId =>
+                       stageId !== TrainingStage.CLASSIFICATION &&
+                       stageId !== TrainingStage.INFRASTRUCTURE
+                     ).map((stageId, idx) => {
                        if (stageId === TrainingStage.DOCUMENT_TYPE_RESOLUTION) return null;
                        const step = steps[stageId];
                        const Icon = getStageIcon(stageId);

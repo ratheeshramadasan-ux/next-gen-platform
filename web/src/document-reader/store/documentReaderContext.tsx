@@ -31,12 +31,13 @@ interface DocumentReaderContextType {
 }
 
 const DEFAULT_STEPS: Record<TrainingStage, WorkflowStep> = {
+  // INFRASTRUCTURE intentionally omitted — managed in Admin → Document Intelligence
   [TrainingStage.INFRASTRUCTURE]: {
     id: TrainingStage.INFRASTRUCTURE,
     label: "INFRASTRUCTURE",
     description: "Enterprise Orchestration & Engine Registry",
-    status: "not_started",
-    isLocked: false,
+    status: "completed",  // treated as pre-configured by admin
+    isLocked: true,
   },
   [TrainingStage.DOCUMENT_UPLOAD]: {
     id: TrainingStage.DOCUMENT_UPLOAD,
@@ -129,7 +130,9 @@ export function DocumentReaderProvider({ children }: { children: React.ReactNode
   // Comprehensive Persistence Logic - Loading on Mount
   useEffect(() => {
     const savedStage = localStorage.getItem("doc_reader_stage");
-    if (savedStage && savedStage !== TrainingStage.INFRASTRUCTURE) {
+    // Never restore INFRASTRUCTURE as active — it lives in Admin now
+    const blockedStages = [TrainingStage.INFRASTRUCTURE];
+    if (savedStage && !blockedStages.includes(savedStage as TrainingStage)) {
       setActiveStage(savedStage as TrainingStage);
     }
 
