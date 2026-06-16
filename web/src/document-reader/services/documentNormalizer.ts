@@ -64,6 +64,7 @@ export class DocumentNormalizer {
         imageUrl,
         width: viewport.width,
         height: viewport.height,
+        confidence: 0,
         textLayer: [],
         annotations: []
       });
@@ -90,6 +91,7 @@ export class DocumentNormalizer {
           imageUrl,
           width: img.width,
           height: img.height,
+          confidence: 0,
           textLayer: [],
           annotations: []
         },

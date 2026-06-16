@@ -145,6 +145,7 @@ export interface PageMetadata {
   imageHash?: string;
   imageUrl: string;
   ocrText?: string;
+  ocrData?: { text?: string; metadata?: string; rawJson?: string };
   textLayer?: OCRWord[];
   headers?: string[];
   footers?: string[];

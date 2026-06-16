@@ -35,6 +35,7 @@ import {
   BookOpen,
   ExternalLink,
   ShieldAlert,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,8 @@ import PageSegregation from "./segregation/PageSegregation";
 import DocumentTypeResolution from "./DocumentTypeResolution";
 import { ExportStudio } from "./ExportStudio";
 import { DocumentationPanel } from "./DocumentationPanel";
+import { PublishStudio } from "../publish/PublishStudio";
+import { AccessManagement } from "../access/AccessManagement";
 
 import { usePipelineStore } from "../store/studioStore";
 
@@ -64,6 +67,7 @@ function StudioContent({
   const { trainingDocuments, setProjectId: setStoreProjectId, loadState, infrastructure } = usePipelineStore();
   const [isSidebarCompact, setIsSidebarCompact] = React.useState(true);
   const [isDocsOpen, setIsDocsOpen] = React.useState(false);
+  const [isAccessOpen, setIsAccessOpen] = React.useState(false);
 
   const activeEngineCount = infrastructure.engines.filter(
     e => e.status === "active"
@@ -91,21 +95,7 @@ function StudioContent({
       case TrainingStage.VALIDATION: return <ValidationStudio />;
       case TrainingStage.TRAINING_REVIEW: return <TrainingReview />;
       case TrainingStage.EXPORT: return <ExportStudio />;
-      case TrainingStage.PUBLISH: return (
-        <div className="flex flex-col items-center justify-center text-center space-y-6">
-          <div className="w-20 h-20 rounded-[9px] bg-emerald-50/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
-            <Rocket size={32} />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold">Ready to Publish</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">Your model has been trained and validated. You can now deploy it to your production environment.</p>
-          </div>
-          <button className="h-11 px-8 rounded-[9px] bg-card border border-border text-foreground font-bold text-[10px] uppercase tracking-[0.2em] shadow-lg hover:border-emerald-500/50 transition-all hover:scale-105 flex items-center gap-2 group">
-            Deploy Model
-            <Rocket size={14} className="text-emerald-500 group-hover:translate-y-[-2px] transition-transform" />
-          </button>
-        </div>
-      );
+      case TrainingStage.PUBLISH: return <PublishStudio />;
       default: return <div className="p-10 text-muted-foreground font-bold uppercase tracking-widest text-[10px]">Studio Initializing...</div>;
     }
   };
@@ -227,6 +217,13 @@ function StudioContent({
                title="Platform Documentation"
              >
                <BookOpen size={18} />
+             </button>
+             <button
+               onClick={() => setIsAccessOpen(true)}
+               className="w-10 h-10 rounded-full bg-card border border-border/50 flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all shadow-sm"
+               title="Access Management"
+             >
+               <Users size={18} />
              </button>
              <button className="w-10 h-10 rounded-full bg-card border border-border/50 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all shadow-sm">
                <Settings size={18} />
@@ -358,6 +355,33 @@ function StudioContent({
       </main>
 
       <DocumentationPanel isOpen={isDocsOpen} onClose={() => setIsDocsOpen(false)} />
+
+      {/* Access Management slide-over */}
+      {isAccessOpen && (
+        <div className="fixed inset-0 z-[60] flex">
+          <div
+            className="flex-1 bg-black/40 backdrop-blur-sm"
+            onClick={() => setIsAccessOpen(false)}
+          />
+          <div className="w-[680px] bg-background border-l border-border shadow-2xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-card/80">
+              <div className="flex items-center gap-3">
+                <Users size={16} className="text-primary" />
+                <span className="text-[11px] font-black text-foreground uppercase tracking-widest">Access Management</span>
+              </div>
+              <button
+                onClick={() => setIsAccessOpen(false)}
+                className="w-8 h-8 rounded-lg border border-border hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-all"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <AccessManagement projectName={projectName} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

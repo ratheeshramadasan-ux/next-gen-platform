@@ -209,12 +209,14 @@ export const UniversalDocumentCanvas: React.FC<Props> = ({
                   key={word.id}
                   onMouseEnter={(e) => {
                     const stage = e.target.getStage();
+                    if (!stage) return;
                     const container = stage.container();
                     container.style.cursor = "pointer";
                     setHoveredWord(word);
                   }}
                   onMouseLeave={(e) => {
                     const stage = e.target.getStage();
+                    if (!stage) return;
                     const container = stage.container();
                     container.style.cursor = "default";
                     setHoveredWord(null);

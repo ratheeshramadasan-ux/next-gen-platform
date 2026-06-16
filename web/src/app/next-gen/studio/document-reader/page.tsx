@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { getAppProjectAction } from "@/app/actions/tenantActions";
 import { DocReaderRegistry } from "@/components/studio/doc-reader/DocReaderRegistry";
 import { DocumentReaderStudio } from "@/document-reader/components/DocumentReaderStudio";
+import { DUDashboard } from "@/document-reader/dashboard/DUDashboard";
 
 type ProjectSummary = {
   name: string;
@@ -15,6 +16,7 @@ function DocReaderContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const projectId = searchParams.get("projectId");
+  const view = searchParams.get("view");
   const [project, setProject] = useState<ProjectSummary | null>(null);
 
   useEffect(() => {
@@ -42,6 +44,19 @@ function DocReaderContent() {
     params.set("projectId", id);
     router.push(`?${params.toString()}`);
   };
+
+  // DU Dashboard view
+  if (view === "dashboard") {
+    return (
+      <DUDashboard
+        onOpenProject={(id) => {
+          const params = new URLSearchParams();
+          params.set("projectId", id);
+          router.push(`?${params.toString()}`);
+        }}
+      />
+    );
+  }
 
   if (!projectId) {
     return <DocReaderRegistry onSelectProject={handleSelectProject} />;
