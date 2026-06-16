@@ -103,6 +103,13 @@ const DEFAULT_STEPS: Record<TrainingStage, WorkflowStep> = {
     status: "not_started",
     isLocked: false,
   },
+  [TrainingStage.EXPORT]: {
+    id: TrainingStage.EXPORT,
+    label: "SECURE EXPORT",
+    description: "Structured JSON/CSV/JSONL export with PII governance",
+    status: "not_started",
+    isLocked: false,
+  },
 };
 
 const DocumentReaderContext = createContext<DocumentReaderContextType | undefined>(undefined);

@@ -434,6 +434,55 @@ export function generateAnalystTelemetry(fieldsReviewed: number, documentsReview
   };
 }
 
+// ─── Sample Optimization Engine ───────────────────────────────────────────────
+//
+// Estimates the number of additional training samples needed to reach a target
+// accuracy given current accuracy, using a simplified power-law learning curve:
+//   accuracy ≈ 1 − k / n^α
+// where n = sample count, α ≈ 0.22 (empirical for document classification tasks),
+// k is calibrated from (current_accuracy, current_samples).
+
+import { SampleOptimizationResult } from "../types";
+
+const LEARNING_CURVE_ALPHA = 0.22;
+
+export function computeSamplesNeeded(
+  currentAccuracy: number,   // 0–1
+  targetAccuracy: number,    // 0–1
+  currentSamples: number,    // positive integer
+  samplesPerDay = 20,        // throughput estimate for ETA
+): SampleOptimizationResult {
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+  const ca = clamp(currentAccuracy);
+  const ta = clamp(targetAccuracy);
+
+  // Calibrate k from current measurements
+  const k = (1 - ca) * Math.pow(Math.max(1, currentSamples), LEARNING_CURVE_ALPHA);
+
+  let samplesNeeded = currentSamples;
+
+  if (ta <= ca) {
+    samplesNeeded = currentSamples; // already at or above target
+  } else {
+    // Solve: ta = 1 − k / n^α  →  n = (k / (1−ta))^(1/α)
+    const needed = Math.pow(k / (1 - ta), 1 / LEARNING_CURVE_ALPHA);
+    samplesNeeded = Math.ceil(needed);
+  }
+
+  const remaining = Math.max(0, samplesNeeded - currentSamples);
+  const eta = samplesPerDay > 0 ? Math.ceil(remaining / samplesPerDay) : null;
+
+  return {
+    current_accuracy: Math.round(ca * 10000) / 100,
+    target_accuracy: Math.round(ta * 10000) / 100,
+    samples_needed: samplesNeeded,
+    current_samples: currentSamples,
+    samples_remaining: remaining,
+    confidence_interval: 1.96 * Math.sqrt((ca * (1 - ca)) / Math.max(1, currentSamples)),
+    estimated_days_to_target: eta,
+  };
+}
+
 export const QUEUE_LABELS: Record<ValidationQueueType, string> = {
   highest_learning_value: "Highest Learning Value (HLV)",
   confidence_review: "Confidence Review",

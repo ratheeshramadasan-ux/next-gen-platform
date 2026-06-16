@@ -33,6 +33,7 @@ import {
   SegregationLogicGroup
 } from "../types";
 import { DocumentNormalizer } from "../services/documentNormalizer";
+import { mockIQAScore } from "../services/iqaService";
 import { usePipelineStore } from "../store/studioStore";
 import { 
   IngestionSource, 
@@ -604,6 +605,73 @@ export function DocumentIntake() {
                      </div>
                    )}
                 </div>
+             </section>
+
+             {/* ── Image Quality Assessment Panel ── */}
+             <section>
+                <div className="flex items-center justify-between mb-6">
+                   <h4 className="text-[11px] font-black text-foreground uppercase tracking-widest flex items-center gap-2">
+                      <ScanLine size={14} className="text-cyan-500" />
+                      Image Quality Assessment
+                   </h4>
+                   {activeDocument && (() => {
+                     const iqa = mockIQAScore();
+                     const colors: Record<string, string> = { excellent: "text-emerald-500", good: "text-cyan-500", fair: "text-amber-500", poor: "text-rose-500" };
+                     return (
+                       <span className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border", colors[iqa.status],
+                         iqa.status === "excellent" ? "bg-emerald-500/10 border-emerald-500/20" :
+                         iqa.status === "good" ? "bg-cyan-500/10 border-cyan-500/20" :
+                         iqa.status === "fair" ? "bg-amber-500/10 border-amber-500/20" :
+                         "bg-rose-500/10 border-rose-500/20"
+                       )}>{iqa.status}</span>
+                     );
+                   })()}
+                </div>
+                {activeDocument ? (() => {
+                  const iqa = mockIQAScore();
+                  const metrics = [
+                    { label: "Readiness Index", value: iqa.readiness_index, max: 100, suffix: "%" },
+                    { label: "Sharpness (Blur)", value: iqa.blur_score, max: 100, suffix: "%" },
+                    { label: "Noise Clearance", value: iqa.noise_score, max: 100, suffix: "%" },
+                    { label: "DPI Adequacy", value: iqa.dpi_score, max: 100, suffix: "%" },
+                  ];
+                  return (
+                    <div className="space-y-3">
+                      {metrics.map(m => (
+                        <div key={m.label} className="p-4 rounded-md bg-card border border-border/40">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{m.label}</span>
+                            <span className={cn("text-[11px] font-black tabular-nums",
+                              m.value >= 80 ? "text-emerald-500" : m.value >= 60 ? "text-cyan-500" : m.value >= 40 ? "text-amber-500" : "text-rose-500"
+                            )}>{m.value}{m.suffix}</span>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all",
+                                m.value >= 80 ? "bg-emerald-500" : m.value >= 60 ? "bg-cyan-500" : m.value >= 40 ? "bg-amber-500" : "bg-rose-500"
+                              )}
+                              style={{ width: `${(m.value / m.max) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      {iqa.skew_degrees !== 0 && (
+                        <div className="flex items-center gap-2 text-[9px] text-amber-600 font-bold bg-amber-500/5 rounded-md px-3 py-2 border border-amber-500/20">
+                          <AlertCircle size={11} />
+                          Skew detected: {iqa.skew_degrees > 0 ? "+" : ""}{iqa.skew_degrees}°
+                        </div>
+                      )}
+                      {iqa.warnings.length > 0 && iqa.warnings.map((w, i) => (
+                        <div key={i} className="flex items-center gap-2 text-[9px] text-rose-600 font-bold bg-rose-500/5 rounded-md px-3 py-2 border border-rose-500/20">
+                          <AlertCircle size={11} />
+                          {w}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })() : (
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest text-center italic opacity-30">Select a document to assess quality</p>
+                )}
              </section>
 
              <section>

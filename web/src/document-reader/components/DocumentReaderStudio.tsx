@@ -3,21 +3,21 @@
 import React from "react";
 import { DocumentReaderProvider, useDocumentReader } from "../store/documentReaderContext";
 import { TrainingStage } from "../types";
-import { 
-  Rocket, 
-  Settings, 
-  Search, 
-  Upload, 
-  Scan, 
-  Split, 
-  Beaker, 
-  ClipboardCheck, 
+import {
+  Rocket,
+  Settings,
+  Search,
+  Upload,
+  Scan,
+  Split,
+  Beaker,
+  ClipboardCheck,
   ShieldCheck,
-  Lock, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Layers, 
+  Lock,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Layers,
   FileSearch,
   FileText,
   Server,
@@ -30,6 +30,8 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Download,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +42,8 @@ import { DocumentIntake, InfrastructureRegistry, TrainingReview } from "./Workfl
 import OCRConfiguration from "./ocr/OCRConfiguration";
 import PageSegregation from "./segregation/PageSegregation";
 import DocumentTypeResolution from "./DocumentTypeResolution";
+import { ExportStudio } from "./ExportStudio";
+import { DocumentationPanel } from "./DocumentationPanel";
 
 import { usePipelineStore } from "../store/studioStore";
 
@@ -55,6 +59,7 @@ function StudioContent({
   const { activeStage, setActiveStage, steps, canNavigateTo, setProjectId: setContextProjectId } = useDocumentReader();
   const { trainingDocuments, setProjectId: setStoreProjectId, loadState } = usePipelineStore();
   const [isSidebarCompact, setIsSidebarCompact] = React.useState(true);
+  const [isDocsOpen, setIsDocsOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (projectId) {
@@ -78,6 +83,7 @@ function StudioContent({
       case TrainingStage.OCR_CONFIGURATION: return <OCRConfiguration />;
       case TrainingStage.VALIDATION: return <ValidationStudio />;
       case TrainingStage.TRAINING_REVIEW: return <TrainingReview />;
+      case TrainingStage.EXPORT: return <ExportStudio />;
       case TrainingStage.PUBLISH: return (
         <div className="flex flex-col items-center justify-center text-center space-y-6">
           <div className="w-20 h-20 rounded-[9px] bg-emerald-50/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
@@ -118,6 +124,7 @@ function StudioContent({
       case TrainingStage.VALIDATION: return ClipboardCheck;
       case TrainingStage.TRAINING_REVIEW: return ShieldCheck;
       case TrainingStage.PUBLISH: return Rocket;
+      case TrainingStage.EXPORT: return Download;
       case TrainingStage.INFRASTRUCTURE: return Server;
       default: return Layers;
     }
@@ -183,6 +190,13 @@ function StudioContent({
           <div className="flex items-center gap-3">
              <button className="w-10 h-10 rounded-full border border-border/50 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
                <Search size={18} />
+             </button>
+             <button
+               onClick={() => setIsDocsOpen(true)}
+               className="w-10 h-10 rounded-full bg-card border border-border/50 flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all shadow-sm"
+               title="Platform Documentation"
+             >
+               <BookOpen size={18} />
              </button>
              <button className="w-10 h-10 rounded-full bg-card border border-border/50 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all shadow-sm">
                <Settings size={18} />
@@ -302,13 +316,15 @@ function StudioContent({
         <div className="flex-1 bg-background relative overflow-hidden flex flex-col">
           {/* Subtle Grid Background */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, var(--primary) 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
-          
+
           <div className="flex-1 flex flex-col min-h-0">
             {renderActiveStudio()}
           </div>
 
         </div>
       </main>
+
+      <DocumentationPanel isOpen={isDocsOpen} onClose={() => setIsDocsOpen(false)} />
     </div>
   );
 }

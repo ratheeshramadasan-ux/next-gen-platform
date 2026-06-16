@@ -1,6 +1,85 @@
-import { TrainingDocument, DocumentClass, TrainingPage } from "../types";
+import { TrainingDocument, DocumentClass, TrainingPage, GovernanceSettings, PiiRedactionResult } from "../types";
 import { OCREngine } from "../services/ocrEngine";
 import { locateField, computeDocumentOffset, ExtractionAnchor, ExtractionFieldSpec } from "./fieldExtraction";
+
+// ─── PII Redaction Guard ──────────────────────────────────────────────────────
+
+const BUILTIN_PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "SSN",           pattern: /\b\d{3}-\d{2}-\d{4}\b/ },
+  { name: "Credit Card",   pattern: /\b(?:\d[ -]?){13,16}\b/ },
+  { name: "Email",         pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/ },
+  { name: "Phone (US)",    pattern: /\b(?:\+1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/ },
+  { name: "Passport No.",  pattern: /\b[A-Z]{1,2}\d{6,9}\b/ },
+  { name: "Medical Chart", pattern: /\bMRN\s*:?\s*\d{6,10}\b/i },
+];
+
+function djb2(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function applyHandlingMode(value: string, mode: GovernanceSettings["handlingMode"]): string {
+  switch (mode) {
+    case "redact": return "[REDACTED]";
+    case "hash":   return `[HASH:${djb2(value)}]`;
+    case "mask": {
+      const vis = Math.min(2, Math.floor(value.length * 0.2));
+      return value.slice(0, vis) + "*".repeat(Math.max(0, value.length - vis * 2)) + value.slice(-vis || undefined);
+    }
+  }
+}
+
+/**
+ * Applies PII redaction to a set of field values according to the project's
+ * GovernanceSettings.  Returns redaction audit records for every field that
+ * was modified; unaffected fields are returned unchanged.
+ */
+export function applyPiiRedaction(
+  fields: Array<{ id: string; name: string; value?: string }>,
+  governance: GovernanceSettings | null | undefined,
+): {
+  fields: Array<{ id: string; name: string; value?: string }>;
+  redactions: PiiRedactionResult[];
+} {
+  if (!governance) return { fields, redactions: [] };
+
+  // Build combined pattern list: builtins whose name matches a governance entity + custom patterns
+  const activePatterns: Array<{ name: string; pattern: RegExp }> = [
+    ...BUILTIN_PII_PATTERNS.filter(bp =>
+      governance.piiEntities.some(e => e.toLowerCase().includes(bp.name.toLowerCase()))
+    ),
+    ...(governance.customPatterns || [])
+      .filter(cp => cp.enabled)
+      .map(cp => {
+        try { return { name: cp.name, pattern: new RegExp(cp.pattern, "i") }; }
+        catch { return null; }
+      })
+      .filter((x): x is { name: string; pattern: RegExp } => x !== null),
+  ];
+
+  if (activePatterns.length === 0) return { fields, redactions: [] };
+
+  const redactions: PiiRedactionResult[] = [];
+  const updatedFields = fields.map(f => {
+    if (!f.value) return f;
+    const matched: string[] = activePatterns.filter(p => p.pattern.test(f.value!)).map(p => p.name);
+    if (matched.length === 0) return f;
+
+    const redacted = applyHandlingMode(f.value, governance.handlingMode);
+    redactions.push({
+      field_id: f.id,
+      field_name: f.name,
+      original_value: f.value,
+      redacted_value: redacted,
+      matched_patterns: matched,
+      handling_mode: governance.handlingMode,
+    });
+    return { ...f, value: redacted };
+  });
+
+  return { fields: updatedFields, redactions };
+}
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 

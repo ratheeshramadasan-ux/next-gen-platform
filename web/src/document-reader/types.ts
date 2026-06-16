@@ -9,7 +9,8 @@ export enum TrainingStage {
   EXTRACTION = "extraction",
   VALIDATION = "validation",
   TRAINING_REVIEW = "training_review",
-  PUBLISH = "publish"
+  PUBLISH = "publish",
+  EXPORT = "export"
 }
 
 export type StepStatus = "not_started" | "in_progress" | "completed" | "blocked" | "needs_review";
@@ -826,4 +827,69 @@ export interface GoldenDatasetResult {
   ranAt: string;
   passesGate: boolean;
 }
+// ─── Wave 1: New telemetry + quality types ────────────────────────────────────
+
+export interface IQAReadinessScore {
+  dpi_score: number;
+  blur_score: number;
+  noise_score: number;
+  skew_degrees: number;
+  readiness_index: number;
+  status: "excellent" | "good" | "fair" | "poor";
+  warnings: string[];
+  assessed_at: string;
+}
+
+export interface DocumentFingerprints {
+  layout_hash: string;
+  content_hash: string;
+  visual_hash: string;
+  generated_at: string;
+  page_count: number;
+}
+
+export interface ProcessingPerformanceTelemetry {
+  stage: string;
+  document_id: string;
+  start_time: string;
+  end_time: string | null;
+  duration_ms: number | null;
+  cpu_pct: number | null;
+  memory_mb: number | null;
+  status: "running" | "completed" | "failed";
+  error?: string;
+}
+
+export interface CostTelemetry {
+  provider: string;
+  model: string;
+  stage: string;
+  document_id: string;
+  timestamp: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cached_input_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+}
+
+export interface SampleOptimizationResult {
+  current_accuracy: number;
+  target_accuracy: number;
+  samples_needed: number;
+  current_samples: number;
+  samples_remaining: number;
+  confidence_interval: number;
+  estimated_days_to_target: number | null;
+}
+
+export interface PiiRedactionResult {
+  field_id: string;
+  field_name: string;
+  original_value: string;
+  redacted_value: string;
+  matched_patterns: string[];
+  handling_mode: "redact" | "mask" | "hash";
+}
+
 // Force re-index
