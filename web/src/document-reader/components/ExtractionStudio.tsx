@@ -303,6 +303,15 @@ export function ExtractionStudio() {
 
   const [regexHelpFieldId, setRegexHelpFieldId] = useState<string | null>(null);
 
+  type ExtractionLang = "auto" | "en" | "fr" | "es" | "de";
+  const [extractionLanguage, setExtractionLanguage] = useState<ExtractionLang>(() => {
+    try { return (localStorage.getItem("du.extractionLanguage") as ExtractionLang) || "auto"; } catch { return "auto"; }
+  });
+  const setAndPersistLang = (lang: ExtractionLang) => {
+    setExtractionLanguage(lang);
+    try { localStorage.setItem("du.extractionLanguage", lang); } catch { /* */ }
+  };
+
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     message: string;
@@ -597,6 +606,13 @@ export function ExtractionStudio() {
         const mn = MONTH_TO_NUM[(m3[2]).toUpperCase()] || MONTH_TO_NUM[(m3[3]).toUpperCase()];
         if (mn) tryParse(+m3[1], mn, +m3[4]);
       }
+      if (parsed) return;
+      // Bilingual slash in month token itself: "29 MAY/MAI 1977" or "01 APR/AVR 2036"
+      const m4 = s.match(/^(\d{1,2})\s+([A-ZÀ-Ö]{2,5})\/([A-ZÀ-Ö]{2,5})\s+(\d{4})$/i);
+      if (m4) {
+        const mn = MONTH_TO_NUM[(m4[2]).toUpperCase()] || MONTH_TO_NUM[(m4[3]).toUpperCase()];
+        if (mn) tryParse(+m4[1], mn, +m4[4]);
+      }
     };
     parseAlpha(corrected);
     if (!parsed) parseAlpha(raw);
@@ -634,37 +650,33 @@ export function ExtractionStudio() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   const normalizeBilingualValue = React.useCallback((text: string): string => {
-    if (!text || !text.includes("/")) return text;
+    if (!text) return text;
 
-    const lang = detectDocumentLanguage();
-    // Only normalise when we detected a clear language; "other" → leave as-is
-    if (lang === "other") return text;
+    // Resolve effective language: explicit user setting takes precedence over auto-detection.
+    // Fall back to "en" when detection is ambiguous — English is the convention-first language
+    // in most bilingual passports and IDs (EN/FR, EN/ES, etc.).
+    const detected = detectDocumentLanguage();
+    const lang: string = extractionLanguage !== "auto"
+      ? extractionLanguage
+      : (detected === "other" ? "en" : detected);
 
-    // Replace WORD/WORD patterns where BOTH sides are alphabetic (not date digits)
-    const result = text.replace(/\b([A-ZÀ-ÖØ-Ýa-zà-öø-ý]+)\/([A-ZÀ-ÖØ-Ýa-zà-öø-ý]+)\b/g, (match, part1, part2) => {
+    // ── Slash-separated pairs: "MAY/MAI", "CANADIAN/CANADIENNE" ─────────────
+    const result = text.replace(/\b([A-ZÀ-ÖØ-Ýa-zà-öø-ý]+)\/([A-ZÀ-ÖØ-Ýa-zà-öø-ý]+)\b/g, (_match, part1, part2) => {
       const p1 = part1.toUpperCase();
       const p2 = part2.toUpperCase();
-
-      // ── Month pairs ──────────────────────────────────────────────────────────
       const pair = BILINGUAL_MONTHS[p1] || BILINGUAL_MONTHS[p2];
       if (pair) {
         const keep = pair[lang] ?? pair["en"];
-        // Return in the same case as the original part that matches
         if (p1 === keep) return part1;
         if (p2 === keep) return part2;
         return keep;
       }
-
-      // ── General word pair heuristic ──────────────────────────────────────────
-      // Convention in most bilingual docs: English first, French second.
-      // For English doc → keep part1; for French → keep part2; others → keep longer (more complete).
-      if (lang === "en") return part1;
+      // General word pair: EN=first, FR=second, default keep first (more complete)
       if (lang === "fr") return part2;
-      if (lang === "es" || lang === "de") return part1; // English is typically first even in ES/DE passports
-      return part1.length >= part2.length ? part1 : part2; // keep the more complete form
+      return part1;
     });
 
-    // Handle space-adjacent bilingual month tokens (no slash): "29 MAY MAI 1977" → "29 MAY 1977"
+    // ── Space-adjacent bilingual months: "29 MAY MAI 1977" → "29 MAY 1977" ──
     const MONTH_KEYS = new Set(Object.keys(BILINGUAL_MONTHS));
     const result2 = result.replace(
       /\b([A-ZÀ-ÖØ-Ý]{2,5})\s+([A-ZÀ-ÖØ-Ý]{2,5})\b/g,
@@ -682,7 +694,7 @@ export function ExtractionStudio() {
     );
 
     return result2.replace(/\s+/g, " ").trim();
-  }, [detectDocumentLanguage]);
+  }, [detectDocumentLanguage, extractionLanguage]);
   // ─────────────────────────────────────────────────────────────────────────────
 
   // ─── Extract all field values from the current text layer ────────────────────
@@ -3491,6 +3503,25 @@ export function ExtractionStudio() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-l border-border pl-3">
+
+          {/* Language selector — controls which language is kept from bilingual values */}
+          <div className="flex items-center gap-1 h-9 bg-muted/40 border border-border rounded-xl px-1">
+            {(["auto", "en", "fr", "es", "de"] as const).map(lang => (
+              <button
+                key={lang}
+                onClick={() => { setAndPersistLang(lang); extractAllFieldValues(true); }}
+                title={lang === "auto" ? "Auto-detect document language" : `Extract ${lang.toUpperCase()} text only`}
+                className={cn(
+                  "h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                  extractionLanguage === lang
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                )}
+              >
+                {lang === "auto" ? "Auto" : lang.toUpperCase()}
+              </button>
+            ))}
+          </div>
 
           {/* Extract — reads OCR text layer into all positioned fields */}
           <button
