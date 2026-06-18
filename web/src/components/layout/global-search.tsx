@@ -9,9 +9,7 @@ import { cn } from "@/lib/utils";
 import { IconWrapper } from "@/components/ui/icon-wrapper";
 import { useAppContext } from "@/lib/context";
 import { TenantSelector } from "./tenant-selector";
-import dynamic from "next/dynamic";
-
-const Logo = dynamic(() => import("@/components/ui/logo"), { ssr: false });
+import Logo from "@/components/ui/logo";
 
 export const GlobalSearch = () => {
   const { isSearchOpen, setSearchOpen, searchQuery, setSearchQuery } = useUIStore();

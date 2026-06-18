@@ -51,9 +51,7 @@ import {
   FolderOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import dynamic from "next/dynamic";
-
-const Logo = dynamic(() => import("@/components/ui/logo"), { ssr: false });
+import Logo from "@/components/ui/logo";
 import { IconWrapper } from "@/components/ui/icon-wrapper";
 
 type MenuItem = {
