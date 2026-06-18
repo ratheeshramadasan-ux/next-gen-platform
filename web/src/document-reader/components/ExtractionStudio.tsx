@@ -128,6 +128,7 @@ type CustomReusableModel = {
   id: string;
   name: string;
   documentClasses: string[]; // all class names that should trigger this model
+  isGeneric?: boolean;       // match by anchor similarity rather than exact class name
   createdAt: string;
   categories: StudioCategory[];
   fields: StudioField[];
@@ -151,16 +152,21 @@ function matchCustomModel(documentClass: string, ocrText: string): CustomReusabl
   const models = loadCustomModels();
   const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const docNorm = normalized(documentClass);
-  // Primary: exact class name match
-  const byClass = models.find(m => m.documentClasses.some(c => normalized(c) === docNorm));
+  // Primary: exact class name match (non-generic models only)
+  const byClass = models.find(m => !m.isGeneric && m.documentClasses.some(c => normalized(c) === docNorm));
   if (byClass) return byClass;
-  // Secondary: anchor text fuzzy match — if >60% of a model's anchor values appear in the OCR text
+  // Secondary: anchor text fuzzy match — generic ≥40%, specific ≥60%
   const ocrNorm = normalized(ocrText);
-  return models.find(m => {
-    if (m.anchors.length === 0) return false;
-    const hits = m.anchors.filter(a => ocrNorm.includes(normalized(a.value)));
-    return hits.length / m.anchors.length >= 0.6;
-  }) || null;
+  const scored = models
+    .filter(m => m.anchors.length > 0)
+    .map(m => {
+      const hits = m.anchors.filter(a => ocrNorm.includes(normalized(a.value)));
+      return { m, score: hits.length / m.anchors.length };
+    })
+    .filter(({ m, score }) => score >= (m.isGeneric ? 0.4 : 0.6));
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].m;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -302,6 +308,12 @@ export function ExtractionStudio() {
     message: string;
     onConfirm: () => void;
     onCancel?: () => void;
+  } | null>(null);
+
+  const [extractAfterOCR, setExtractAfterOCR] = useState(false);
+  const [saveModelDialog, setSaveModelDialog] = useState<{
+    name: string;
+    isGeneric: boolean;
   } | null>(null);
 
   const [categories, setCategories] = useState<StudioCategory[]>([]);
@@ -539,6 +551,30 @@ export function ExtractionStudio() {
     if (!raw) return "";
     if (field.type !== "date" || !field.dateFormat) return raw;
 
+    // OCR error correction: fix common character confusions in date strings
+    const ALL_MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC",
+                        "JANV","FEVR","MARS","AVR","MAI","JUIN","JUIL","AOUT","SEPT","DEC"];
+    const correctMonthToken = (tok: string): string => {
+      const up = tok.toUpperCase().replace(/À/g,"A").replace(/Ô/g,"O").replace(/É/g,"E").replace(/Û/g,"U");
+      if (ALL_MONTHS.includes(up)) return up;
+      // Allow up to 2 character substitutions (handles OCR noise like kpr→APR)
+      const best = ALL_MONTHS.find(m => {
+        if (Math.abs(m.length - up.length) > 1) return false;
+        let diffs = Math.abs(m.length - up.length);
+        for (let i = 0; i < Math.min(m.length, up.length); i++) { if (m[i] !== up[i]) diffs++; }
+        return diffs <= 2;
+      });
+      return best || tok;
+    };
+    // Fix "T1" → "01" (zero/letter O confusion with leading digit)
+    const corrected = raw
+      .replace(/\bT(\d)\b/g, "0$1")
+      .replace(/\bO(\d)\b/gi, "0$1")
+      // Correct garbled month tokens
+      .replace(/\b([A-ZÀ-ÖØ-Ýa-zà-öø-ý]{2,5})\b/g, (tok) => correctMonthToken(tok))
+      // Expand 3-digit truncated years in range 190x–209x
+      .replace(/\b(\d{3})\b/g, (m) => { const n = parseInt(m); return (n >= 190 && n <= 210) ? m + "0" : m; });
+
     let day = 0, month = 0, year = 0;
     let parsed = false;
 
@@ -546,27 +582,32 @@ export function ExtractionStudio() {
       if (d > 0 && d <= 31 && m > 0 && m <= 12 && y > 0) { day = d; month = m; year = y; parsed = true; }
     };
 
-    // "29 MAY 1977" or "MAY 29 1977"
-    const alphaMonth = raw.match(/^(\d{1,2})\s+([A-ZÀ-Ö]{2,5})\s+(\d{4})$/i);
-    if (alphaMonth) {
-      const mn = MONTH_TO_NUM[(alphaMonth[2]).toUpperCase()];
-      if (mn) tryParse(+alphaMonth[1], mn, +alphaMonth[3]);
-    }
-    if (!parsed) {
-      const alphaMonthRev = raw.match(/^([A-ZÀ-Ö]{2,5})\s+(\d{1,2})\s+(\d{4})$/i);
-      if (alphaMonthRev) {
-        const mn = MONTH_TO_NUM[(alphaMonthRev[1]).toUpperCase()];
-        if (mn) tryParse(+alphaMonthRev[2], mn, +alphaMonthRev[3]);
+    // "29 MAY 1977" or "MAY 29 1977" — try corrected first, raw as fallback
+    const parseAlpha = (s: string) => {
+      if (parsed) return;
+      const m1 = s.match(/^(\d{1,2})\s+([A-ZÀ-Ö]{2,5})\s+(\d{4})$/i);
+      if (m1) { const mn = MONTH_TO_NUM[(m1[2]).toUpperCase()]; if (mn) tryParse(+m1[1], mn, +m1[3]); }
+      if (parsed) return;
+      const m2 = s.match(/^([A-ZÀ-Ö]{2,5})\s+(\d{1,2})\s+(\d{4})$/i);
+      if (m2) { const mn = MONTH_TO_NUM[(m2[1]).toUpperCase()]; if (mn) tryParse(+m2[2], mn, +m2[3]); }
+      if (parsed) return;
+      // Adjacent bilingual months: "29 MAY MAI 1977" or "29 MAI MAY 1977"
+      const m3 = s.match(/^(\d{1,2})\s+([A-ZÀ-Ö]{2,5})\s+([A-ZÀ-Ö]{2,5})\s+(\d{4})$/i);
+      if (m3) {
+        const mn = MONTH_TO_NUM[(m3[2]).toUpperCase()] || MONTH_TO_NUM[(m3[3]).toUpperCase()];
+        if (mn) tryParse(+m3[1], mn, +m3[4]);
       }
-    }
+    };
+    parseAlpha(corrected);
+    if (!parsed) parseAlpha(raw);
     // "29/05/1977", "29-05-1977", "29.05.1977"
     if (!parsed) {
-      const sep = raw.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+      const sep = (corrected || raw).match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
       if (sep) tryParse(+sep[1], +sep[2], +sep[3]);
     }
     // "1977/05/29", "1977-05-29"
     if (!parsed) {
-      const iso = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      const iso = (corrected || raw).match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
       if (iso) tryParse(+iso[3], +iso[2], +iso[1]);
     }
     // "05/29/1977" (US format) — try if day > 12 to detect
@@ -623,7 +664,24 @@ export function ExtractionStudio() {
       return part1.length >= part2.length ? part1 : part2; // keep the more complete form
     });
 
-    return result.replace(/\s+/g, " ").trim();
+    // Handle space-adjacent bilingual month tokens (no slash): "29 MAY MAI 1977" → "29 MAY 1977"
+    const MONTH_KEYS = new Set(Object.keys(BILINGUAL_MONTHS));
+    const result2 = result.replace(
+      /\b([A-ZÀ-ÖØ-Ý]{2,5})\s+([A-ZÀ-ÖØ-Ý]{2,5})\b/g,
+      (_m, t1: string, t2: string) => {
+        const u1 = t1.toUpperCase();
+        const u2 = t2.toUpperCase();
+        if (!MONTH_KEYS.has(u1) && !MONTH_KEYS.has(u2)) return _m;
+        const pair = BILINGUAL_MONTHS[u1] || BILINGUAL_MONTHS[u2];
+        if (!pair) return _m;
+        const keep = pair[lang] ?? pair["en"];
+        if (u1 === keep) return t1;
+        if (u2 === keep) return t2;
+        return keep;
+      }
+    );
+
+    return result2.replace(/\s+/g, " ").trim();
   }, [detectDocumentLanguage]);
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -663,7 +721,10 @@ export function ExtractionStudio() {
 
       if (!rawText) return field;
 
-      const value = normalizeBilingualValue(rawText);
+      const normalised = normalizeBilingualValue(rawText);
+      const value = field.type === "date" && field.dateFormat
+        ? formatFieldValue({ ...field, value: normalised })
+        : normalised;
       const confidence = words.length > 0
         ? words.reduce((s, w) => {
             const c = w.confidence ?? 0;
@@ -679,23 +740,31 @@ export function ExtractionStudio() {
     toast.success(updated > 0
       ? `Extracted values for ${updated} field${updated !== 1 ? "s" : ""}.`
       : "All positioned fields already have values. Use Re-fetch OCR to re-read.");
-  }, [activePage, normalizeBilingualValue, anchors]);
+  }, [activePage, normalizeBilingualValue, formatFieldValue, anchors]);
 
   // ─── Re-fetch OCR then extract ────────────────────────────────────────────────
+  // Uses a flag + useEffect so extraction runs against the freshly-updated
+  // activePage.textLayer from the store, avoiding the stale-closure problem.
   const handleRefetchOCR = React.useCallback(async () => {
     setIsRefetchingOCR(true);
     try {
       await executeOCR();
-      // Small tick to allow store state to propagate before extracting
-      await new Promise<void>(r => setTimeout(r, 300));
-      extractAllFieldValues(true);
-      toast.success("OCR complete. All field values updated.");
+      setExtractAfterOCR(true);
+      toast.success("OCR complete. Extracting field values…");
     } catch {
       toast.error("OCR failed — check the OCR Configuration stage.");
-    } finally {
       setIsRefetchingOCR(false);
     }
-  }, [executeOCR, extractAllFieldValues]);
+  }, [executeOCR]);
+
+  // Runs after the store has propagated new OCR data into activePage
+  useEffect(() => {
+    if (!extractAfterOCR || !activePage?.textLayer) return;
+    setExtractAfterOCR(false);
+    extractAllFieldValues(true);
+    setIsRefetchingOCR(false);
+    toast.success("Field values updated from fresh OCR.");
+  }, [extractAfterOCR, activePage?.textLayer]);
   // ─────────────────────────────────────────────────────────────────────────────
 
   const normalizeWordBox = (word: OCRWord): OCRWord => {
@@ -1132,20 +1201,24 @@ export function ExtractionStudio() {
   };
 
   // ─── Save current design as a reusable custom model ─────────────────────────
-  const saveAsCustomModel = React.useCallback(() => {
+  const openSaveModelDialog = React.useCallback(() => {
     if (fields.length === 0) {
       toast.warning("Define at least one field before saving as a model.");
       return;
     }
     const docClass = activeDocument?.classification?.className || activeDocument?.name || "Unknown";
-    const modelName = `${docClass} Model`;
+    setSaveModelDialog({ name: `${docClass} Model`, isGeneric: false });
+  }, [fields, activeDocument]);
+
+  const doSaveModel = React.useCallback((modelName: string, isGeneric: boolean) => {
+    const docClass = activeDocument?.classification?.className || activeDocument?.name || "Unknown";
     const existing = loadCustomModels();
-    // Update if a model for this class already exists; otherwise create new
-    const idx = existing.findIndex(m => m.documentClasses.some(c => c.toLowerCase() === docClass.toLowerCase()));
+    const idx = existing.findIndex(m => m.name === modelName || m.documentClasses.some(c => c.toLowerCase() === docClass.toLowerCase()));
     const model: CustomReusableModel = {
       id: idx >= 0 ? existing[idx].id : `custom_${Date.now()}`,
       name: modelName,
-      documentClasses: [docClass],
+      documentClasses: isGeneric ? [] : [docClass],
+      isGeneric,
       createdAt: new Date().toISOString(),
       categories,
       fields,
@@ -1155,32 +1228,34 @@ export function ExtractionStudio() {
     if (idx >= 0) existing[idx] = model; else existing.push(model);
     saveCustomModels(existing);
 
-    // Register a matching document class (if one doesn't already exist) so that
-    // future uploads of similar documents are classified as this type — rather
-    // than left Unclassified or routed to a generic prebuilt model — using the
-    // saved model's anchor labels and field names as keywords/anchor phrases.
-    const existingClass = documentClasses.find(c => c.name.toLowerCase() === docClass.toLowerCase());
-    if (!existingClass) {
-      const anchorPhrases = Array.from(new Set(anchors.map(a => a.value.trim()).filter(Boolean)));
-      const fieldNames = fields.map(f => f.name).filter(Boolean);
-      const keywords = Array.from(new Set([docClass, ...fieldNames]));
-      addClass({
-        classId: `class_${Date.now()}`,
-        name: docClass,
-        description: `Auto-created from "${modelName}" saved in the AI Document Designer.`,
-        sampleCount: 1,
-        minConfidence: 0.5,
-        requiredFields: fieldNames,
-        optionalFields: [],
-        keywords,
-        anchorPhrases,
-        layoutPatterns: [],
-        isActive: true,
-        color: "#6366f1"
-      });
+    if (!isGeneric) {
+      const existingClass = documentClasses.find(c => c.name.toLowerCase() === docClass.toLowerCase());
+      if (!existingClass) {
+        const anchorPhrases = Array.from(new Set(anchors.map(a => a.value.trim()).filter(Boolean)));
+        const fieldNames = fields.map(f => f.name).filter(Boolean);
+        addClass({
+          classId: `class_${Date.now()}`,
+          name: docClass,
+          description: `Auto-created from "${modelName}" saved in the AI Document Designer.`,
+          sampleCount: 1,
+          minConfidence: 0.5,
+          requiredFields: fieldNames,
+          optionalFields: [],
+          keywords: Array.from(new Set([docClass, ...fieldNames])),
+          anchorPhrases,
+          layoutPatterns: [],
+          isActive: true,
+          color: "#6366f1"
+        });
+      }
     }
 
-    toast.success(`"${modelName}" saved as reusable model. It will auto-apply to all ${docClass} documents.`);
+    setSaveModelDialog(null);
+    toast.success(
+      isGeneric
+        ? `"${modelName}" saved as a generic model — will apply to any document with similar structure.`
+        : `"${modelName}" saved. Auto-applies to all "${docClass}" documents.`
+    );
   }, [fields, anchors, links, categories, activeDocument, documentClasses, addClass]);
 
   // ─── Apply a custom model to the current document ────────────────────────────
@@ -2540,7 +2615,15 @@ export function ExtractionStudio() {
   };
 
   const updateFieldConfig = (id: string, updates: Partial<StudioField>) => {
-    setFields(prev => prev.map(field => field.id === id ? { ...field, ...updates } : field));
+    setFields(prev => prev.map(field => {
+      if (field.id !== id) return field;
+      const merged = { ...field, ...updates };
+      // Re-format stored value when dateFormat changes on a date field that already has a value
+      if (updates.dateFormat && merged.type === "date" && merged.value) {
+        merged.value = formatFieldValue(merged);
+      }
+      return merged;
+    }));
   };
 
   const moveFieldToCategory = (fieldId: string, categoryId: string | null) => {
@@ -3477,7 +3560,7 @@ export function ExtractionStudio() {
 
           {/* Save Model */}
           <button
-             onClick={saveAsCustomModel}
+             onClick={openSaveModelDialog}
              className="h-9 px-3 rounded-xl bg-card border border-violet-200 text-[9px] font-black uppercase tracking-widest hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 transition-all flex items-center gap-2 group shadow-sm text-foreground whitespace-nowrap"
              title="Save current field layout as a reusable model that auto-applies to matching documents"
           >
@@ -4466,6 +4549,72 @@ export function ExtractionStudio() {
         );
       })()}
       {/* CUSTOM THEME-BASED MODAL PROMPT */}
+      {/* Save Model Dialog */}
+      {saveModelDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-background border border-border rounded-xl shadow-2xl w-[480px] p-6 flex flex-col gap-5">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-tight text-foreground">Save Extraction Model</h3>
+              <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-widest">Name this model and choose how it matches future documents.</p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Model Name</label>
+              <input
+                type="text"
+                value={saveModelDialog.name}
+                onChange={e => setSaveModelDialog(d => d ? { ...d, name: e.target.value } : d)}
+                className="h-9 px-3 rounded-lg border border-border bg-muted/30 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Match Strategy</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setSaveModelDialog(d => d ? { ...d, isGeneric: false } : d)}
+                  className={cn(
+                    "flex flex-col gap-1 p-3 rounded-lg border text-left transition-all",
+                    !saveModelDialog.isGeneric
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/30"
+                  )}
+                >
+                  <span className="text-[10px] font-black uppercase tracking-widest">Specific</span>
+                  <span className="text-[9px] font-medium leading-snug">Matches this exact document class by name</span>
+                </button>
+                <button
+                  onClick={() => setSaveModelDialog(d => d ? { ...d, isGeneric: true } : d)}
+                  className={cn(
+                    "flex flex-col gap-1 p-3 rounded-lg border text-left transition-all",
+                    saveModelDialog.isGeneric
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/30"
+                  )}
+                >
+                  <span className="text-[10px] font-black uppercase tracking-widest">Generic</span>
+                  <span className="text-[9px] font-medium leading-snug">Applies to any document with similar structure / anchors</span>
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => setSaveModelDialog(null)}
+                className="h-9 px-4 rounded-lg border border-border text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-muted transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => doSaveModel(saveModelDialog.name.trim() || "Untitled Model", saveModelDialog.isGeneric)}
+                disabled={!saveModelDialog.name.trim()}
+                className="h-9 px-5 rounded-lg bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all disabled:opacity-40"
+              >
+                Save Model
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {customPrompt && (
         <CustomPromptDialog
           title={customPrompt.title}
