@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { enforceResourceQuota } from "./quotaActions";
 import { randomUUID } from "crypto";
-import { ResourceType } from "@prisma/client";
+import { ResourceType } from "@/generated/prisma-client";
 import { syncToLocalFileSystem } from "@/lib/studio/sync";
 import fs from "fs";
 import path from "path";

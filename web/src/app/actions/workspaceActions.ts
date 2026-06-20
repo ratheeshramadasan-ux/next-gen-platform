@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { ResourceType } from "@prisma/client";
+import { ResourceType } from "@/generated/prisma-client";
 
 /**
  * Fetches all workspaces for a given tenant.

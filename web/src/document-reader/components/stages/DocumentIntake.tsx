@@ -43,6 +43,7 @@ import {
   IngestionBatch 
 } from "../../types";
 import { cn } from "@/lib/utils";
+import { useAppContext } from "@/lib/context";
 import { AnimatePresence, motion } from "framer-motion";
 // OCR and PageSegregation stages have been modularized to ./ocr/ and ./segregation/
 
@@ -76,7 +77,8 @@ const SOURCE_ICONS: Record<string, any> = {
 
 export function DocumentIntake() {
   const { updateStepStatus, setActiveStage } = useDocumentReader();
-  const { 
+  const { currentUser } = useAppContext();
+  const {
     trainingDocuments,
     activeDocument,
     setActiveDocument, 
@@ -212,7 +214,9 @@ export function DocumentIntake() {
             blurScore: (Math.random() * 0.2).toFixed(2),
             isVirusSafe: true,
             ingestionSource: selectedSourceId || "MANUAL_UPLOAD",
-            ingestionTime: new Date().toISOString()
+            ingestionTime: new Date().toISOString(),
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: currentUser.name
           }
         };
         newDocs.push(enrichedDoc as TrainingDocument);
@@ -468,6 +472,7 @@ export function DocumentIntake() {
                         <tr className="bg-background/50 border-b border-border/30">
                            <th className="px-8 py-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-50">Document Name</th>
                            <th className="px-8 py-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-50">Origin</th>
+                           <th className="px-8 py-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-50">Uploaded</th>
                            <th className="px-8 py-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-50">Quality</th>
                            <th className="px-8 py-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-50">Status</th>
                            <th className="px-8 py-5 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-50">Actions</th>
@@ -476,7 +481,7 @@ export function DocumentIntake() {
                      <tbody className="divide-y divide-border/20">
                         {trainingDocuments.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-8 py-24 text-center">
+                            <td colSpan={6} className="px-8 py-24 text-center">
                                <div className="flex flex-col items-center gap-4 opacity-40">
                                   <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                                      <FileText size={24} />
@@ -504,6 +509,16 @@ export function DocumentIntake() {
                                </td>
                                <td className="px-8 py-4">
                                   <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{doc.metadata?.ingestionSource === "MANUAL_UPLOAD" ? "Direct Upload" : "API Stream"}</span>
+                               </td>
+                               <td className="px-8 py-4">
+                                  <div className="flex flex-col leading-tight">
+                                     <span className="text-[10px] font-black text-foreground">
+                                        {doc.metadata?.uploadedAt ? new Date(doc.metadata.uploadedAt).toLocaleString() : "—"}
+                                     </span>
+                                     <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest mt-0.5">
+                                        {doc.metadata?.uploadedBy || "—"}
+                                     </span>
+                                  </div>
                                </td>
                                <td className="px-8 py-4">
                                   <div className="flex items-center gap-3">

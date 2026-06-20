@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@prisma/client", "prisma"],
+  serverExternalPackages: ["@prisma/client", "prisma", "@prisma/adapter-pg", "pg"],
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -10,7 +10,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '100mb',
     },
-  }
+  },
+  webpack: (config) => {
+    // Enable async WASM support so webpack doesn't transform WASM binaries
+    // for any residual Prisma WASM imports that might still be encountered.
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
+    return config;
+  },
 };
 
 export default nextConfig;

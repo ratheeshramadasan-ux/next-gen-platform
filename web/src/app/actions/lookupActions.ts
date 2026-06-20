@@ -65,9 +65,7 @@ export async function getPlatformLookups(activeOnly: boolean = true) {
     // Engagement Tier
     console.log("[DEBUG] Fetching EngagementTier...");
     try {
-      const etData = await prisma.lookupEngagementTier.findMany({ 
-        where: { isActive: activeOnly ? true : undefined }
-      });
+      const etData = await prisma.lookupEngagementTier.findMany({ where });
       lookups.engagementTiers = etData.map((t: any) => ({
         id: t.id, label: t.label, category: t.category, description: t.description, isActive: t.isActive
       }));

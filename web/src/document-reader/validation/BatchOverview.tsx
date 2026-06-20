@@ -3,7 +3,7 @@
 import React from "react";
 import {
   ChevronDown, ChevronUp, UploadCloud, Package, CheckCircle2, Clock, FolderTree, Loader2,
-  ScanSearch, Tags, Trash2, ShieldOff, ShieldCheck, AlertTriangle, Sparkles,
+  ScanSearch, Tags, Trash2, ShieldOff, AlertTriangle, Sparkles,
   TrendingUp, TrendingDown, Target,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -251,7 +251,7 @@ export function BatchOverview({
                 <span className="truncate">Status</span>
                 <span className="truncate">Confidence</span>
                 <span className="truncate">Uploaded</span>
-                <span className="truncate">Training</span>
+                <span className="truncate">Train</span>
                 <span className="truncate text-right">Actions</span>
               </div>
 
@@ -427,26 +427,20 @@ export function BatchOverview({
 
                         <div className="flex flex-col leading-tight min-w-0">
                           <span className="text-[10px] font-black text-foreground truncate">
-                            {uploadedAt ? new Date(uploadedAt).toLocaleDateString() : "—"}
+                            {uploadedAt ? new Date(uploadedAt).toLocaleString() : "—"}
                           </span>
                           <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-tight truncate">
                             {uploadedBy || "—"}
                           </span>
                         </div>
 
-                        <button
-                          onClick={() => handleToggleTrainingInclusion(doc, group)}
-                          className={cn(
-                            "flex items-center gap-1 text-[9px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 border transition-colors w-fit",
-                            excluded
-                              ? "border-border/60 text-muted-foreground hover:border-rose-500/40 hover:text-rose-500"
-                              : "border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10"
-                          )}
+                        <input
+                          type="checkbox"
+                          checked={!excluded}
+                          onChange={() => handleToggleTrainingInclusion(doc, group)}
+                          className="h-3.5 w-3.5 rounded border-border/60 text-emerald-500 focus:ring-1 focus:ring-emerald-500/40 cursor-pointer"
                           title={excluded ? "Training disabled — click to enable and see the confidence impact" : "Training enabled — click to disable and see the confidence impact"}
-                        >
-                          {excluded ? <ShieldOff size={9} /> : <ShieldCheck size={9} />}
-                          {excluded ? "Disabled" : "Enabled"}
-                        </button>
+                        />
 
                         <div className="flex items-center justify-end gap-1">
                           <button

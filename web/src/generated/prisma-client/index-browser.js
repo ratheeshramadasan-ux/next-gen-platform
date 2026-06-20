@@ -153,6 +153,8 @@ exports.Prisma.CustomerScalarFieldEnum = {
   displayName: 'displayName',
   currency: 'currency',
   timezone: 'timezone',
+  language: 'language',
+  supportEmail: 'supportEmail',
   authType: 'authType',
   allowedDomains: 'allowedDomains',
   mfaEnforced: 'mfaEnforced',
@@ -1084,16 +1086,64 @@ exports.Prisma.DeploymentScalarFieldEnum = {
 exports.Prisma.ApplicationScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
+  customerId: 'customerId',
   name: 'name',
+  appCode: 'appCode',
   category: 'category',
+  applicationType: 'applicationType',
+  businessOwner: 'businessOwner',
+  technicalOwner: 'technicalOwner',
   owner: 'owner',
   criticality: 'criticality',
+  description: 'description',
+  status: 'status',
+  timezone: 'timezone',
+  is24x7: 'is24x7',
   isActive: 'isActive',
   sourceApplicationId: 'sourceApplicationId',
   isLinked: 'isLinked',
   resourceId: 'resourceId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AppOperatingHoursScalarFieldEnum = {
+  id: 'id',
+  applicationId: 'applicationId',
+  dayOfWeek: 'dayOfWeek',
+  isClosed: 'isClosed',
+  startTime: 'startTime',
+  endTime: 'endTime',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AppBlackoutPeriodScalarFieldEnum = {
+  id: 'id',
+  applicationId: 'applicationId',
+  name: 'name',
+  startDate: 'startDate',
+  endDate: 'endDate',
+  isRecurring: 'isRecurring',
+  recurrenceRule: 'recurrenceRule',
+  botPolicy: 'botPolicy',
+  description: 'description',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AppFreezeWindowScalarFieldEnum = {
+  id: 'id',
+  applicationId: 'applicationId',
+  reason: 'reason',
+  startAt: 'startAt',
+  endAt: 'endAt',
+  isActive: 'isActive',
+  impact: 'impact',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  resolvedAt: 'resolvedAt',
+  resolvedBy: 'resolvedBy'
 };
 
 exports.Prisma.ApplicationVersionScalarFieldEnum = {
@@ -1599,6 +1649,276 @@ exports.Prisma.ExtractionTableScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.FlowDefinitionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  workspaceId: 'workspaceId',
+  name: 'name',
+  description: 'description',
+  category: 'category',
+  tags: 'tags',
+  status: 'status',
+  dataResidency: 'dataResidency',
+  dataClassification: 'dataClassification',
+  isGovernanceLocked: 'isGovernanceLocked',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FlowVersionScalarFieldEnum = {
+  id: 'id',
+  flowDefinitionId: 'flowDefinitionId',
+  version: 'version',
+  nodesJson: 'nodesJson',
+  edgesJson: 'edgesJson',
+  validationStatus: 'validationStatus',
+  validationReport: 'validationReport',
+  publishedAt: 'publishedAt',
+  publishedBy: 'publishedBy',
+  changeDescription: 'changeDescription',
+  isActive: 'isActive',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowNodeSchemaScalarFieldEnum = {
+  id: 'id',
+  flowVersionId: 'flowVersionId',
+  nodeId: 'nodeId',
+  nodeType: 'nodeType',
+  schemaJson: 'schemaJson',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowInstanceScalarFieldEnum = {
+  id: 'id',
+  flowDefinitionId: 'flowDefinitionId',
+  flowVersionId: 'flowVersionId',
+  tenantId: 'tenantId',
+  workspaceId: 'workspaceId',
+  correlationId: 'correlationId',
+  traceId: 'traceId',
+  status: 'status',
+  priority: 'priority',
+  inputPayload: 'inputPayload',
+  outputPayload: 'outputPayload',
+  maskedPayload: 'maskedPayload',
+  dataClassification: 'dataClassification',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FlowNodeExecutionScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  nodeType: 'nodeType',
+  nodeName: 'nodeName',
+  status: 'status',
+  attempt: 'attempt',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  durationMs: 'durationMs',
+  inputSnapshot: 'inputSnapshot',
+  outputSnapshot: 'outputSnapshot',
+  errorCode: 'errorCode',
+  errorMessage: 'errorMessage',
+  retryCount: 'retryCount',
+  traceId: 'traceId',
+  spanId: 'spanId',
+  auditHash: 'auditHash',
+  previousEventHash: 'previousEventHash'
+};
+
+exports.Prisma.FlowContextSnapshotScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  snapshotType: 'snapshotType',
+  contextJson: 'contextJson',
+  maskedJson: 'maskedJson',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowCheckpointScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  checkpointName: 'checkpointName',
+  stateJson: 'stateJson',
+  nodePosition: 'nodePosition',
+  compensationJson: 'compensationJson',
+  timerJson: 'timerJson',
+  correlationJson: 'correlationJson',
+  resumeAttempts: 'resumeAttempts',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowWaitingInstanceScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  correlationKey: 'correlationKey',
+  correlationValue: 'correlationValue',
+  eventName: 'eventName',
+  status: 'status',
+  waitingSince: 'waitingSince',
+  expiresAt: 'expiresAt',
+  resumedAt: 'resumedAt',
+  resumedBy: 'resumedBy'
+};
+
+exports.Prisma.FlowEventCorrelationScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  eventName: 'eventName',
+  correlationKey: 'correlationKey',
+  correlationValue: 'correlationValue',
+  eventPayload: 'eventPayload',
+  status: 'status',
+  processedAt: 'processedAt',
+  receivedAt: 'receivedAt'
+};
+
+exports.Prisma.FlowTimerScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  timerType: 'timerType',
+  fireAt: 'fireAt',
+  status: 'status',
+  firedAt: 'firedAt',
+  cancelledAt: 'cancelledAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowHumanTaskScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  taskType: 'taskType',
+  assignedTo: 'assignedTo',
+  assignedRole: 'assignedRole',
+  formId: 'formId',
+  status: 'status',
+  action: 'action',
+  actionBy: 'actionBy',
+  actionAt: 'actionAt',
+  actionReason: 'actionReason',
+  signature: 'signature',
+  dueAt: 'dueAt',
+  escalatedAt: 'escalatedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowApprovalScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  level: 'level',
+  levelName: 'levelName',
+  approverPool: 'approverPool',
+  requiredApprovals: 'requiredApprovals',
+  receivedApprovals: 'receivedApprovals',
+  status: 'status',
+  decisions: 'decisions',
+  completedAt: 'completedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowCompensationStackScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  nodeName: 'nodeName',
+  compensationAction: 'compensationAction',
+  compensationParams: 'compensationParams',
+  executionOrder: 'executionOrder',
+  status: 'status',
+  executedAt: 'executedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowIdempotencyKeyScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  idempotencyKey: 'idempotencyKey',
+  resultRef: 'resultRef',
+  expiresAt: 'expiresAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowAuditLogScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  eventType: 'eventType',
+  actorId: 'actorId',
+  actorRole: 'actorRole',
+  description: 'description',
+  maskedPayload: 'maskedPayload',
+  auditHash: 'auditHash',
+  previousHash: 'previousHash',
+  dataClassification: 'dataClassification',
+  legalHold: 'legalHold',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowTelemetrySpanScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  traceId: 'traceId',
+  spanId: 'spanId',
+  parentSpanId: 'parentSpanId',
+  nodeId: 'nodeId',
+  nodeType: 'nodeType',
+  operationName: 'operationName',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt',
+  durationMs: 'durationMs',
+  status: 'status',
+  inputSizeBytes: 'inputSizeBytes',
+  outputSizeBytes: 'outputSizeBytes',
+  retryCount: 'retryCount',
+  errorCode: 'errorCode',
+  costUnits: 'costUnits',
+  tokenUsage: 'tokenUsage',
+  serviceLatencyMs: 'serviceLatencyMs',
+  queueLatencyMs: 'queueLatencyMs',
+  tags: 'tags'
+};
+
+exports.Prisma.FlowMilestoneScalarFieldEnum = {
+  id: 'id',
+  instanceId: 'instanceId',
+  nodeId: 'nodeId',
+  milestoneName: 'milestoneName',
+  progress: 'progress',
+  reachedAt: 'reachedAt',
+  elapsedMs: 'elapsedMs',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.FlowCalendarDefinitionScalarFieldEnum = {
+  id: 'id',
+  flowDefinitionId: 'flowDefinitionId',
+  tenantId: 'tenantId',
+  name: 'name',
+  timezone: 'timezone',
+  workingHoursJson: 'workingHoursJson',
+  holidaysJson: 'holidaysJson',
+  exceptionsJson: 'exceptionsJson',
+  isGlobal: 'isGlobal',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1820,6 +2140,9 @@ exports.Prisma.ModelName = {
   OrganizationSettings: 'OrganizationSettings',
   Deployment: 'Deployment',
   Application: 'Application',
+  AppOperatingHours: 'AppOperatingHours',
+  AppBlackoutPeriod: 'AppBlackoutPeriod',
+  AppFreezeWindow: 'AppFreezeWindow',
   ApplicationVersion: 'ApplicationVersion',
   ApplicationEnvironment: 'ApplicationEnvironment',
   ApplicationConfig: 'ApplicationConfig',
@@ -1863,7 +2186,25 @@ exports.Prisma.ModelName = {
   ExtractionField: 'ExtractionField',
   ExtractionAnchor: 'ExtractionAnchor',
   ExtractionRepeatRegion: 'ExtractionRepeatRegion',
-  ExtractionTable: 'ExtractionTable'
+  ExtractionTable: 'ExtractionTable',
+  FlowDefinition: 'FlowDefinition',
+  FlowVersion: 'FlowVersion',
+  FlowNodeSchema: 'FlowNodeSchema',
+  FlowInstance: 'FlowInstance',
+  FlowNodeExecution: 'FlowNodeExecution',
+  FlowContextSnapshot: 'FlowContextSnapshot',
+  FlowCheckpoint: 'FlowCheckpoint',
+  FlowWaitingInstance: 'FlowWaitingInstance',
+  FlowEventCorrelation: 'FlowEventCorrelation',
+  FlowTimer: 'FlowTimer',
+  FlowHumanTask: 'FlowHumanTask',
+  FlowApproval: 'FlowApproval',
+  FlowCompensationStack: 'FlowCompensationStack',
+  FlowIdempotencyKey: 'FlowIdempotencyKey',
+  FlowAuditLog: 'FlowAuditLog',
+  FlowTelemetrySpan: 'FlowTelemetrySpan',
+  FlowMilestone: 'FlowMilestone',
+  FlowCalendarDefinition: 'FlowCalendarDefinition'
 };
 
 /**

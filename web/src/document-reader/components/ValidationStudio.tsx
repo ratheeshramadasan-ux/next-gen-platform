@@ -24,8 +24,7 @@ import { BatchOverview } from "../validation/BatchOverview";
 import { appendTrainingLedgerEntry } from "../validation/ledger";
 import { DocumentNormalizer } from "../services/documentNormalizer";
 import { runOcrOnDocument, classifyDocumentFromOcr, buildExtractionDesignFromOcr, AutoPipelineStage } from "../validation/autoPipeline";
-
-const CURRENT_USER = "Sarah Jenkins";
+import { useAppContext } from "@/lib/context";
 
 const QUEUE_ORDER: ValidationQueueType[] = ["manual_escalation", "highest_learning_value", "confidence_review", "straight_through"];
 
@@ -47,6 +46,7 @@ type WorkspaceTab = "queue" | "validation";
 
 export function ValidationStudio() {
   const { updateStepStatus, setActiveStage, projectId } = useDocumentReader();
+  const { currentUser } = useAppContext();
   const {
     trainingDocuments, documentClasses, activeDocument, activePage,
     setActiveDocument, setActivePage, updateTrainingDocument, setTrainingDocuments, addIngestionBatch,
@@ -430,7 +430,7 @@ export function ValidationStudio() {
               ingestionTime: new Date().toISOString(),
               sourceFileName: normalized.name,
               uploadedAt: new Date().toISOString(),
-              uploadedBy: CURRENT_USER,
+              uploadedBy: currentUser.name,
             },
           });
         } catch (error) {
@@ -460,7 +460,7 @@ export function ValidationStudio() {
     } finally {
       setIsUploading(false);
     }
-  }, [trainingDocuments, setTrainingDocuments, setActiveDocument, setActivePage, addIngestionBatch, runAutoPipeline]);
+  }, [trainingDocuments, setTrainingDocuments, setActiveDocument, setActivePage, addIngestionBatch, runAutoPipeline, currentUser.name]);
 
   const handleMarkProcessed = React.useCallback(() => {
     if (!activeDocument) return;
@@ -469,7 +469,7 @@ export function ValidationStudio() {
         ...activeDocument.metadata,
         reviewCompleted: true,
         reviewedAt: new Date().toISOString(),
-        reviewedBy: CURRENT_USER,
+        reviewedBy: currentUser.name,
       },
     });
     toast.success(`"${activeDocument.name}" marked as processed.`);

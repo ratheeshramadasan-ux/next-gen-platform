@@ -13,7 +13,7 @@ import {
   RiskSeverity,
   ComplianceStatus,
   OnboardingStatus
-} from "@prisma/client";
+} from "@/generated/prisma-client";
 
 /**
  * Retrieves all discovery assessments for a customer/tenant.

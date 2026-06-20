@@ -5,6 +5,14 @@ generator client {
   output          = "../src/generated/prisma-client"
 }
 
+// Second generator writes to the default node_modules/.prisma/client location,
+// keeping @prisma/client (already in serverExternalPackages) in sync with the
+// current schema so webpack never bundles the Prisma WASM binary.
+generator clientDefault {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
 datasource db {
   provider = "postgresql"
   schemas  = ["platform", "public", "studio", "discovery", "security"]

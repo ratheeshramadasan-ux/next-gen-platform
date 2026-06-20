@@ -3,10 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import { prisma, baseDb } from "@/lib/prisma";
-import { ResourceType } from "@prisma/client";
+import { ResourceType } from "@/generated/prisma-client";
 import { AuditBundleService } from "@/lib/services/AuditBundleService";
 import { EmailService } from "@/lib/services/EmailService";
 import { syncToLocalFileSystem } from "@/lib/studio/sync";
+
+// Prisma 7 WASM panics bypass JS try/catch when given invalid IDs.
+// Always validate UUIDs before passing to any Prisma query.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function getCustomers() {
   try {
@@ -1398,27 +1402,36 @@ export async function saveStudioWorkflow(payload: any) {
 }
 
 export async function getAppProjectAction(projectId: string) {
+  // Prisma WASM panics bypass JS try/catch — guard before reaching the query engine.
+  if (!projectId || !UUID_RE.test(projectId)) return { success: false, error: "Invalid project ID" };
   try {
+    // Use explicit select (not include) to avoid Prisma 7 WASM serialization issues
+    // with nested pagination (take inside include) and hidden int fields.
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      include: {
-        studioWorkflows: {
-          where: { isMain: true },
-          take: 1
-        }
-      }
+      select: {
+        id: true, name: true, description: true, metadata: true, version: true,
+        tenantId: true, customerId: true, workspaceId: true, folderId: true,
+        isGovernanceLocked: true, createdAt: true, updatedAt: true,
+      },
     });
-    
-    if (!project) {
-      return { success: false, error: "Project not found" };
-    }
-    
-    const workflow = project.studioWorkflows[0] || null;
-    
-    return { 
-      success: true, 
-      project: JSON.parse(JSON.stringify(project)), 
-      workflow: workflow ? JSON.parse(JSON.stringify(workflow)) : null 
+
+    if (!project) return { success: false, error: "Project not found" };
+
+    const workflows = await prisma.studioWorkflow.findMany({
+      where: { projectId, isMain: true },
+      select: {
+        id: true, name: true, status: true, type: true,
+        isMain: true, version: true, createdAt: true, updatedAt: true,
+      },
+      take: 1,
+    });
+
+    const workflow = workflows[0] || null;
+    return {
+      success: true,
+      project: JSON.parse(JSON.stringify({ ...project, studioWorkflows: workflows })),
+      workflow: workflow ? JSON.parse(JSON.stringify(workflow)) : null,
     };
   } catch (e: any) {
     console.error("Failed to fetch app project:", e);
@@ -1427,15 +1440,30 @@ export async function getAppProjectAction(projectId: string) {
 }
 
 export async function getStudioWorkflow(workflowId: string) {
+  // Prisma WASM panics bypass JS try/catch — guard before reaching the query engine.
+  if (!workflowId || !UUID_RE.test(workflowId)) return null;
   try {
+    // Use explicit select (not include: true) to avoid Prisma 7 WASM panics
+    // from hidden int fields and implicit pagination in nested includes.
     const workflow = await prisma.studioWorkflow.findUnique({
       where: { id: workflowId },
-      include: {
-        studioNodes: true,
-        connections: true,
-        project: true,
-        variables: true,
-        arguments: true,
+      select: {
+        id: true, name: true, flowJson: true, projectId: true,
+        studioNodes: {
+          select: { id: true, nodeType: true, positionX: true, positionY: true, configJson: true },
+        },
+        connections: {
+          select: { id: true, fromNodeId: true, toNodeId: true, conditionType: true },
+        },
+        project: {
+          select: { name: true, metadata: true, folderId: true },
+        },
+        variables: {
+          select: { name: true, dataType: true, scope: true, defaultValue: true },
+        },
+        arguments: {
+          select: { name: true, direction: true, dataType: true, defaultValue: true },
+        },
       },
     });
 
@@ -1534,12 +1562,11 @@ export async function getStudioWorkflow(workflowId: string) {
 
 export async function getStudioFolders(customerId: string, tenantId?: string) {
   // Guard: Prisma WASM panics bypass JS try/catch — never let invalid input reach the query.
-  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!customerId || !uuidRe.test(customerId)) return [];
+  if (!customerId || !UUID_RE.test(customerId)) return [];
 
   try {
     const where: any = { customerId, isArchived: false };
-    if (tenantId && uuidRe.test(tenantId)) {
+    if (tenantId && UUID_RE.test(tenantId)) {
       where.tenantId = tenantId;
     }
 

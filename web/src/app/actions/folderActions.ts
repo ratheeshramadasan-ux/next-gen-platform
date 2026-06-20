@@ -2,7 +2,7 @@
 
 import { prisma, baseDb } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { ResourceType } from "@prisma/client";
+import { ResourceType } from "@/generated/prisma-client";
 import { createAuditLog } from "./tenantActions";
 
 type RolePermissionLike = { permissions?: string | null; name?: string | null } | string;
