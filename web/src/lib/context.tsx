@@ -8,10 +8,16 @@ export type CustomerStatus = "Active" | "Pending Approval" | "Suspended";
 export type ThemeName = 
   | "Sand Serenity" | "Ink Wash" | "Jade Pebble" | "Opaline" | "Arctic Reflection" | "Mocha Espresso" | "Minimalist Slate" | "Pure Alabaster" // Light
   | "Woodland" | "Midnight Aurora" | "Wraith" | "Next Gen Ultra" | "Deep Space" | "Cyberpunk Neon" | "Emerald Empire" | "Crimson Velvet" | "Oceanic Depth" | "Jet Black" // Dark
-  | "Aurora Glass" | "Frosted Glass" | "Obsidian Glass" | "Silk Glass" | "Horizon Glass" | "Lavender Mist"; // Glass & Soft
+  | "Aurora Glass" | "Frosted Glass" | "Obsidian Glass" | "Silk Glass" | "Horizon Glass" | "Lavender Mist" | "Champagne Glass"; // Glass & Soft
 export type IconSetName = "Standard" | "Glow Aura" | "Minimal Thin" | "Vibrant Duotone" | "Sharp Tech" | "Futuristic Cyber" | "Glassmorphic Hologram" | "Retro 8-Bit" | "Neomorphic Tactile";
 export type FontName = "Inter" | "Outfit" | "Plus Jakarta Sans" | "Playfair Display" | "JetBrains Mono" | "Manrope" | "Cormorant Garamond" | "Lexend" | "Space Grotesk" | "Montserrat" | "Syne" | "Roboto" | "Open Sans" | "Lato" | "Helvetica" | "Avenir" | "Cambria";
 export type TextSize = "Tiny" | "Small" | "Regular" | "Large" | "Extra Large" | "Gigantic";
+
+// Dark-background themes (including dark glass) — drives the `dark` class + React Flow color mode.
+export const DARK_THEMES: ThemeName[] = ["Woodland", "Midnight Aurora", "Wraith", "Next Gen Ultra", "Deep Space", "Obsidian Glass", "Aurora Glass"];
+
+// Glass themes that need the glass-mode class.
+export const GLASS_THEMES: ThemeName[] = ["Aurora Glass", "Frosted Glass", "Obsidian Glass", "Silk Glass", "Horizon Glass", "Champagne Glass"];
 
 export interface SystemUser {
   name: string;
@@ -97,6 +103,7 @@ interface AppContextType {
   switchUser: (email: string) => void;
   activeTheme: ThemeName;
   setActiveTheme: (theme: ThemeName) => void;
+  isDarkTheme: boolean;
   activeIconSet: IconSetName;
   setActiveIconSet: (iconSet: IconSetName) => void;
   activeFont: FontName;
@@ -348,6 +355,12 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     });
     document.body.classList.add(`theme-${themeClass}`);
     localStorage.setItem("nextgen_theme", activeTheme);
+
+    const isDark = DARK_THEMES.includes(activeTheme);
+    document.documentElement.classList.toggle("dark", isDark);
+
+    const isGlass = GLASS_THEMES.includes(activeTheme);
+    document.documentElement.classList.toggle("glass-mode", isGlass);
   }, [activeTheme]);
 
   useEffect(() => {
@@ -477,6 +490,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
       switchUser,
       activeTheme,
       setActiveTheme,
+      isDarkTheme: DARK_THEMES.includes(activeTheme),
       activeIconSet,
       setActiveIconSet,
       activeFont,

@@ -692,6 +692,36 @@ export interface DocumentConfidenceBreakdown {
   businessRulesPass: boolean; // C_biz_rules
   weights: { w1: number; w2: number; w3: number; w4: number };
   overallConfidence: number; // C_doc [0,1]
+
+  // 7-layer Confidence Framework (additive — Phase 1 Validation Studio)
+  anchorConfidence: number; // [0,1]
+  boundaryConfidence: number; // [0,1]
+  validationConfidence: number; // [0,1] historical acceptance rate
+  trainingConfidence: number; // [0,1] sample-count maturity proxy
+  evidenceConfidence: number; // [0,1] sample-count evidence curve
+  evidenceCap: number; // [0,1] hard ceiling applied to overallConfidence
+  driftPenalty: number; // [0,1] subtracted from blended score
+  driftEnabled: boolean; // false until real Drift Monitoring Engine ships
+  weights2: {
+    ocr: number;
+    extraction: number;
+    boundary: number;
+    anchor: number;
+    validation: number;
+    training: number;
+    evidence: number;
+  };
+}
+
+/** Per-field transparency breakdown for the Confidence Transparency UI */
+export interface FieldConfidenceBreakdown {
+  fieldId: string;
+  boundaryConfidence: number;
+  anchorConfidence: number;
+  validationConfidence: number;
+  driftPenalty: number;
+  driftEnabled: boolean;
+  topIssue: string;
 }
 
 export type ValidationQueueType =
@@ -751,6 +781,20 @@ export interface ValidationTransactionLog {
   timestamp: string;
 }
 
+/** Correction Attribution Engine — classification of every training correction */
+export type CorrectionType =
+  | "OCR_SUBSTITUTION"
+  | "OCR_INSERTION"
+  | "OCR_DELETION"
+  | "FIELD_TRUNCATION"
+  | "FIELD_OVER_CAPTURE"
+  | "MULTILINE_FAILURE"
+  | "ANCHOR_ERROR"
+  | "TABLE_BOUNDARY_ERROR"
+  | "CLASSIFICATION_ERROR"
+  | "BUSINESS_INTERPRETATION_ERROR"
+  | "MANUAL_OVERRIDE";
+
 /** 4.8 Training Dataset Governance Ledger */
 export interface TrainingLedgerEntry {
   training_sample_id: string;
@@ -760,6 +804,13 @@ export interface TrainingLedgerEntry {
   predicted_value: string;
   corrected_value: string;
   predicted_confidence: number;
+  ocr_value?: string;
+  bounding_box?: { x: number; y: number; width: number; height: number };
+  anchor_id?: string;
+  page_number?: number;
+  field_type?: string;
+  correction_type: CorrectionType | null;
+  attribution_reasons: string[];
   provenance_metadata: {
     source_user_id: string;
     approval_timestamp: string;
@@ -882,6 +933,58 @@ export interface SampleOptimizationResult {
   samples_remaining: number;
   confidence_interval: number;
   estimated_days_to_target: number | null;
+}
+
+// ─── Training Center / Sample Requirement Engine (Phase 2) ───────────────────
+
+export interface CorrectionTypeBreakdown {
+  correction_type: CorrectionType;
+  count: number;
+  percentage: number;
+}
+
+export interface ClassReadiness {
+  classId: string;
+  name: string;
+  sampleCount: number;
+  currentAccuracy: number;
+  targetAccuracy: number;
+  samplesNeeded: number;
+  samplesRemaining: number;
+  etaDays: number | null;
+  topIssues: CorrectionTypeBreakdown[];
+  readinessTier: "ready" | "needs_samples" | "needs_attribution_fix";
+  /** Fraction (0-1) of `DocumentClass.requiredFields` populated, averaged across this class's documents. */
+  requiredFieldCoverage: number;
+}
+
+// ─── Field Intelligence (Phase 3) ─────────────────────────────────────────────
+
+export interface FieldIntelligenceProfile {
+  field_id: string;
+  field_name: string;
+  totalCorrections: number;
+  dominantIssue: CorrectionTypeBreakdown | null;
+}
+
+// ─── Learning Analytics (Phase 3) ─────────────────────────────────────────────
+
+export interface LearningTrend {
+  enabled: boolean;
+  direction: "improving" | "declining" | "flat";
+  deltaPct: number;
+}
+
+// ─── Production Readiness (Phase 3) ───────────────────────────────────────────
+
+export type GateStatus = "passed" | "warning" | "failed" | "pending";
+
+export interface ProductionReadinessGate {
+  id: string;
+  label: string;
+  description: string;
+  status: GateStatus;
+  value?: string;
 }
 
 export interface PiiRedactionResult {

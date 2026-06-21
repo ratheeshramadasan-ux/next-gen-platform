@@ -2,12 +2,28 @@
 
 import React from "react";
 import {
-  Sparkles, FileText, Tag, Fingerprint,
+  Sparkles, FileText, Tag, Fingerprint, Activity,
   CheckCircle2, AlertTriangle, XCircle, Pencil, Check, X, ShieldAlert, Eraser,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ValidationDocumentSummary, FieldExplanation } from "../types";
+import { ValidationDocumentSummary, FieldExplanation, FieldConfidenceBreakdown } from "../types";
 import { HeatmapField, confidenceTier } from "./ConfidenceHeatmapCanvas";
+
+const CONFIDENCE_LAYERS: Array<{ key: keyof ValidationDocumentSummary["confidence"]; label: string; weightKey: keyof ValidationDocumentSummary["confidence"]["weights2"] }> = [
+  { key: "ocrConfidence", label: "OCR", weightKey: "ocr" },
+  { key: "geometricFieldConfidence", label: "Extraction", weightKey: "extraction" },
+  { key: "boundaryConfidence", label: "Boundary", weightKey: "boundary" },
+  { key: "anchorConfidence", label: "Anchor", weightKey: "anchor" },
+  { key: "validationConfidence", label: "Validation", weightKey: "validation" },
+  { key: "trainingConfidence", label: "Training", weightKey: "training" },
+  { key: "evidenceConfidence", label: "Evidence", weightKey: "evidence" },
+];
+
+function tierColor(value: number) {
+  if (value >= 0.85) return "bg-emerald-500";
+  if (value >= 0.65) return "bg-amber-500";
+  return "bg-rose-500";
+}
 
 const TIER_TEXT: Record<string, string> = {
   high: "text-emerald-500",
@@ -98,6 +114,7 @@ interface ExplainabilityPanelProps {
   selectedFieldId: string | null;
   onSelectField: (fieldId: string) => void;
   onFieldAction: (field: HeatmapField, action: FieldReviewAction, value?: string) => void;
+  fieldConfidenceById?: Map<string, FieldConfidenceBreakdown>;
 }
 
 export function ExplainabilityPanel({
@@ -107,6 +124,7 @@ export function ExplainabilityPanel({
   selectedFieldId,
   onSelectField,
   onFieldAction,
+  fieldConfidenceById,
 }: ExplainabilityPanelProps) {
   const [editingFieldId, setEditingFieldId] = React.useState<string | null>(null);
   const [draftValue, setDraftValue] = React.useState("");
@@ -131,8 +149,54 @@ export function ExplainabilityPanel({
     setEditingFieldId(null);
   };
 
+  const selectedFieldConfidence = selectedFieldId ? fieldConfidenceById?.get(selectedFieldId) : undefined;
+
   return (
     <div className="w-full h-full flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
+
+      {/* Confidence Transparency */}
+      <section className="bg-card rounded-[9px] border border-border/50 shadow-sm p-4">
+        <header className="flex items-center justify-between mb-3">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+            <Activity size={13} className="text-primary" />
+            Confidence Transparency
+          </h4>
+          <span className={cn("text-[11px] font-black", TIER_TEXT[confidenceTier(summary.confidence.overallConfidence)])}>
+            {(summary.confidence.overallConfidence * 100).toFixed(1)}%
+          </span>
+        </header>
+        <div className="space-y-1.5">
+          {CONFIDENCE_LAYERS.map(layer => {
+            const value = summary.confidence[layer.key] as number;
+            const weight = summary.confidence.weights2[layer.weightKey];
+            return (
+              <div key={layer.key} className="flex items-center gap-2">
+                <span className="w-16 shrink-0 text-[8px] font-black uppercase tracking-tight text-muted-foreground">{layer.label}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className={cn("h-full rounded-full", tierColor(value))} style={{ width: `${Math.round(value * 100)}%` }} />
+                </div>
+                <span className="w-16 shrink-0 text-right text-[8.5px] font-mono text-foreground">
+                  {(value * 100).toFixed(0)}% <span className="text-muted-foreground">×{Math.round(weight * 100)}%</span>
+                </span>
+              </div>
+            );
+          })}
+          <div className="flex items-center gap-2 pt-1 border-t border-border/40 mt-1.5">
+            <span className="w-16 shrink-0 text-[8px] font-black uppercase tracking-tight text-muted-foreground">Drift Penalty</span>
+            <div className="flex-1">
+              {summary.confidence.driftEnabled ? (
+                <span className="text-[8.5px] font-mono text-rose-500">-{(summary.confidence.driftPenalty * 100).toFixed(1)}%</span>
+              ) : (
+                <span className="text-[8.5px] font-bold uppercase tracking-tight text-muted-foreground/60 italic">Not yet enabled</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[8.5px] text-muted-foreground/80">
+            <span className="w-16 shrink-0 font-black uppercase tracking-tight">Evidence Cap</span>
+            <span className="font-mono">{(summary.confidence.evidenceCap * 100).toFixed(0)}% ceiling applied to overall confidence</span>
+          </div>
+        </div>
+      </section>
 
       {/* AI Explanation */}
       <section className="bg-card rounded-[9px] border border-border/50 shadow-sm p-4">
@@ -202,6 +266,25 @@ export function ExplainabilityPanel({
               </div>
             ))}
           </div>
+
+          {selectedFieldConfidence && (
+            <div className="mt-3 pt-3 border-t border-border/50 space-y-1.5">
+              {[
+                { label: "Boundary", value: selectedFieldConfidence.boundaryConfidence },
+                { label: "Anchor", value: selectedFieldConfidence.anchorConfidence },
+                { label: "Validation", value: selectedFieldConfidence.validationConfidence },
+              ].map(row => (
+                <div key={row.label} className="flex items-center gap-2">
+                  <span className="w-16 shrink-0 text-[8px] font-black uppercase tracking-tight text-muted-foreground">{row.label}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className={cn("h-full rounded-full", tierColor(row.value))} style={{ width: `${Math.round(row.value * 100)}%` }} />
+                  </div>
+                  <span className="w-10 shrink-0 text-right text-[8.5px] font-mono text-foreground">{(row.value * 100).toFixed(0)}%</span>
+                </div>
+              ))}
+              <p className="text-[8.5px] font-bold text-muted-foreground italic pt-1">Top issue: {selectedFieldConfidence.topIssue}</p>
+            </div>
+          )}
         </section>
       )}
 

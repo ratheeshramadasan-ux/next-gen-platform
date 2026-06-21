@@ -408,7 +408,7 @@
   --studio-border:         rgba(255,255,255,0.14);
 }
 .theme-pure-alabaster, .theme-arctic-reflection, .theme-silk-glass,
-.theme-frosted-glass, .theme-horizon-glass {
+.theme-frosted-glass, .theme-horizon-glass, .theme-champagne-glass {
   --studio-surface:        oklch(0.963 0 0);
   --studio-surface-raised: oklch(0.934 0 0);
   --studio-surface-sunken: oklch(0.983 0 0);
@@ -808,6 +808,23 @@
   --radius: 0.625rem;
 }
 
+/* --- 15. Champagne Glass (Black, Cream & Gold) --- */
+.theme-champagne-glass {
+  --background: #FEFEFE;
+  --foreground: #0D0D0D;
+  --primary: #0D0D0D;
+  --primary-foreground: #FEFEFE;
+  --card: hsl(from #F2F2F2 h s l / var(--panel-opacity, 0.55));
+  --card-foreground: #0D0D0D;
+  --muted: rgba(13, 13, 13, 0.04);
+  --muted-foreground: #4A4A4A;
+  --accent: #BA9731;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(186, 151, 49, 0.25);
+  --sidebar: rgba(255, 255, 255, 0.45);
+  --radius: 0.75rem;
+}
+
 /* ─── Glass Mode: Advanced Rendering ─── */
 
 /* Grain Texture Overlay */
@@ -859,8 +876,16 @@ html.glass-mode.theme-silk-glass body {
 }
 html.glass-mode.theme-horizon-glass,
 html.glass-mode.theme-horizon-glass body {
-  background: 
+  background:
     linear-gradient(135deg, #8BC6EC 0%, #9599E2 100%) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+html.glass-mode.theme-champagne-glass,
+html.glass-mode.theme-champagne-glass body {
+  background:
+    linear-gradient(135deg, #FEFEFE 0%, #DACE84 55%, #BA9731 100%) !important;
   background-size: cover !important;
   background-position: center !important;
   background-attachment: fixed !important;

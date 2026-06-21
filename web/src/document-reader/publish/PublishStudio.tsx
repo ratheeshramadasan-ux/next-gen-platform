@@ -8,7 +8,7 @@
  * deployment gating for trained DU models.
  */
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Rocket, CheckCircle2, AlertTriangle, GitBranch, Tag, Globe,
   Server, Lock, ShieldCheck, ChevronRight, ExternalLink,
@@ -16,28 +16,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDocumentReader } from "../store/documentReaderContext";
-import { TrainingStage } from "../types";
+import { TrainingStage, ProductionReadinessGate, GateStatus } from "../types";
 import { ScheduleConfig } from "./ScheduleConfig";
+import { usePipelineStore } from "../store/studioStore";
+import { computeProductionReadinessGates } from "../validation/engine";
+import { loadTrainingLedger } from "../validation/ledger";
 
 type Environment = "staging" | "uat" | "production";
-type GateStatus = "passed" | "warning" | "failed" | "pending";
-
-interface DeploymentGate {
-  id: string;
-  label: string;
-  description: string;
-  status: GateStatus;
-  value?: string;
-}
-
-const DEPLOYMENT_GATES: DeploymentGate[] = [
-  { id: "accuracy", label: "Accuracy Threshold", description: "Minimum 85% extraction accuracy", status: "passed", value: "94.7%" },
-  { id: "validation", label: "Human Validation", description: "≥ 50 documents validated by reviewers", status: "passed", value: "124 docs" },
-  { id: "pii", label: "PII Governance", description: "Redaction rules configured", status: "passed", value: "Active" },
-  { id: "fingerprint", label: "Document Fingerprint", description: "Deduplication fingerprint registered", status: "passed", value: "3-hash" },
-  { id: "benchmark", label: "Performance Benchmark", description: "Avg processing < 5s per document", status: "warning", value: "1.23s" },
-  { id: "security", label: "Security Scan", description: "No PII leakage in test batch", status: "passed", value: "Clean" },
-];
+type DeploymentGate = ProductionReadinessGate;
 
 const ENVIRONMENTS: { id: Environment; label: string; desc: string; icon: React.ElementType; color: string }[] = [
   { id: "staging", label: "Staging", desc: "Internal testing — no real documents", icon: Server, color: "text-cyan-500" },
@@ -64,6 +50,7 @@ function GateRow({ gate }: { gate: DeploymentGate }) {
           "text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0",
           gate.status === "passed" ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
           gate.status === "warning" ? "text-amber-600 bg-amber-500/10 border-amber-500/20" :
+          gate.status === "pending" ? "text-muted-foreground bg-muted/30 border-border/40" :
           "text-rose-500 bg-rose-500/10 border-rose-500/20"
         )}>
           {gate.value}
@@ -75,11 +62,18 @@ function GateRow({ gate }: { gate: DeploymentGate }) {
 
 export function PublishStudio() {
   const { updateStepStatus, setActiveStage } = useDocumentReader();
+  const documentClasses = usePipelineStore(s => s.documentClasses);
+  const trainingDocuments = usePipelineStore(s => s.trainingDocuments);
   const [selectedEnv, setSelectedEnv] = useState<Environment>("staging");
   const [version, setVersion] = useState("v1.0.0");
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployed, setDeployed] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+
+  const DEPLOYMENT_GATES = useMemo(() => {
+    const ledgerEntries = loadTrainingLedger();
+    return computeProductionReadinessGates(documentClasses, trainingDocuments, ledgerEntries);
+  }, [documentClasses, trainingDocuments]);
 
   const gatesPassed = DEPLOYMENT_GATES.filter(g => g.status === "passed").length;
   const gatesFailed = DEPLOYMENT_GATES.filter(g => g.status === "failed").length;

@@ -48,6 +48,15 @@ import { OCREngine as OCREngineService } from "../services/ocrEngine";
 
 const DB_METADATA_AUTOSAVE_LIMIT_BYTES = 50_000_000;
 
+// Every store mutation calls saveProject() immediately, so a flurry of edits
+// (e.g. changing several field types in a row) fires many concurrent DB
+// writes. Without serialization, an earlier request can resolve after a
+// later one and silently overwrite newer edits with stale data. These guard
+// flags ensure only one write is ever in flight, and that the most recent
+// state is always the last one sent.
+let dbSaveInFlight = false;
+let dbSaveQueued = false;
+
 export type { 
   TrainingDocument, 
   TrainingPage, 
@@ -1225,23 +1234,35 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
         return;
       }
 
+      if (dbSaveInFlight) {
+        // A save is already in flight. Don't fire a concurrent request that
+        // could resolve out of order and overwrite newer data — just mark
+        // that another save is needed once the current one finishes.
+        dbSaveQueued = true;
+        return;
+      }
+
+      dbSaveInFlight = true;
       try {
         const formData = new FormData();
         formData.append("projectId", state.projectId);
         formData.append("metadata", payloadStr);
-        void updateProjectMetadataWithForm(formData)
-          .then(result => {
-            if (result?.success) {
-              console.log("[StudioStore] Project persisted to DB successfully.");
-            } else {
-              console.warn("[StudioStore] DB Persistence skipped or failed:", result?.error);
-            }
-          })
-          .catch(err => {
-            console.error("[StudioStore] DB Persistence failed:", err);
-          });
+        const result = await updateProjectMetadataWithForm(formData);
+        if (result?.success) {
+          console.log("[StudioStore] Project persisted to DB successfully.");
+        } else {
+          console.warn("[StudioStore] DB Persistence skipped or failed:", result?.error);
+        }
       } catch (err) {
         console.error("[StudioStore] DB Persistence failed:", err);
+      } finally {
+        dbSaveInFlight = false;
+        if (dbSaveQueued) {
+          dbSaveQueued = false;
+          // Re-read the freshest state rather than reusing the closure —
+          // more edits may have landed while this request was in flight.
+          void get().saveProject();
+        }
       }
     }
   },

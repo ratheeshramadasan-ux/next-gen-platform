@@ -113,6 +113,7 @@ export default function ThemeSettingsPage() {
     { name: "Silk Glass", colors: ["#E2725B", "#FAF9F6", "#A8816B"], desc: "Minimalist light silk (Image 4)", category: "glass" },
     { name: "Horizon Glass", colors: ["#3B82F6", "#8BC6EC", "#9599E2"], desc: "Clean data dashboard (Image 5)", category: "glass" },
     { name: "Lavender Mist", colors: ["#8B5CF6", "#F5F3FF", "#DDD6FE"], desc: "Soft floral tech aesthetic", category: "glass" },
+    { name: "Champagne Glass", colors: ["#0D0D0D", "#FEFEFE", "#BA9731"], desc: "Black, cream & gold elegance", category: "glass" },
   ];
 
   const lightThemes = themes.filter(t => t.category === "light");
@@ -250,6 +251,7 @@ export default function ThemeSettingsPage() {
       case "Midnight Aurora": return ["#14B8A6", "#020617", "#F43F5E", "#10B981", "#1E1B4B", "#0D9488"];
       case "Arctic Reflection": return ["#5289AD", "#F4FCFB", "#243C4C", "#BEE3F8", "#2C5282", "#EBF8FF"];
       case "Next Gen Ultra": return ["#00D1FF", "#050505", "#A855F7", "#38BDF8", "#7C3AED", "#1E1E1E"];
+      case "Champagne Glass": return ["#0D0D0D", "#F2F2F2", "#FEFEFE", "#BA9731", "#DACE84"];
       default: return [...base, "#0F172A", "#1E293B", "#334155", "#F1F5F9", "#FFFFFF"];
     }
   };

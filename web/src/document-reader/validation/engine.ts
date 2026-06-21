@@ -7,6 +7,7 @@ import {
   ValidationQueueType,
   BusinessRuleCheckResult,
   FieldExplanation,
+  FieldConfidenceBreakdown,
   ValidationDocumentSummary,
   ValidationTransactionLog,
   ModelVersionRecord,
@@ -15,7 +16,14 @@ import {
   FieldDecayProfile,
   AnalystTelemetry,
   GoldenDatasetResult,
+  CorrectionType,
+  TrainingLedgerEntry,
+  ClassReadiness,
+  ProductionReadinessGate,
+  GateStatus,
+  LearningTrend,
 } from "../types";
+import { loadTrainingLedger, aggregateCorrectionTypes, aggregateByField } from "./ledger";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -161,12 +169,93 @@ export function runBusinessRules(doc: TrainingDocument): BusinessRuleCheckResult
 
 const CONF_WEIGHTS = { w1: 0.3, w2: 0.4, w3: 0.2, w4: 0.1 };
 
+/** 7-layer Confidence Framework weights — Phase 1 Validation Studio */
+const CONF_WEIGHTS_2 = {
+  ocr: 0.15,
+  extraction: 0.25,
+  boundary: 0.10,
+  anchor: 0.10,
+  validation: 0.15,
+  training: 0.15,
+  evidence: 0.10,
+};
+
+/** Evidence Confidence cap curve, keyed off sample count — interpolated linearly. */
+const EVIDENCE_CURVE: Array<[number, number]> = [
+  [0, 0.55],
+  [10, 0.70],
+  [25, 0.80],
+  [50, 0.88],
+  [100, 0.93],
+  [250, 0.97],
+];
+
+function evidenceConfidenceForSamples(sampleCount: number): number {
+  const n = Math.max(0, sampleCount);
+  for (let i = 0; i < EVIDENCE_CURVE.length - 1; i++) {
+    const [n0, v0] = EVIDENCE_CURVE[i];
+    const [n1, v1] = EVIDENCE_CURVE[i + 1];
+    if (n <= n1) {
+      const t = n0 === n1 ? 0 : (n - n0) / (n1 - n0);
+      return clamp01(v0 + (v1 - v0) * Math.max(0, t));
+    }
+  }
+  return EVIDENCE_CURVE[EVIDENCE_CURVE.length - 1][1];
+}
+
+/** Maturity proxy from sample count, reusing the power-law learning curve (n→accuracy at α=0.22). */
+function trainingMaturityForSamples(sampleCount: number): number {
+  const n = Math.max(1, sampleCount);
+  const k = 0.6; // calibration constant — matches a ~50% accuracy floor at n=1
+  return clamp01(1 - k / Math.pow(n, LEARNING_CURVE_ALPHA));
+}
+
+function fieldHasBoundary(field: Record<string, any>): boolean {
+  const box = field.boundingBox || field.bounding_box;
+  return !!box && [box.x, box.y, box.width, box.height].every((v: any) => typeof v === "number");
+}
+
+function fieldAnchorConfidence(field: Record<string, any>): number {
+  const anchorId = field.anchorId || field.anchor_id;
+  if (!anchorId) return 0.5; // neutral — not every field needs an anchor
+  const anchorConfidence = field.anchorConfidence ?? field.anchor_confidence;
+  return typeof anchorConfidence === "number" ? norm(anchorConfidence) : 0.9;
+}
+
+function ledgerEntriesForDocument(ledgerEntries: TrainingLedgerEntry[], documentId: string): TrainingLedgerEntry[] {
+  return ledgerEntries.filter(e => e.document_id === documentId);
+}
+
+/**
+ * Real drift signal derived from `DocumentClass.confidenceHistory` snapshots
+ * (recorded by `recordClassConfidenceSnapshot` as the class accumulates samples).
+ * Requires at least 3 historical points before enabling — with fewer points
+ * there's nothing to distinguish "trend" from "noise," so we stay honest and
+ * report disabled rather than fabricate a number from 1-2 data points.
+ */
+function computeDriftSignal(docClass?: DocumentClass): { enabled: boolean; penalty: number } {
+  const history = docClass?.confidenceHistory;
+  if (!history || history.length < 3) return { enabled: false, penalty: 0 };
+
+  const latest = history[history.length - 1].overall;
+  const priorWindow = history.slice(Math.max(0, history.length - 4), history.length - 1);
+  if (priorWindow.length === 0) return { enabled: false, penalty: 0 };
+
+  const priorAvg = priorWindow.reduce((s, h) => s + h.overall, 0) / priorWindow.length;
+  const decline = priorAvg - latest;
+  const penalty = decline > 0 ? clamp01(Math.min(decline, 0.15)) : 0;
+  return { enabled: true, penalty };
+}
+
 export function computeDocConfidence(
   doc: TrainingDocument,
-  businessRules: BusinessRuleCheckResult[]
+  businessRules: BusinessRuleCheckResult[],
+  docClass?: DocumentClass,
+  ledgerEntries: TrainingLedgerEntry[] = []
 ): DocumentConfidenceBreakdown {
   const Cc = norm(doc.classification?.confidence);
   const fields = getExtractionFields(doc);
+  const rawDesignFields = (doc.metadata?.extractionDesign?.fields || []) as Array<Record<string, any>>;
   const fieldConfidences = fields.map(f => Math.max(norm(f.confidence), 0.0001));
 
   const geometricFieldConfidence = fieldConfidences.length > 0
@@ -183,14 +272,185 @@ export function computeDocConfidence(
     CONF_WEIGHTS.w4 * (businessRulesPass ? 1.0 : 0.0)
   );
 
+  // ── 7-layer Confidence Framework ──
+  const docLedger = ledgerEntriesForDocument(ledgerEntries, doc.documentId);
+  const boundaryBreakingTypes: CorrectionType[] = ["FIELD_TRUNCATION", "FIELD_OVER_CAPTURE", "TABLE_BOUNDARY_ERROR"];
+  const fieldsForBoundary = rawDesignFields.length > 0 ? rawDesignFields : fields;
+  const boundaryConfidence = fieldsForBoundary.length > 0
+    ? clamp01(fieldsForBoundary.reduce((s, f) => {
+        const hasBox = fieldHasBoundary(f);
+        const brokenForField = docLedger.some(e => e.field_id === f.id && e.correction_type && boundaryBreakingTypes.includes(e.correction_type));
+        return s + (hasBox && !brokenForField ? 1 : hasBox ? 0.4 : 0.6);
+      }, 0) / fieldsForBoundary.length)
+    : 0.6;
+
+  const anchorConfidence = fieldsForBoundary.length > 0
+    ? clamp01(fieldsForBoundary.reduce((s, f) => s + fieldAnchorConfidence(f), 0) / fieldsForBoundary.length)
+    : 0.5;
+
+  const totalCorrections = docLedger.length;
+  const acceptedCorrections = docLedger.filter(e => e.correction_type === null).length;
+  const validationConfidence = totalCorrections > 0 ? clamp01(acceptedCorrections / totalCorrections) : 0.85;
+
+  const trainingConfidence = trainingMaturityForSamples(docClass?.sampleCount ?? 0);
+  const evidenceConfidence = evidenceConfidenceForSamples(docClass?.sampleCount ?? 0);
+  const evidenceCap = evidenceConfidence;
+
+  const { enabled: driftEnabled, penalty: driftPenalty } = computeDriftSignal(docClass);
+
+  const blended = clamp01(
+    CONF_WEIGHTS_2.ocr * Cocr +
+    CONF_WEIGHTS_2.extraction * geometricFieldConfidence +
+    CONF_WEIGHTS_2.boundary * boundaryConfidence +
+    CONF_WEIGHTS_2.anchor * anchorConfidence +
+    CONF_WEIGHTS_2.validation * validationConfidence +
+    CONF_WEIGHTS_2.training * trainingConfidence +
+    CONF_WEIGHTS_2.evidence * evidenceConfidence -
+    driftPenalty
+  );
+  const cappedOverallConfidence = Math.min(blended, evidenceCap);
+
   return {
     classificationConfidence: Cc,
     geometricFieldConfidence,
     ocrConfidence: Cocr,
     businessRulesPass,
     weights: CONF_WEIGHTS,
-    overallConfidence,
+    overallConfidence: cappedOverallConfidence > 0 ? cappedOverallConfidence : overallConfidence,
+    anchorConfidence,
+    boundaryConfidence,
+    validationConfidence,
+    trainingConfidence,
+    evidenceConfidence,
+    evidenceCap,
+    driftPenalty,
+    driftEnabled,
+    weights2: CONF_WEIGHTS_2,
   };
+}
+
+/** Per-field transparency breakdown for the Confidence Transparency UI. */
+export function computeFieldConfidence(
+  field: Record<string, any>,
+  doc: TrainingDocument,
+  docClass: DocumentClass | undefined,
+  ledgerEntries: TrainingLedgerEntry[]
+): FieldConfidenceBreakdown {
+  const docLedger = ledgerEntriesForDocument(ledgerEntries, doc.documentId).filter(e => e.field_id === field.id);
+  const boundaryBreakingTypes: CorrectionType[] = ["FIELD_TRUNCATION", "FIELD_OVER_CAPTURE", "TABLE_BOUNDARY_ERROR"];
+
+  const hasBox = fieldHasBoundary(field);
+  const brokenBoundary = docLedger.some(e => e.correction_type && boundaryBreakingTypes.includes(e.correction_type));
+  const boundaryConfidence = hasBox && !brokenBoundary ? 1 : hasBox ? 0.4 : 0.6;
+
+  const anchorConfidence = fieldAnchorConfidence(field);
+
+  const total = docLedger.length;
+  const accepted = docLedger.filter(e => e.correction_type === null).length;
+  const validationConfidence = total > 0 ? clamp01(accepted / total) : 0.85;
+
+  const { enabled: driftEnabled, penalty: driftPenalty } = computeDriftSignal(docClass);
+
+  const contributors: Array<{ label: string; value: number; issue: string }> = [
+    { label: "boundary", value: boundaryConfidence, issue: "Field boundary repeatedly mis-captured (truncation/over-capture)." },
+    { label: "anchor", value: anchorConfidence, issue: "No reliable anchor link found for this field." },
+    { label: "validation", value: validationConfidence, issue: "Frequent analyst corrections on this field." },
+  ];
+  const lowest = contributors.reduce((min, c) => (c.value < min.value ? c : min), contributors[0]);
+  const topIssue = lowest.value < 0.7 ? lowest.issue : "No significant issues detected for this field.";
+
+  return {
+    fieldId: field.id,
+    boundaryConfidence,
+    anchorConfidence,
+    validationConfidence,
+    driftPenalty,
+    driftEnabled,
+    topIssue,
+  };
+}
+
+// ─── Correction Attribution Engine ──────────────────────────────────────────
+//
+// Classifies every analyst correction into a CorrectionType so that, per the
+// governance requirement, "nothing trains until attribution occurs." Rule-based
+// and deterministic (not ML) so every classification is explainable.
+
+function isAmbiguousSubstitution(predicted: string, corrected: string): boolean {
+  if (predicted.length !== corrected.length || predicted.length === 0) return false;
+  let diffCount = 0;
+  for (let i = 0; i < predicted.length; i++) {
+    const p = predicted[i];
+    const c = corrected[i];
+    if (p === c) continue;
+    diffCount++;
+    const altsForP = AMBIGUOUS_CHAR_PAIRS[p] || AMBIGUOUS_CHAR_PAIRS[p.toUpperCase()] || [];
+    const matches = altsForP.some(alt => alt.toLowerCase() === c.toLowerCase());
+    if (!matches) return false;
+  }
+  return diffCount > 0;
+}
+
+export function classifyCorrection(
+  field: Record<string, any>,
+  predictedValue: string,
+  correctedValue: string,
+  action: "accept" | "edit" | "clear",
+  doc?: TrainingDocument,
+  businessRules?: BusinessRuleCheckResult[]
+): { type: CorrectionType | null; reasons: string[] } {
+  const predicted = predictedValue || "";
+  const corrected = correctedValue || "";
+
+  // 1. No change — accepted as-is.
+  if (action === "accept" || predicted === corrected) {
+    return { type: null, reasons: ["Analyst accepted the predicted value without modification."] };
+  }
+
+  // 2. Cleared by analyst.
+  if (action === "clear") {
+    return { type: "MANUAL_OVERRIDE", reasons: ["Analyst cleared an unusable extraction."] };
+  }
+
+  // 3. OCR character-confusion substitution.
+  if (isAmbiguousSubstitution(predicted, corrected)) {
+    return { type: "OCR_SUBSTITUTION", reasons: [`Corrected value differs from the predicted value only in glyphs known to be visually ambiguous (e.g. "0"/"O", "1"/"I", "5"/"S").`] };
+  }
+
+  // 4. Truncation / over-capture.
+  if (corrected.length > predicted.length && corrected.startsWith(predicted)) {
+    return { type: "FIELD_TRUNCATION", reasons: ["Predicted value was a truncated prefix of the corrected value — field boundary likely cut off text."] };
+  }
+  if (predicted.length > corrected.length && predicted.startsWith(corrected)) {
+    return { type: "FIELD_OVER_CAPTURE", reasons: ["Predicted value over-captured beyond the corrected value — field boundary likely extended too far."] };
+  }
+
+  // 5. Multiline failure.
+  if (corrected.includes("\n") && !predicted.includes("\n")) {
+    return { type: "MULTILINE_FAILURE", reasons: ["Corrected value spans multiple lines that the predicted single-line extraction missed."] };
+  }
+
+  // 6. Table boundary error.
+  if (field.type === "table") {
+    return { type: "TABLE_BOUNDARY_ERROR", reasons: ["Correction made on a table field — likely a row/column boundary detection error."] };
+  }
+
+  // 7. Anchor error — no anchor link found for this field.
+  const anchorId = field.anchorId || field.anchor_id;
+  if (!anchorId) {
+    return { type: "ANCHOR_ERROR", reasons: ["No anchor link was found for this field, making its position unverifiable against the document layout."] };
+  }
+
+  // 8. Business interpretation error — correction touches a reconciliation field.
+  if (doc && businessRules && /total|amount|sum|grand|tax|subtotal/i.test(field.name || "")) {
+    const reconciliation = businessRules.find(r => r.ruleId === "invoice_reconciliation");
+    if (reconciliation && !reconciliation.passed) {
+      return { type: "BUSINESS_INTERPRETATION_ERROR", reasons: [`Correction resolves a failed business-rule reconciliation (${reconciliation.expression}).`] };
+    }
+  }
+
+  // 9. Fallback.
+  return { type: "MANUAL_OVERRIDE", reasons: ["Analyst override with no detected OCR, boundary, anchor, or business-rule cause."] };
 }
 
 // ─── 4.3 Active Learning & HLV Queue routing ────────────────────────────────
@@ -285,7 +545,9 @@ export function buildClassificationExplanation(doc: TrainingDocument, documentCl
 export function summarizeDocument(doc: TrainingDocument, documentClasses: DocumentClass[]): ValidationDocumentSummary {
   const riskScore = computeRiskScore(doc, documentClasses);
   const businessRules = runBusinessRules(doc);
-  const confidence = computeDocConfidence(doc, businessRules);
+  const docClass = documentClasses.find(c => c.classId === doc.classification?.classId || c.name === doc.classification?.className);
+  const ledgerEntries = loadTrainingLedger();
+  const confidence = computeDocConfidence(doc, businessRules, docClass, ledgerEntries);
   const queue = classifyQueue(confidence, riskScore);
   const fieldExplanations = buildFieldExplanations(doc);
   const classificationExplanation = buildClassificationExplanation(doc, documentClasses);
@@ -489,3 +751,176 @@ export const QUEUE_LABELS: Record<ValidationQueueType, string> = {
   manual_escalation: "Manual Escalation",
   straight_through: "Straight-Through (Auto-Approved)",
 };
+
+// ─── Training Center / Sample Requirement Engine (Phase 2) ───────────────────
+
+export const CORRECTION_TYPE_LABELS: Record<CorrectionType, string> = {
+  OCR_SUBSTITUTION: "OCR character substitution",
+  OCR_INSERTION: "OCR character insertion",
+  OCR_DELETION: "OCR character deletion",
+  FIELD_TRUNCATION: "Field truncation",
+  FIELD_OVER_CAPTURE: "Field over-capture",
+  MULTILINE_FAILURE: "Multiline capture failure",
+  ANCHOR_ERROR: "Missing anchor links",
+  TABLE_BOUNDARY_ERROR: "Table boundary error",
+  CLASSIFICATION_ERROR: "Classification error",
+  BUSINESS_INTERPRETATION_ERROR: "Business interpretation error",
+  MANUAL_OVERRIDE: "Manual override",
+};
+
+/** Fraction (0-1) of a class's required fields that are actually populated, averaged across its documents. */
+function computeRequiredFieldCoverage(docClass: DocumentClass, classDocs: TrainingDocument[]): number {
+  if (docClass.requiredFields.length === 0 || classDocs.length === 0) return 1;
+  const perDocCoverage = classDocs.map(doc => {
+    const fields = getExtractionFields(doc);
+    const populatedNames = new Set(fields.filter(f => !!f.value && f.value.trim().length > 0).map(f => f.name));
+    const covered = docClass.requiredFields.filter(name => populatedNames.has(name)).length;
+    return covered / docClass.requiredFields.length;
+  });
+  return perDocCoverage.reduce((a, b) => a + b, 0) / perDocCoverage.length;
+}
+
+export function computeClassReadiness(
+  docClass: DocumentClass,
+  ledgerEntries: TrainingLedgerEntry[],
+  trainingDocuments: TrainingDocument[],
+): ClassReadiness {
+  const classDocs = trainingDocuments.filter(d => d.classification?.classId === docClass.classId);
+
+  const history = docClass.confidenceHistory;
+  let currentAccuracy: number;
+  if (history && history.length > 0) {
+    currentAccuracy = history[history.length - 1].overall;
+  } else if (classDocs.length > 0) {
+    const scores = classDocs.map(d => computeDocConfidence(d, runBusinessRules(d), docClass, ledgerEntries).overallConfidence);
+    currentAccuracy = scores.reduce((a, b) => a + b, 0) / scores.length;
+  } else {
+    currentAccuracy = 0.75;
+  }
+
+  const targetAccuracy = clamp01(docClass.minConfidence);
+  const sampleResult = computeSamplesNeeded(currentAccuracy, targetAccuracy, docClass.sampleCount);
+
+  const classDocIds = new Set(classDocs.map(d => d.documentId));
+  const classLedgerEntries = ledgerEntries.filter(e => classDocIds.has(e.document_id));
+  const topIssues = aggregateCorrectionTypes(classLedgerEntries, 3);
+
+  let readinessTier: ClassReadiness["readinessTier"];
+  if (sampleResult.samples_remaining === 0) {
+    readinessTier = "ready";
+  } else if (sampleResult.samples_remaining < 10 && (topIssues[0]?.percentage ?? 0) > 40) {
+    readinessTier = "needs_attribution_fix";
+  } else {
+    readinessTier = "needs_samples";
+  }
+
+  return {
+    classId: docClass.classId,
+    name: docClass.name,
+    sampleCount: docClass.sampleCount,
+    currentAccuracy,
+    targetAccuracy,
+    samplesNeeded: sampleResult.samples_needed,
+    samplesRemaining: sampleResult.samples_remaining,
+    etaDays: sampleResult.estimated_days_to_target,
+    topIssues,
+    readinessTier,
+    requiredFieldCoverage: computeRequiredFieldCoverage(docClass, classDocs),
+  };
+}
+
+/** Network-wide (all classes) per-field correction profiles — top problematic fields, for Field Intelligence. */
+export function computeFieldIntelligence(ledgerEntries: TrainingLedgerEntry[], limit = 5) {
+  return aggregateByField(ledgerEntries, limit);
+}
+
+/**
+ * Real learning-curve trend from a class's recorded confidence snapshots. Requires at least 2
+ * historical points — never fabricates a trend from a single reading.
+ */
+export function computeLearningTrend(docClass: DocumentClass): LearningTrend {
+  const history = docClass.confidenceHistory;
+  if (!history || history.length < 2) {
+    return { enabled: false, direction: "flat", deltaPct: 0 };
+  }
+  const first = history[0].overall;
+  const latest = history[history.length - 1].overall;
+  const deltaPct = Math.round((latest - first) * 1000) / 10;
+  const direction: LearningTrend["direction"] = deltaPct > 0.5 ? "improving" : deltaPct < -0.5 ? "declining" : "flat";
+  return { enabled: true, direction, deltaPct };
+}
+
+/**
+ * Real deployment-gate evaluation for Publish Studio. Only computes gates we
+ * actually have measured data for (accuracy from class readiness, human
+ * validation from the training ledger). The remaining gates (PII governance,
+ * fingerprinting, performance benchmark, security scan) have no instrumentation
+ * wired into this pipeline yet — they're reported "pending" rather than faked.
+ */
+export function computeProductionReadinessGates(
+  documentClasses: DocumentClass[],
+  trainingDocuments: TrainingDocument[],
+  ledgerEntries: TrainingLedgerEntry[],
+): ProductionReadinessGate[] {
+  const activeClasses = documentClasses.filter(c => c.isActive);
+  const readiness = activeClasses.map(c => computeClassReadiness(c, ledgerEntries, trainingDocuments));
+
+  const avgAccuracy = readiness.length > 0
+    ? readiness.reduce((s, r) => s + r.currentAccuracy, 0) / readiness.length
+    : 0;
+  const accuracyThreshold = 0.85;
+  const accuracyStatus: GateStatus = readiness.length === 0
+    ? "pending"
+    : avgAccuracy >= accuracyThreshold ? "passed" : avgAccuracy >= accuracyThreshold - 0.1 ? "warning" : "failed";
+
+  const validatedDocCount = new Set(ledgerEntries.map(e => e.document_id)).size;
+  const validationTarget = 50;
+  const validationStatus: GateStatus = validatedDocCount === 0
+    ? "pending"
+    : validatedDocCount >= validationTarget ? "passed" : validatedDocCount >= validationTarget * 0.5 ? "warning" : "failed";
+
+  return [
+    {
+      id: "accuracy",
+      label: "Accuracy Threshold",
+      description: `Minimum ${Math.round(accuracyThreshold * 100)}% accuracy across active classes`,
+      status: accuracyStatus,
+      value: readiness.length === 0 ? "No data" : `${Math.round(avgAccuracy * 1000) / 10}%`,
+    },
+    {
+      id: "validation",
+      label: "Human Validation",
+      description: `≥ ${validationTarget} documents validated by reviewers`,
+      status: validationStatus,
+      value: `${validatedDocCount} docs`,
+    },
+    {
+      id: "pii",
+      label: "PII Governance",
+      description: "Redaction rules configured",
+      status: "pending",
+      value: "Not yet wired",
+    },
+    {
+      id: "fingerprint",
+      label: "Document Fingerprint",
+      description: "Deduplication fingerprint registered",
+      status: "pending",
+      value: "Not yet wired",
+    },
+    {
+      id: "benchmark",
+      label: "Performance Benchmark",
+      description: "Avg processing time per document",
+      status: "pending",
+      value: "Not yet wired",
+    },
+    {
+      id: "security",
+      label: "Security Scan",
+      description: "No PII leakage in test batch",
+      status: "pending",
+      value: "Not yet wired",
+    },
+  ];
+}

@@ -6,11 +6,9 @@ import { LaunchpadEngine } from "@/components/launchpad/LaunchpadEngine";
 import { AICommandBar } from "@/components/launchpad/AICommandBar";
 import { ImmersiveLaunchpad } from "@/components/launchpad/ImmersiveLaunchpad";
 import { Loader2 } from "lucide-react";
-import { useTheme } from "next-themes";
 
 export default function LaunchpadPage() {
   const { loadWorkspace, setUserId, isLoading, navigationMode } = usePersonalizationStore();
-  const { theme } = useTheme();
 
   useEffect(() => {
     // Mock user for demonstration. In real app, comes from session.

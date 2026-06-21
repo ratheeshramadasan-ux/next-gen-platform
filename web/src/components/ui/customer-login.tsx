@@ -34,13 +34,14 @@ const THEME_CLASS_MAP: Record<string, string> = {
   "Silk Glass":          "theme-silk-glass",
   "Horizon Glass":       "theme-horizon-glass",
   "Lavender Mist":       "theme-lavender-mist",
+  "Champagne Glass":     "theme-champagne-glass",
 }
 
 // Themes that use light backgrounds — affects text/overlay choices
 const LIGHT_THEMES = new Set([
   "Sand Serenity", "Ink Wash", "Jade Pebble", "Opaline",
   "Arctic Reflection", "Mocha Espresso", "Minimalist Slate", "Pure Alabaster",
-  "Aurora Glass", "Frosted Glass", "Silk Glass", "Lavender Mist",
+  "Aurora Glass", "Frosted Glass", "Silk Glass", "Lavender Mist", "Champagne Glass",
 ])
 
 const DEFAULT_THEME = "Midnight Aurora"

@@ -37,18 +37,151 @@ import { mockIQAScore } from "../../services/iqaService";
 import { mockEnhancementResult } from "../../services/imageEnhancementService";
 import { mockStructuralAnalysis } from "../../services/structuralElementDetector";
 import { usePipelineStore } from "../../store/studioStore";
-import { 
-  IngestionSource, 
-  IngestionSourceType, 
-  IngestionBatch 
+import {
+  IngestionSource,
+  IngestionSourceType,
+  IngestionBatch,
+  ClassReadiness,
 } from "../../types";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
+import { computeClassReadiness, computeFieldIntelligence, computeLearningTrend, CORRECTION_TYPE_LABELS } from "../../validation/engine";
+import { loadTrainingLedger } from "../../validation/ledger";
+
+const TIER_STYLES: Record<ClassReadiness["readinessTier"], { label: string; badge: string; bar: string }> = {
+  ready: { label: "Ready", badge: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30", bar: "bg-emerald-500" },
+  needs_samples: { label: "Needs Samples", badge: "bg-amber-500/10 text-amber-500 border-amber-500/30", bar: "bg-amber-500" },
+  needs_attribution_fix: { label: "Needs Attribution Fix", badge: "bg-rose-500/10 text-rose-500 border-rose-500/30", bar: "bg-rose-500" },
+};
+
+function ClassReadinessCard({ readiness, trend }: { readiness: ClassReadiness; trend: ReturnType<typeof computeLearningTrend> }) {
+  const tier = TIER_STYLES[readiness.readinessTier];
+  const progress = readiness.samplesNeeded > 0
+    ? Math.min(100, Math.round((readiness.sampleCount / readiness.samplesNeeded) * 100))
+    : 100;
+
+  return (
+    <div className="p-5 rounded-md border border-border/50 bg-card space-y-4">
+      <div className="flex items-center justify-between">
+        <h5 className="text-[11px] font-black text-foreground uppercase tracking-tight">{readiness.name}</h5>
+        <div className="flex items-center gap-1.5">
+          {trend.enabled && trend.direction !== "flat" && (
+            <span className={cn(
+              "text-[8px] font-black uppercase tracking-widest px-1.5 py-1 rounded border",
+              trend.direction === "improving"
+                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+                : "bg-rose-500/10 text-rose-500 border-rose-500/30"
+            )}>
+              {trend.direction === "improving" ? "▲" : "▼"} {Math.abs(trend.deltaPct)}%
+            </span>
+          )}
+          <span className={cn("text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded border", tier.badge)}>
+            {tier.label}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-[9px] font-black text-muted-foreground uppercase tracking-widest">
+          <span>{readiness.sampleCount} / {readiness.samplesNeeded} samples</span>
+          <span>{readiness.samplesRemaining === 0 ? "Target reached" : `${readiness.samplesRemaining} remaining`}</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+          <div className={cn("h-full rounded-full transition-all", tier.bar)} style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="p-2 rounded bg-muted/20 border border-border/50 text-center">
+          <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Current Accuracy</span>
+          <span className="text-[10px] font-black text-foreground">{Math.round(readiness.currentAccuracy * 1000) / 10}%</span>
+        </div>
+        <div className="p-2 rounded bg-muted/20 border border-border/50 text-center">
+          <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">ETA to Target</span>
+          <span className="text-[10px] font-black text-foreground">{readiness.etaDays === null ? "—" : `${readiness.etaDays}d`}</span>
+        </div>
+        <div className="p-2 rounded bg-muted/20 border border-border/50 text-center">
+          <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Field Coverage</span>
+          <span className="text-[10px] font-black text-foreground">{Math.round(readiness.requiredFieldCoverage * 1000) / 10}%</span>
+        </div>
+      </div>
+
+      {readiness.topIssues.length > 0 && (
+        <div className="space-y-1.5">
+          <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest">Top Correction Issues</span>
+          <div className="flex flex-wrap gap-1.5">
+            {readiness.topIssues.map(issue => (
+              <span
+                key={issue.correction_type}
+                className="text-[8px] font-bold text-muted-foreground bg-muted/30 border border-border/50 rounded px-1.5 py-0.5"
+                title={`${issue.count} occurrence(s) · ${issue.percentage}% of corrections`}
+              >
+                {CORRECTION_TYPE_LABELS[issue.correction_type]} ({issue.percentage}%)
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FieldIntelligenceSection({ profiles }: { profiles: ReturnType<typeof computeFieldIntelligence> }) {
+  if (profiles.length === 0) return null;
+  return (
+    <div className="w-full p-5 rounded-md border border-border/50 bg-card space-y-3 text-left">
+      <h5 className="text-[11px] font-black text-foreground uppercase tracking-tight">Field Intelligence</h5>
+      <p className="text-[9px] text-muted-foreground">Fields with the most analyst corrections across all classes — likely candidates for anchor or boundary fixes.</p>
+      <div className="space-y-2">
+        {profiles.map(p => (
+          <div key={p.field_id} className="flex items-center justify-between gap-3 p-2 rounded bg-muted/20 border border-border/50">
+            <span className="text-[10px] font-black text-foreground">{p.field_name}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[8px] font-bold text-muted-foreground">{p.totalCorrections} correction{p.totalCorrections === 1 ? "" : "s"}</span>
+              {p.dominantIssue && (
+                <span className="text-[8px] font-bold text-muted-foreground bg-muted/30 border border-border/50 rounded px-1.5 py-0.5">
+                  {CORRECTION_TYPE_LABELS[p.dominantIssue.correction_type]}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function TrainingReview() {
   const { updateStepStatus, setActiveStage } = useDocumentReader();
+  const documentClasses = usePipelineStore(s => s.documentClasses);
+  const trainingDocuments = usePipelineStore(s => s.trainingDocuments);
+
+  const ledgerEntries = useMemo(() => loadTrainingLedger(), [documentClasses, trainingDocuments]);
+
+  const readinessByClass = useMemo(() => {
+    return documentClasses.map(cls => computeClassReadiness(cls, ledgerEntries, trainingDocuments));
+  }, [documentClasses, trainingDocuments, ledgerEntries]);
+
+  const trendByClassId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof computeLearningTrend>>();
+    for (const cls of documentClasses) map.set(cls.classId, computeLearningTrend(cls));
+    return map;
+  }, [documentClasses]);
+
+  const fieldIntelligence = useMemo(() => computeFieldIntelligence(ledgerEntries, 5), [ledgerEntries]);
+
+  const readyCount = readinessByClass.filter(r => r.readinessTier === "ready").length;
+
+  const confidenceCenter = useMemo(() => {
+    if (readinessByClass.length === 0) return null;
+    const avgConfidence = readinessByClass.reduce((s, r) => s + r.currentAccuracy, 0) / readinessByClass.length;
+    const totalSamples = readinessByClass.reduce((s, r) => s + r.sampleCount, 0);
+    const totalCorrections = ledgerEntries.filter(e => e.correction_type != null).length;
+    return { avgConfidence, totalSamples, totalCorrections };
+  }, [readinessByClass, ledgerEntries]);
+
   return (
-    <div className="flex flex-col items-center justify-center text-center space-y-6">
+    <div className="flex flex-col items-center text-center space-y-6 w-full max-w-3xl mx-auto">
       <div className="w-20 h-20 rounded-md bg-primary/5 flex items-center justify-center text-primary">
         <CheckCircle2 size={32} />
       </div>
@@ -56,16 +189,55 @@ export function TrainingReview() {
         <h3 className="text-xl font-bold">Training Review</h3>
         <p className="text-sm text-muted-foreground max-w-sm">Review model performance across all classes and fields before publishing.</p>
       </div>
-      <button 
-        onClick={() => {
-          updateStepStatus(TrainingStage.TRAINING_REVIEW, "completed");
-          setActiveStage(TrainingStage.PUBLISH);
-        }}
-        className="h-11 px-8 rounded-md bg-card border border-border text-foreground font-bold text-[10px] uppercase tracking-[0.2em] shadow-lg hover:border-primary/50 transition-all hover:scale-105 flex items-center gap-2 group"
-      >
-        Approve Training
-        <ChevronRight size={14} className="text-primary group-hover:translate-x-1 transition-transform" />
-      </button>
+
+      {confidenceCenter && (
+        <div className="w-full p-4 rounded-md border border-border/50 bg-card grid grid-cols-3 gap-3 text-left">
+          <div className="text-center">
+            <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Avg Confidence</span>
+            <span className="text-[13px] font-black text-foreground">{Math.round(confidenceCenter.avgConfidence * 1000) / 10}%</span>
+          </div>
+          <div className="text-center">
+            <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Total Samples</span>
+            <span className="text-[13px] font-black text-foreground">{confidenceCenter.totalSamples}</span>
+          </div>
+          <div className="text-center">
+            <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Corrections Logged</span>
+            <span className="text-[13px] font-black text-foreground">{confidenceCenter.totalCorrections}</span>
+          </div>
+        </div>
+      )}
+
+      {readinessByClass.length > 0 && (
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+          {readinessByClass.map(readiness => (
+            <ClassReadinessCard
+              key={readiness.classId}
+              readiness={readiness}
+              trend={trendByClassId.get(readiness.classId) ?? { enabled: false, direction: "flat", deltaPct: 0 }}
+            />
+          ))}
+        </div>
+      )}
+
+      <FieldIntelligenceSection profiles={fieldIntelligence} />
+
+      <div className="space-y-3 flex flex-col items-center">
+        {readinessByClass.length > 0 && (
+          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+            {readyCount} of {readinessByClass.length} classes ready to train
+          </p>
+        )}
+        <button
+          onClick={() => {
+            updateStepStatus(TrainingStage.TRAINING_REVIEW, "completed");
+            setActiveStage(TrainingStage.PUBLISH);
+          }}
+          className="h-11 px-8 rounded-md bg-card border border-border text-foreground font-bold text-[10px] uppercase tracking-[0.2em] shadow-lg hover:border-primary/50 transition-all hover:scale-105 flex items-center gap-2 group"
+        >
+          Approve Training
+          <ChevronRight size={14} className="text-primary group-hover:translate-x-1 transition-transform" />
+        </button>
+      </div>
     </div>
   );
 }

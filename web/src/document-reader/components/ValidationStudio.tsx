@@ -13,15 +13,15 @@ import { usePipelineStore, TrainingDocument } from "../store/studioStore";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-import { summarizeDocument, generateTransactionLog, generateAnalystTelemetry } from "../validation/engine";
+import { summarizeDocument, generateTransactionLog, generateAnalystTelemetry, classifyCorrection, computeFieldConfidence } from "../validation/engine";
 import { QUEUE_LABELS } from "../validation/engine";
-import { ValidationQueueType, ValidationDocumentSummary } from "../types";
+import { ValidationQueueType, ValidationDocumentSummary, FieldConfidenceBreakdown } from "../types";
 import { ConfidenceHeatmapCanvas, ConfidenceHeatmapLegend, HeatmapField, confidenceTier } from "../validation/ConfidenceHeatmapCanvas";
 import { ExplainabilityPanel, FieldReviewAction } from "../validation/ExplainabilityPanel";
 import { AnalystTelemetryDrawer } from "../validation/AnalystTelemetryDrawer";
 import { SystemLifecycle } from "../validation/SystemLifecycle";
 import { BatchOverview } from "../validation/BatchOverview";
-import { appendTrainingLedgerEntry } from "../validation/ledger";
+import { appendTrainingLedgerEntry, loadTrainingLedger } from "../validation/ledger";
 import { DocumentNormalizer } from "../services/documentNormalizer";
 import { runOcrOnDocument, classifyDocumentFromOcr, buildExtractionDesignFromOcr, AutoPipelineStage } from "../validation/autoPipeline";
 import { useAppContext } from "@/lib/context";
@@ -175,9 +175,22 @@ export function ValidationStudio() {
     return generateAnalystTelemetry(fieldsReviewed, summaries.filter(s => s.queue !== "straight_through").length, Math.max(elapsed, fieldsReviewed * 1.4 + 4));
   }, [fieldsReviewed, summaries]);
 
+  const fieldConfidenceById = React.useMemo(() => {
+    const map = new Map<string, FieldConfidenceBreakdown>();
+    if (!activeDocument) return map;
+    const docClass = documentClasses.find(c => c.classId === activeDocument.classification?.classId || c.name === activeDocument.classification?.className);
+    const ledgerEntries = loadTrainingLedger();
+    const designFields = (activeDocument.metadata?.extractionDesign?.fields || []) as Array<Record<string, any>>;
+    (designFields.length > 0 ? designFields : heatmapFields).forEach(f => {
+      map.set(f.id, computeFieldConfidence(f, activeDocument, docClass, ledgerEntries));
+    });
+    return map;
+  }, [activeDocument, documentClasses, heatmapFields, fieldsReviewed]);
+
   const handleFieldAction = React.useCallback((field: HeatmapField, action: FieldReviewAction, value?: string) => {
     if (!activeDocument) return;
     const designFields = (activeDocument.metadata?.extractionDesign?.fields || []) as Array<Record<string, any>>;
+    const designField = designFields.find(f => f.id === field.id);
 
     const newValue = action === "clear" ? "" : action === "edit" ? (value ?? "") : (field.value || "");
     const newConfidence = action === "clear" ? 0 : 1.0;
@@ -197,6 +210,14 @@ export function ValidationStudio() {
     const excludedFromTraining = !!activeDocument.metadata?.excludedFromTraining;
 
     if (!excludedFromTraining) {
+      const attribution = classifyCorrection(
+        designField || { id: field.id, name: field.name },
+        field.value || "",
+        newValue,
+        action,
+        activeDocument,
+        summaries.find(s => s.documentId === activeDocument.documentId)?.businessRules
+      );
       appendTrainingLedgerEntry({
         document_id: activeDocument.documentId,
         field_id: field.id,
@@ -204,11 +225,20 @@ export function ValidationStudio() {
         predicted_value: field.value || "",
         corrected_value: newValue,
         predicted_confidence: field.confidence ?? 0,
+        ocr_value: field.value || "",
+        bounding_box: field.x !== undefined && field.y !== undefined && field.width !== undefined && field.height !== undefined
+          ? { x: field.x, y: field.y, width: field.width, height: field.height }
+          : undefined,
+        anchor_id: designField?.anchorId || designField?.anchor_id,
+        page_number: activePage?.pageNumber,
+        field_type: designField?.type,
+        correction_type: attribution.type,
+        attribution_reasons: attribution.reasons,
         provenance_metadata: {
-          source_user_id: "analyst_sarah_j",
+          source_user_id: currentUser.email,
           approval_timestamp: new Date().toISOString(),
           origin_batch_id: batchId,
-          approver_id: "supervisor_alex_m",
+          approver_id: currentUser.email,
           base_model_version_used: transactionLog?.model_context.classification_model_version || "unassigned",
         },
       });
@@ -224,7 +254,7 @@ export function ValidationStudio() {
     } else {
       toast.success(`"${field.name}" corrected${excludedFromTraining ? "" : " and committed to the training dataset ledger"}.${trainingNote}`);
     }
-  }, [activeDocument, updateTrainingDocument, batchId, transactionLog]);
+  }, [activeDocument, activePage, updateTrainingDocument, batchId, transactionLog, summaries, currentUser]);
 
   const handleSelectDocument = React.useCallback((docId: string) => {
     const doc = trainingDocuments.find(d => d.documentId === docId);
@@ -724,6 +754,7 @@ export function ValidationStudio() {
                       selectedFieldId={selectedFieldId}
                       onSelectField={handleSelectField}
                       onFieldAction={handleFieldAction}
+                      fieldConfidenceById={fieldConfidenceById}
                     />
                   ) : (
                     <div className="w-full h-full bg-card rounded-[9px] border border-dashed border-border flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 p-6 text-center">

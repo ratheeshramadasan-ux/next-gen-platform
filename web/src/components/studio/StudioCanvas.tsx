@@ -44,7 +44,7 @@ import { getAsset } from "@/app/actions/assetActions";
 import { toast } from "sonner";
 import "@xyflow/react/dist/style.css";
 import { cn } from "@/lib/utils";
-import { useTheme } from "next-themes";
+import { useAppContext } from "@/lib/context";
 import * as LucideIcons from "lucide-react";
 import {
   MousePointer2,
@@ -730,7 +730,7 @@ export function StudioCanvas({
     };
   }, []);
 
-  const { theme, resolvedTheme } = useTheme();
+  const { isDarkTheme } = useAppContext();
 
   const { setNodes, setEdges: rfSetEdges, getNodes, getEdges, fitView } = useReactFlow();
 
@@ -746,10 +746,7 @@ export function StudioCanvas({
   }, [onConnect, activeEdgeType]);
 
   // React Flow color mode sync
-  const rfColorMode = useMemo(() => {
-    const active = resolvedTheme || theme || "light";
-    return active === "dark" || active.includes("Glass") ? "dark" : "light";
-  }, [theme, resolvedTheme]);
+  const rfColorMode = useMemo(() => (isDarkTheme ? "dark" : "light"), [isDarkTheme]);
 
   // --- Message Dialog State (shown during execution) ---
   const [messageDialog, setMessageDialog] = useState<{
