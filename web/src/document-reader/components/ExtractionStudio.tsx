@@ -304,9 +304,15 @@ export function ExtractionStudio() {
   const [regexHelpFieldId, setRegexHelpFieldId] = useState<string | null>(null);
 
   type ExtractionLang = "auto" | "en" | "fr" | "es" | "de";
-  const [extractionLanguage, setExtractionLanguage] = useState<ExtractionLang>(() => {
-    try { return (localStorage.getItem("du.extractionLanguage") as ExtractionLang) || "auto"; } catch { return "auto"; }
-  });
+  // Always start at "auto" so server and client render the same initial markup; the persisted
+  // value (if any) is applied after mount in an effect, avoiding a localStorage hydration mismatch.
+  const [extractionLanguage, setExtractionLanguage] = useState<ExtractionLang>("auto");
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("du.extractionLanguage") as ExtractionLang | null;
+      if (stored) setExtractionLanguage(stored);
+    } catch { /* */ }
+  }, []);
   const setAndPersistLang = (lang: ExtractionLang) => {
     setExtractionLanguage(lang);
     try { localStorage.setItem("du.extractionLanguage", lang); } catch { /* */ }

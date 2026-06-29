@@ -713,6 +713,9 @@ model Folder {
   studioWorkflows    StudioWorkflow[]
 
   @@index([path])
+  @@index([customerId, tenantId, isArchived])
+  @@index([workspaceId])
+  @@index([parentId])
   @@map("folders")
   @@schema("platform")
 }
@@ -764,6 +767,9 @@ model Project {
   executionWorkflows Workflow[]
   queues             StudioQueue[]
 
+  @@index([customerId, tenantId])
+  @@index([folderId])
+  @@index([workspaceId])
   @@map("projects")
   @@schema("platform")
 }
@@ -1004,6 +1010,8 @@ model StudioWorkflow {
   project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   resource           Resource?            @relation(fields: [resourceId], references: [id])
 
+  @@index([projectId, updatedAt])
+  @@index([folderId])
   @@map("studio_workflows")
   @@schema("platform")
 }

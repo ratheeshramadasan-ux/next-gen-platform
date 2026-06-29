@@ -108,34 +108,22 @@ function buildFieldGroups(fields: HeatmapField[], categories: FieldCategory[]): 
 }
 
 interface ExplainabilityPanelProps {
-  summary: ValidationDocumentSummary;
   fields: HeatmapField[];
   categories?: FieldCategory[];
   selectedFieldId: string | null;
   onSelectField: (fieldId: string) => void;
   onFieldAction: (field: HeatmapField, action: FieldReviewAction, value?: string) => void;
-  fieldConfidenceById?: Map<string, FieldConfidenceBreakdown>;
 }
 
 export function ExplainabilityPanel({
-  summary,
   fields,
   categories = [],
   selectedFieldId,
   onSelectField,
   onFieldAction,
-  fieldConfidenceById,
 }: ExplainabilityPanelProps) {
   const [editingFieldId, setEditingFieldId] = React.useState<string | null>(null);
   const [draftValue, setDraftValue] = React.useState("");
-
-  const explanationByField = React.useMemo(() => {
-    const map = new Map<string, FieldExplanation>();
-    summary.fieldExplanations.forEach(f => map.set(f.fieldId, f));
-    return map;
-  }, [summary.fieldExplanations]);
-
-  const selectedExplanation = selectedFieldId ? explanationByField.get(selectedFieldId) : undefined;
 
   const fieldGroups = React.useMemo(() => buildFieldGroups(fields, categories), [fields, categories]);
 
@@ -149,11 +137,165 @@ export function ExplainabilityPanel({
     setEditingFieldId(null);
   };
 
-  const selectedFieldConfidence = selectedFieldId ? fieldConfidenceById?.get(selectedFieldId) : undefined;
-
   return (
     <div className="w-full h-full flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
 
+      {/* Extracted Fields */}
+      <section className="bg-card rounded-[9px] border border-border/50 shadow-sm p-4 flex-1 min-h-0 flex flex-col">
+        <header className="flex items-center gap-2 mb-3 shrink-0">
+          <FileText size={13} className="text-primary" />
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground">Extracted Fields</h4>
+          <span className="ml-auto text-[8px] font-black text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{fields.length}</span>
+        </header>
+        <div className="space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
+          {fields.length === 0 && (
+            <p className="text-[9px] text-muted-foreground italic">No extraction fields configured for this document.</p>
+          )}
+          {(() => {
+            let order = 0;
+            return fieldGroups.map(group => (
+              <div key={group.key} className="space-y-1.5">
+                {categories.length > 0 && (
+                  <p
+                    className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.2em] pt-1.5 first:pt-0"
+                    style={{ paddingLeft: group.depth * 10 }}
+                  >
+                    {group.name}
+                  </p>
+                )}
+                {group.fields.map(field => {
+                  order += 1;
+                  const sequence = order;
+                  const confidence = field.confidence ?? 0;
+                  const tier = confidenceTier(confidence > 1 ? confidence / 100 : confidence);
+                  const Icon = TIER_ICON[tier];
+                  const isSelected = selectedFieldId === field.id;
+                  const isEditing = editingFieldId === field.id;
+                  const isPositioned = field.x !== undefined && field.y !== undefined;
+
+                  return (
+                    <div
+                      key={field.id}
+                      onClick={() => onSelectField(field.id)}
+                      style={{ marginLeft: group.depth * 10 }}
+                      className={cn(
+                        "p-2 rounded-lg border cursor-pointer transition-all",
+                        isSelected ? "border-red-500 bg-red-500/10" : "border-border/40 hover:border-border"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="shrink-0 w-3.5 h-3.5 rounded-[3px] bg-muted text-muted-foreground text-[7px] font-black flex items-center justify-center">{sequence}</span>
+                          <span className="text-[9px] font-black uppercase tracking-tight text-foreground truncate">{field.name}</span>
+                          {!isPositioned && (
+                            <span className="shrink-0 text-[7px] font-black uppercase tracking-widest text-muted-foreground/50" title="Not mapped to a location on the page">unmapped</span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Icon size={11} className={TIER_TEXT[tier]} />
+                          <span className={cn("text-[8px] font-black", TIER_TEXT[tier])}>
+                            {((confidence > 1 ? confidence / 100 : confidence) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                      {isEditing ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            autoFocus
+                            value={draftValue}
+                            onChange={e => setDraftValue(e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") commitEdit(field);
+                              if (e.key === "Escape") setEditingFieldId(null);
+                            }}
+                            className="flex-1 bg-background border border-primary/40 rounded px-1.5 py-1 text-[9px] font-mono outline-none focus:border-primary"
+                          />
+                          <button onClick={(e) => { e.stopPropagation(); commitEdit(field); }} className="p-1 rounded bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
+                            <Check size={11} />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); setEditingFieldId(null); }} className="p-1 rounded bg-muted text-muted-foreground hover:bg-muted/70">
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[9.5px] font-mono text-muted-foreground truncate">{field.value || "—"}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onFieldAction(field, "accept"); }}
+                              disabled={!field.value}
+                              className="p-1 rounded text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Accept — extraction is correct"
+                            >
+                              <Check size={10} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); startEdit(field); }}
+                              className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              title="Edit value"
+                            >
+                              <Pencil size={10} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onFieldAction(field, "clear"); }}
+                              disabled={!field.value}
+                              className="p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Clear value"
+                            >
+                              <Eraser size={10} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ));
+          })()}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Row({ label, value, bold, icon: Icon }: { label: string; value: string; bold?: boolean; icon?: React.ElementType }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight flex items-center gap-1.5">
+        {Icon && <Icon size={10} />}
+        {label}
+      </span>
+      <span className={cn("text-[10px] font-mono text-foreground truncate max-w-[55%] text-right", bold && "font-black")}>{value}</span>
+    </div>
+  );
+}
+
+interface ConfidenceTransparencyPanelProps {
+  summary: ValidationDocumentSummary;
+  selectedFieldId?: string | null;
+  fieldConfidenceById?: Map<string, FieldConfidenceBreakdown>;
+}
+
+/** How a document's confidence score was calculated — the weighted layer breakdown, classification
+ * signals, business rule checks, and (if a field is selected) that field's own confidence makeup. */
+export function ConfidenceTransparencyPanel({
+  summary,
+  selectedFieldId,
+  fieldConfidenceById,
+}: ConfidenceTransparencyPanelProps) {
+  const explanationByField = React.useMemo(() => {
+    const map = new Map<string, FieldExplanation>();
+    summary.fieldExplanations.forEach(f => map.set(f.fieldId, f));
+    return map;
+  }, [summary.fieldExplanations]);
+
+  const selectedExplanation = selectedFieldId ? explanationByField.get(selectedFieldId) : undefined;
+  const selectedFieldConfidence = selectedFieldId ? fieldConfidenceById?.get(selectedFieldId) : undefined;
+
+  return (
+    <div className="space-y-4">
       {/* Confidence Transparency */}
       <section className="bg-card rounded-[9px] border border-border/50 shadow-sm p-4">
         <header className="flex items-center justify-between mb-3">
@@ -287,135 +429,6 @@ export function ExplainabilityPanel({
           )}
         </section>
       )}
-
-      {/* Extracted Fields */}
-      <section className="bg-card rounded-[9px] border border-border/50 shadow-sm p-4 flex-1 min-h-0 flex flex-col">
-        <header className="flex items-center gap-2 mb-3 shrink-0">
-          <FileText size={13} className="text-primary" />
-          <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground">Extracted Fields</h4>
-          <span className="ml-auto text-[8px] font-black text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{fields.length}</span>
-        </header>
-        <div className="space-y-1.5 overflow-y-auto custom-scrollbar pr-1">
-          {fields.length === 0 && (
-            <p className="text-[9px] text-muted-foreground italic">No extraction fields configured for this document.</p>
-          )}
-          {(() => {
-            let order = 0;
-            return fieldGroups.map(group => (
-              <div key={group.key} className="space-y-1.5">
-                {categories.length > 0 && (
-                  <p
-                    className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.2em] pt-1.5 first:pt-0"
-                    style={{ paddingLeft: group.depth * 10 }}
-                  >
-                    {group.name}
-                  </p>
-                )}
-                {group.fields.map(field => {
-                  order += 1;
-                  const sequence = order;
-                  const confidence = field.confidence ?? 0;
-                  const tier = confidenceTier(confidence > 1 ? confidence / 100 : confidence);
-                  const Icon = TIER_ICON[tier];
-                  const isSelected = selectedFieldId === field.id;
-                  const isEditing = editingFieldId === field.id;
-                  const isPositioned = field.x !== undefined && field.y !== undefined;
-
-                  return (
-                    <div
-                      key={field.id}
-                      onClick={() => onSelectField(field.id)}
-                      style={{ marginLeft: group.depth * 10 }}
-                      className={cn(
-                        "p-2 rounded-lg border cursor-pointer transition-all",
-                        isSelected ? "border-red-500 bg-red-500/10" : "border-border/40 hover:border-border"
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          <span className="shrink-0 w-3.5 h-3.5 rounded-[3px] bg-muted text-muted-foreground text-[7px] font-black flex items-center justify-center">{sequence}</span>
-                          <span className="text-[9px] font-black uppercase tracking-tight text-foreground truncate">{field.name}</span>
-                          {!isPositioned && (
-                            <span className="shrink-0 text-[7px] font-black uppercase tracking-widest text-muted-foreground/50" title="Not mapped to a location on the page">unmapped</span>
-                          )}
-                        </span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Icon size={11} className={TIER_TEXT[tier]} />
-                          <span className={cn("text-[8px] font-black", TIER_TEXT[tier])}>
-                            {((confidence > 1 ? confidence / 100 : confidence) * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                      </div>
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            autoFocus
-                            value={draftValue}
-                            onChange={e => setDraftValue(e.target.value)}
-                            onClick={e => e.stopPropagation()}
-                            onKeyDown={e => {
-                              if (e.key === "Enter") commitEdit(field);
-                              if (e.key === "Escape") setEditingFieldId(null);
-                            }}
-                            className="flex-1 bg-background border border-primary/40 rounded px-1.5 py-1 text-[9px] font-mono outline-none focus:border-primary"
-                          />
-                          <button onClick={(e) => { e.stopPropagation(); commitEdit(field); }} className="p-1 rounded bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20">
-                            <Check size={11} />
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); setEditingFieldId(null); }} className="p-1 rounded bg-muted text-muted-foreground hover:bg-muted/70">
-                            <X size={11} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[9.5px] font-mono text-muted-foreground truncate">{field.value || "—"}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onFieldAction(field, "accept"); }}
-                              disabled={!field.value}
-                              className="p-1 rounded text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Accept — extraction is correct"
-                            >
-                              <Check size={10} />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); startEdit(field); }}
-                              className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10"
-                              title="Edit value"
-                            >
-                              <Pencil size={10} />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onFieldAction(field, "clear"); }}
-                              disabled={!field.value}
-                              className="p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Clear value"
-                            >
-                              <Eraser size={10} />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ));
-          })()}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function Row({ label, value, bold, icon: Icon }: { label: string; value: string; bold?: boolean; icon?: React.ElementType }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight flex items-center gap-1.5">
-        {Icon && <Icon size={10} />}
-        {label}
-      </span>
-      <span className={cn("text-[10px] font-mono text-foreground truncate max-w-[55%] text-right", bold && "font-black")}>{value}</span>
     </div>
   );
 }

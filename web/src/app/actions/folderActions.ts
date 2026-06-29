@@ -217,6 +217,11 @@ export async function getTenantFolderTree(
       }
     }
 
+    // Deliberately flat: no nested `studioWorkflows: { take, orderBy }` here. That pattern forces
+    // Postgres to run a correlated window-function subquery per project, which is both slow (no
+    // index can help a per-row LIMIT) and has triggered "invalid type: unit value, expected usize"
+    // crashes from the pg driver adapter on this codebase before. Latest workflow per project is
+    // resolved below via a single flat, indexed query instead (see getTenantStudioRegistry).
     const projectSummarySelect = {
       id: true,
       name: true,
@@ -226,17 +231,6 @@ export async function getTenantFolderTree(
       workspaceId: true,
       createdAt: true,
       updatedAt: true,
-      studioWorkflows: {
-        take: 1,
-        orderBy: { updatedAt: "desc" as const },
-        select: {
-          id: true,
-          status: true,
-          name: true,
-          version: true,
-          updatedAt: true,
-        },
-      },
       resource: {
         select: {
           status: true,
@@ -293,7 +287,37 @@ export async function getTenantFolderTree(
       orderBy: { updatedAt: "desc" }
     });
 
-    return { folders, rootProjects };
+    const allProjectIds = [
+      ...folders.flatMap(f => (f.projects || []).map((p: { id: string }) => p.id)),
+      ...rootProjects.map(p => p.id),
+    ];
+
+    const latestWorkflowByProject = new Map<string, { id: string; status: string; name: string; version: string; updatedAt: Date }>();
+    if (allProjectIds.length > 0) {
+      const workflows = await prisma.studioWorkflow.findMany({
+        where: { projectId: { in: allProjectIds } },
+        select: { id: true, projectId: true, status: true, name: true, version: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      });
+      for (const wf of workflows) {
+        if (!latestWorkflowByProject.has(wf.projectId)) {
+          latestWorkflowByProject.set(wf.projectId, wf);
+        }
+      }
+    }
+
+    const attachLatestWorkflow = (projects: { id: string }[]) => projects.map(project => ({
+      ...project,
+      studioWorkflows: latestWorkflowByProject.get(project.id) || null,
+    }));
+
+    return {
+      folders: folders.map(folder => ({
+        ...folder,
+        projects: attachLatestWorkflow(folder.projects || []),
+      })),
+      rootProjects: attachLatestWorkflow(rootProjects),
+    };
   } catch (e) {
     console.error("Failed to fetch tenant folder tree:", e);
     return { folders: [], rootProjects: [] };
@@ -384,6 +408,11 @@ export async function getTenantDocReaderRegistry(
       }
     }
 
+    // Deliberately flat: no nested `studioWorkflows: { take, orderBy }` here. That pattern forces
+    // Postgres to run a correlated window-function subquery per project, which is both slow (no
+    // index can help a per-row LIMIT) and has triggered "invalid type: unit value, expected usize"
+    // crashes from the pg driver adapter on this codebase before. Latest workflow per project is
+    // resolved below via a single flat, indexed query instead (see getTenantStudioRegistry).
     const projectSelect = {
       id: true,
       name: true,
@@ -393,17 +422,6 @@ export async function getTenantDocReaderRegistry(
       workspaceId: true,
       createdAt: true,
       updatedAt: true,
-      studioWorkflows: {
-        take: 1,
-        orderBy: { updatedAt: "desc" as const },
-        select: {
-          id: true,
-          status: true,
-          name: true,
-          version: true,
-          updatedAt: true,
-        },
-      },
       resource: {
         select: {
           status: true,
@@ -440,11 +458,30 @@ export async function getTenantDocReaderRegistry(
       orderBy: { updatedAt: "desc" },
     });
 
+    const allProjectIds = [
+      ...folders.flatMap(f => (f.projects || []).map((p: { id: string }) => p.id)),
+      ...rootProjects.map(p => p.id),
+    ];
+
+    const latestWorkflowByProject = new Map<string, { id: string; status: string; name: string; version: string; updatedAt: Date }>();
+    if (allProjectIds.length > 0) {
+      const workflows = await prisma.studioWorkflow.findMany({
+        where: { projectId: { in: allProjectIds } },
+        select: { id: true, projectId: true, status: true, name: true, version: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      });
+      for (const wf of workflows) {
+        if (!latestWorkflowByProject.has(wf.projectId)) {
+          latestWorkflowByProject.set(wf.projectId, wf);
+        }
+      }
+    }
+
     const normalizeProjects = (projects: ProjectSummary[]) => projects.map(project => ({
       ...project,
       metadata: JSON.stringify({ projectType: "DOC_READER" }),
       status: (project.resource as { status?: string } | undefined)?.status || project.status,
-      studioWorkflows: project.studioWorkflows?.[0] || null,
+      studioWorkflows: latestWorkflowByProject.get(project.id as string) || null,
     }));
 
     return {
@@ -546,6 +583,11 @@ export async function getTenantStudioRegistry(
       }
     }
 
+    // Deliberately flat: no nested `studioWorkflows: { take, orderBy }` here. That pattern forces
+    // Postgres to run a correlated window-function subquery per project, which is both slow (no
+    // index can help a per-row LIMIT) and has triggered "invalid type: unit value, expected usize"
+    // crashes from the pg driver adapter on this codebase before (see git history). Latest workflow
+    // per project is resolved below via a single flat, indexed query instead.
     const projectSelect = {
       id: true,
       name: true,
@@ -555,17 +597,6 @@ export async function getTenantStudioRegistry(
       workspaceId: true,
       createdAt: true,
       updatedAt: true,
-      studioWorkflows: {
-        take: 1,
-        orderBy: { updatedAt: "desc" as const },
-        select: {
-          id: true,
-          status: true,
-          name: true,
-          version: true,
-          updatedAt: true,
-        },
-      },
       resource: {
         select: {
           status: true,
@@ -602,11 +633,30 @@ export async function getTenantStudioRegistry(
       orderBy: { updatedAt: "desc" },
     });
 
+    const allProjectIds = [
+      ...folders.flatMap(f => (f.projects || []).map((p: { id: string }) => p.id)),
+      ...rootProjects.map(p => p.id),
+    ];
+
+    const latestWorkflowByProject = new Map<string, { id: string; status: string; name: string; version: string; updatedAt: Date }>();
+    if (allProjectIds.length > 0) {
+      const workflows = await prisma.studioWorkflow.findMany({
+        where: { projectId: { in: allProjectIds } },
+        select: { id: true, projectId: true, status: true, name: true, version: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+      });
+      for (const wf of workflows) {
+        if (!latestWorkflowByProject.has(wf.projectId)) {
+          latestWorkflowByProject.set(wf.projectId, wf);
+        }
+      }
+    }
+
     const normalizeProjects = (projects: ProjectSummary[]) => projects.map(project => ({
       ...project,
       metadata: JSON.stringify({ projectType }),
       status: (project.resource as { status?: string } | undefined)?.status || project.status,
-      studioWorkflows: project.studioWorkflows?.[0] || null,
+      studioWorkflows: latestWorkflowByProject.get(project.id as string) || null,
     }));
 
     return {

@@ -17,7 +17,7 @@ import { summarizeDocument, generateTransactionLog, generateAnalystTelemetry, cl
 import { QUEUE_LABELS } from "../validation/engine";
 import { ValidationQueueType, ValidationDocumentSummary, FieldConfidenceBreakdown } from "../types";
 import { ConfidenceHeatmapCanvas, ConfidenceHeatmapLegend, HeatmapField, confidenceTier } from "../validation/ConfidenceHeatmapCanvas";
-import { ExplainabilityPanel, FieldReviewAction } from "../validation/ExplainabilityPanel";
+import { ExplainabilityPanel, ConfidenceTransparencyPanel, FieldReviewAction } from "../validation/ExplainabilityPanel";
 import { AnalystTelemetryDrawer } from "../validation/AnalystTelemetryDrawer";
 import { SystemLifecycle } from "../validation/SystemLifecycle";
 import { BatchOverview } from "../validation/BatchOverview";
@@ -42,16 +42,18 @@ const QUEUE_TONE: Record<ValidationQueueType, string> = {
   straight_through: "text-emerald-500 border-emerald-500/30 bg-emerald-500/5",
 };
 
-type WorkspaceTab = "queue" | "validation";
+type WorkspaceTab = "queue" | "validation" | "confidence";
+
 
 export function ValidationStudio() {
   const { updateStepStatus, setActiveStage, projectId } = useDocumentReader();
   const { currentUser } = useAppContext();
   const {
-    trainingDocuments, documentClasses, activeDocument, activePage,
+    trainingDocuments, documentClasses, activeDocument, activePage, infrastructure,
     setActiveDocument, setActivePage, updateTrainingDocument, setTrainingDocuments, addIngestionBatch,
     deleteTrainingDocument, updateClassConfig, recordClassConfidenceSnapshot,
   } = usePipelineStore();
+  const ocrEngineId = infrastructure.primaryEngineId;
 
   const [activeWorkspaceTab, setActiveWorkspaceTab] = React.useState<WorkspaceTab>("queue");
   const [selectedQueue, setSelectedQueue] = React.useState<ValidationQueueType | "all">("all");
@@ -265,6 +267,15 @@ export function ValidationStudio() {
     setActiveWorkspaceTab("validation");
   }, [trainingDocuments, setActiveDocument, setActivePage]);
 
+  // Same as handleSelectDocument but stays on the Confidence Transparency tab.
+  const handleSelectDocumentForConfidence = React.useCallback((docId: string) => {
+    const doc = trainingDocuments.find(d => d.documentId === docId);
+    if (!doc) return;
+    setActiveDocument(doc);
+    setActivePage(doc.pages[0]);
+    setSelectedFieldId(null);
+  }, [trainingDocuments, setActiveDocument, setActivePage]);
+
   const handleDeleteDocument = React.useCallback((docId: string) => {
     const doc = trainingDocuments.find(d => d.documentId === docId);
     deleteTrainingDocument(docId);
@@ -340,7 +351,7 @@ export function ValidationStudio() {
       let workingDoc = candidate;
       const hasOcr = (candidate.pages[0]?.textLayer?.length || 0) > 0;
       if (!hasOcr) {
-        workingDoc = await runOcrOnDocument(candidate);
+        workingDoc = await runOcrOnDocument(candidate, ocrEngineId);
         updateTrainingDocument(candidate.documentId, { pages: workingDoc.pages });
       }
 
@@ -362,7 +373,7 @@ export function ValidationStudio() {
       });
       lateExtractionRef.current.delete(candidate.documentId);
     })();
-  }, [trainingDocuments, needsExtraction, updateTrainingDocument]);
+  }, [trainingDocuments, needsExtraction, updateTrainingDocument, ocrEngineId]);
 
   /** Manually (re)run extraction for a single classified document on demand. */
   const handleRunExtraction = React.useCallback((docId: string) => {
@@ -381,7 +392,7 @@ export function ValidationStudio() {
       let workingDoc = doc;
       const hasOcr = (doc.pages[0]?.textLayer?.length || 0) > 0;
       if (!hasOcr) {
-        workingDoc = await runOcrOnDocument(doc);
+        workingDoc = await runOcrOnDocument(doc, ocrEngineId);
         updateTrainingDocument(docId, { pages: workingDoc.pages });
       }
 
@@ -405,12 +416,12 @@ export function ValidationStudio() {
       });
       lateExtractionRef.current.delete(docId);
     })();
-  }, [trainingDocuments, processingDocs, updateTrainingDocument]);
+  }, [trainingDocuments, processingDocs, updateTrainingDocument, ocrEngineId]);
 
   const runAutoPipeline = React.useCallback(async (doc: TrainingDocument, priorDocuments: TrainingDocument[]) => {
     setProcessingDocs(prev => ({ ...prev, [doc.documentId]: "classifying" }));
 
-    const ocrDoc = await runOcrOnDocument(doc);
+    const ocrDoc = await runOcrOnDocument(doc, ocrEngineId);
     updateTrainingDocument(doc.documentId, { pages: ocrDoc.pages });
 
     const classification = classifyDocumentFromOcr(ocrDoc, documentClasses);
@@ -442,7 +453,7 @@ export function ValidationStudio() {
         ? `"${doc.name}" classified as ${classification.className} — extraction complete.`
         : `"${doc.name}" added to the Unclassified section — no document class matched yet.`
     );
-  }, [documentClasses, updateTrainingDocument]);
+  }, [documentClasses, updateTrainingDocument, ocrEngineId]);
 
   const handleUploadFiles = React.useCallback(async (files: FileList) => {
     setIsUploading(true);
@@ -533,6 +544,7 @@ export function ValidationStudio() {
         queueCount={trainingDocuments.length}
         unclassifiedCount={unclassifiedCount}
         validationCount={reviewQueueCount}
+        confidenceCount={summaries.length}
       />
 
       <div className="flex-1 min-h-0 flex flex-col gap-3 p-4 overflow-hidden">
@@ -562,7 +574,7 @@ export function ValidationStudio() {
               onRecordConfidenceSnapshot={recordClassConfidenceSnapshot}
             />
           </div>
-        ) : (
+        ) : activeWorkspaceTab === "validation" ? (
           <>
             {trainingDocuments.length === 0 ? (
               <div className="flex-1 bg-card rounded-[9px] border border-dashed border-border flex flex-col items-center justify-center text-center p-12">
@@ -744,21 +756,19 @@ export function ValidationStudio() {
                   )}
                 </div>
 
-                {/* RIGHT PANEL — Explainability */}
-                <aside className="w-80 shrink-0">
+                {/* RIGHT PANEL — Extracted Fields */}
+                <aside className="w-80 shrink-0 h-full min-h-0">
                   {activeSummary ? (
                     <ExplainabilityPanel
-                      summary={activeSummary}
                       fields={heatmapFields}
                       categories={extractionCategories}
                       selectedFieldId={selectedFieldId}
                       onSelectField={handleSelectField}
                       onFieldAction={handleFieldAction}
-                      fieldConfidenceById={fieldConfidenceById}
                     />
                   ) : (
                     <div className="w-full h-full bg-card rounded-[9px] border border-dashed border-border flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 p-6 text-center">
-                      Select a document to view explainability data
+                      Select a document to view extracted fields
                     </div>
                   )}
                 </aside>
@@ -768,6 +778,16 @@ export function ValidationStudio() {
             {/* BOTTOM DRAWER — Analyst Telemetry */}
             <AnalystTelemetryDrawer telemetry={analystTelemetry} isOpen={drawerOpen} onToggle={() => setDrawerOpen(v => !v)} />
           </>
+        ) : (
+          <ConfidenceTransparencyTab
+            queueDocuments={queueDocuments}
+            summaryByDoc={summaryByDoc}
+            activeDocument={activeDocument}
+            activeSummary={activeSummary}
+            selectedFieldId={selectedFieldId}
+            fieldConfidenceById={fieldConfidenceById}
+            onSelectDocument={handleSelectDocumentForConfidence}
+          />
         )}
 
         <Footer
@@ -853,17 +873,19 @@ function ValidationHeader({ batchId, stpRate, processedCount, totalCount }: { ba
 }
 
 function WorkspaceTabBar({
-  activeTab, onChange, queueCount, unclassifiedCount, validationCount,
+  activeTab, onChange, queueCount, unclassifiedCount, validationCount, confidenceCount,
 }: {
   activeTab: WorkspaceTab;
   onChange: (tab: WorkspaceTab) => void;
   queueCount: number;
   unclassifiedCount: number;
   validationCount: number;
+  confidenceCount: number;
 }) {
   const tabs: Array<{ id: WorkspaceTab; label: string; icon: React.ElementType; count: number; badge?: number }> = [
     { id: "queue", label: "Upload & Queue", icon: UploadCloud, count: queueCount, badge: unclassifiedCount > 0 ? unclassifiedCount : undefined },
     { id: "validation", label: "Validation Workspace", icon: ClipboardCheck, count: validationCount },
+    { id: "confidence", label: "Confidence Transparency", icon: Activity, count: confidenceCount },
   ];
 
   return (
@@ -909,6 +931,106 @@ function WorkspaceTabBar({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const METHODOLOGY_LAYERS: Array<{ label: string; description: string }> = [
+  { label: "OCR (×15%)", description: "Raw text-recognition confidence reported by the OCR engine for the words behind each field." },
+  { label: "Extraction (×25%)", description: "How well the field's geometry (position/size) matched what was expected for this document class." },
+  { label: "Boundary (×10%)", description: "Whether the extracted value's bounding box cleanly aligns to a single field region without overlap." },
+  { label: "Anchor (×10%)", description: "Whether a reliable nearby label/keyword anchor confirmed the field's identity." },
+  { label: "Validation (×15%)", description: "Whether the value passed format/business-rule checks for this field type." },
+  { label: "Training (×15%)", description: "How much labeled training history exists for this document class — more samples, higher trust." },
+  { label: "Evidence (×10%)", description: "Cross-checks against corroborating evidence elsewhere on the document." },
+];
+
+function ConfidenceTransparencyTab({
+  queueDocuments, summaryByDoc, activeDocument, activeSummary, selectedFieldId, fieldConfidenceById, onSelectDocument,
+}: {
+  queueDocuments: TrainingDocument[];
+  summaryByDoc: Map<string, ValidationDocumentSummary>;
+  activeDocument: TrainingDocument | null | undefined;
+  activeSummary: ValidationDocumentSummary | undefined;
+  selectedFieldId: string | null;
+  fieldConfidenceById: Map<string, FieldConfidenceBreakdown>;
+  onSelectDocument: (docId: string) => void;
+}) {
+  return (
+    <div className="flex-1 flex flex-col gap-3 min-h-0">
+      {queueDocuments.length === 0 ? (
+        <div className="flex-1 bg-card rounded-[9px] border border-dashed border-border flex flex-col items-center justify-center text-center p-12">
+          <Activity size={40} strokeWidth={1} className="text-muted-foreground/30 mb-4" />
+          <h3 className="text-sm font-black text-foreground uppercase tracking-tight mb-1">No Documents Yet</h3>
+          <p className="text-[10px] text-muted-foreground max-w-sm uppercase font-bold tracking-wider leading-relaxed opacity-60">
+            Upload and classify a document to see how its confidence score is calculated.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="shrink-0 bg-card rounded-[9px] border border-border/50 shadow-sm p-2 flex items-center gap-2 overflow-x-auto custom-scrollbar">
+            {queueDocuments.map(doc => {
+              const summary = summaryByDoc.get(doc.documentId);
+              const tier = summary ? confidenceTier(summary.confidence.overallConfidence) : "high";
+              const isActive = activeDocument?.documentId === doc.documentId;
+              return (
+                <button
+                  key={doc.documentId}
+                  onClick={() => onSelectDocument(doc.documentId)}
+                  className={cn(
+                    "shrink-0 flex items-center gap-2 px-3 h-10 rounded-[7px] border text-left transition-all",
+                    isActive ? "border-primary bg-primary/5 shadow-sm" : "border-border/50 hover:border-border bg-background"
+                  )}
+                >
+                  <span className={cn(
+                    "w-2 h-2 rounded-full shrink-0",
+                    tier === "high" && "bg-emerald-500",
+                    tier === "medium" && "bg-amber-500",
+                    tier === "low" && "bg-rose-500"
+                  )} />
+                  <div className="leading-tight">
+                    <p className="text-[9px] font-black uppercase tracking-tight text-foreground max-w-[140px] truncate">{doc.name}</p>
+                    <p className="text-[8px] font-bold text-muted-foreground uppercase">
+                      {summary ? `${(summary.confidence.overallConfidence * 100).toFixed(1)}% C_doc` : "—"}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex-1 min-h-0 flex gap-3 overflow-hidden">
+            <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar pr-1">
+              {activeSummary ? (
+                <ConfidenceTransparencyPanel
+                  summary={activeSummary}
+                  selectedFieldId={selectedFieldId}
+                  fieldConfidenceById={fieldConfidenceById}
+                />
+              ) : (
+                <div className="w-full h-full bg-card rounded-[9px] border border-dashed border-border flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 p-6 text-center">
+                  Select a document above to view its confidence breakdown
+                </div>
+              )}
+            </div>
+
+            <aside className="w-72 shrink-0 h-full overflow-y-auto custom-scrollbar bg-card rounded-[9px] border border-border/50 shadow-sm p-4">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-foreground mb-1">How Confidence Is Calculated</h4>
+              <p className="text-[9px] text-muted-foreground leading-relaxed mb-3">
+                Overall confidence is a weighted sum of seven layers, then capped by the Evidence ceiling and reduced by any active drift penalty.
+              </p>
+              <div className="space-y-2.5">
+                {METHODOLOGY_LAYERS.map(layer => (
+                  <div key={layer.label}>
+                    <p className="text-[8.5px] font-black uppercase tracking-tight text-foreground">{layer.label}</p>
+                    <p className="text-[9px] text-muted-foreground leading-snug">{layer.description}</p>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
+        </>
+      )}
     </div>
   );
 }
