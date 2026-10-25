@@ -1,6 +1,6 @@
 import forge from "node-forge";
 import { prisma } from "../lib/prisma.js";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "node:crypto";
 
 /**
  * CAService - Implements Platform-Owned CA hierarchy (Root -> Tenant -> VM)
@@ -73,7 +73,7 @@ export class CAService {
     const cert = forge.pki.createCertificate();
 
     cert.publicKey = keys.publicKey;
-    cert.serialNumber = uuidv4().replace(/-/g, "").substring(0, 16);
+    cert.serialNumber = randomUUID().replace(/-/g, "").substring(0, 16);
     cert.validity.notBefore = new Date();
     cert.validity.notAfter = new Date();
     cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 5); // 5 years
@@ -125,7 +125,7 @@ export class CAService {
     const cert = forge.pki.createCertificate();
 
     cert.publicKey = keys.publicKey;
-    cert.serialNumber = uuidv4().replace(/-/g, "").substring(0, 16);
+    cert.serialNumber = randomUUID().replace(/-/g, "").substring(0, 16);
     cert.validity.notBefore = new Date();
     cert.validity.notAfter = new Date();
     cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1); // 1 year

@@ -1,5 +1,9 @@
 import { prisma } from "../lib/prisma.js";
 import { randomUUID } from "crypto";
+import type { PrismaClient } from "../../../../web/src/generated/prisma-client/index.js";
+
+// Use the built-in interactive transaction client type
+type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
 type CommitPayload = {
   executionId: string;
@@ -12,7 +16,7 @@ type CommitPayload = {
 };
 
 export async function commitExecutionEvent(data: CommitPayload) {
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: TxClient) => {
     // 1. Fetch current execution run and lock it
     const run = await tx.executionRun.findUnique({
       where: { id: data.executionId },
@@ -66,7 +70,7 @@ export async function commitExecutionEvent(data: CommitPayload) {
 
 export async function acquireExecutionLease(executionId: string) {
   // Generates a new generation ID and assigns the lease
-  return await prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx: TxClient) => {
     const newGenerationId = randomUUID();
 
     const run = await tx.executionRun.update({

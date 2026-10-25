@@ -2,9 +2,13 @@ import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as dotenv from 'dotenv';
+import path from 'path';
 
-// Use absolute paths for environment variables to ensure stability across server contexts
-dotenv.config({ path: '/Users/ratheesh/next-gen-platform/.env' });
+// Load environment variables (.env in web/ or repository root)
+dotenv.config();
+if (!process.env.DATABASE_URL) {
+  dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+}
 
 const prismaClientSingleton = () => {
   const dbUrl = process.env.DATABASE_URL || "";
@@ -32,4 +36,3 @@ if (process.env.NODE_ENV !== 'production') {
 export const baseDb = prisma;
 export { prisma };
 export default prisma;
-

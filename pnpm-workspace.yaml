@@ -4,4 +4,8 @@ packages:
   - "packages/shared-contracts"
   - "packages/sdk"
   - "packages/universal-agent-object"
+  - "web/src/generated/prisma-client"
 
+allowBuilds:
+  esbuild: true
+  sharp: true

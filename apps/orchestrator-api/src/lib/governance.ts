@@ -1,8 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { PrismaClient } from "../../../../web/src/generated/prisma-client/index.js";
+import { prisma } from "./prisma.js";
 import { randomUUID } from "crypto";
-
-const prisma = new PrismaClient();
 
 export async function governanceInterceptor(req: Request, res: Response, next: NextFunction) {
   // Only intercept state-mutating requests (POST, PUT, PATCH, DELETE)

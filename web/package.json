@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "PATH=/usr/local/bin:$PATH NODE_PATH=./node_modules next dev -p 4000 --webpack",
+    "dev": "next dev -p 4000 --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
